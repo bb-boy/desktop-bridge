@@ -11,10 +11,11 @@ import { requireBearerAuth } from '@modelcontextprotocol/sdk/server/auth/middlew
 import { openStore } from './store.mjs';
 import { installOAuth } from './oauth.mjs';
 import { Broker } from './broker.mjs';
-import { installManagement } from './management.mjs';
+import { createSessions, installManagement } from './management.mjs';
+import { installGoogle } from './google.mjs';
 
 const root=path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-export async function startServer(config) {
+export async function startServer(config,dependencies={}) {
   if(!config.baseUrl || !config.ownerPasswordHash || !Array.isArray(config.devices??[])) throw new Error('Missing server configuration');
   const base=new URL(config.baseUrl);
   if(base.pathname!=='/' || base.search || base.hash || base.username || base.password) throw new Error('baseUrl must be an origin');
@@ -31,10 +32,12 @@ export async function startServer(config) {
   const loginLimiter=rateLimit({windowMs:15*60000,limit:10,standardHeaders:'draft-8',legacyHeaders:false});
   const store=openStore(config.dataDir??path.join(root,'data'));
   store.migrate(config);
-  const provider=installOAuth(app,config,store,loginLimiter);
+  const sessions=createSessions(config,store);
+  const provider=installOAuth(app,config,store,loginLimiter,sessions);
   const httpServer=http.createServer(app);
   const broker=new Broker(httpServer,config,store);
-  installManagement(app,config,store,broker,loginLimiter);
+  installManagement(app,config,store,broker,loginLimiter,sessions);
+  installGoogle(app,config,store,sessions,loginLimiter,{fetch:dependencies.googleFetch});
   const auth=requireBearerAuth({verifier:provider,requiredScopes:['desktop'],expectedResource:new URL('/mcp',base),resourceMetadataUrl:new URL('/.well-known/oauth-protected-resource/mcp',base).href});
   app.get('/healthz',(_req,res)=>res.json({status:'ok',version:'0.2.0'}));
   app.get('/api/devices',auth,(req,res)=>res.json({devices:broker.devices(req.auth.extra.ownerId)}));

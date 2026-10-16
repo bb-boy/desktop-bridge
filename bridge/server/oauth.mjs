@@ -1,8 +1,9 @@
 import { mcpAuthRouter } from '@modelcontextprotocol/sdk/server/auth/router.js';
 import { InvalidGrantError, InvalidTokenError, InvalidScopeError, InvalidTargetError, InvalidClientMetadataError } from '@modelcontextprotocol/sdk/server/auth/errors.js';
 import { opaque, hash, checkPassword, cookieValue, escapeHtml } from './security.mjs';
+import { googleEnabled } from './google.mjs';
 
-export function installOAuth(app, config, store, loginLimiter) {
+export function installOAuth(app, config, store, loginLimiter, sessions) {
   const loggedPaths=new Set(['/authorize','/oauth/consent','/oauth/approve','/token','/register']);
   app.use((req,res,next)=>{
     if(!loggedPaths.has(req.path)) return next();
@@ -106,8 +107,12 @@ export function installOAuth(app, config, store, loginLimiter) {
     res.set('Cache-Control','no-store');
     // Preserve the same-origin POST Origin while suppressing cross-origin referrers.
     res.set('Referrer-Policy','same-origin');
-    res.set('Content-Security-Policy',`default-src 'self'; style-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self' ${new URL(grant.redirectUri).origin}`);
-    res.type('html').send(`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>连接你的电脑</title><link rel="stylesheet" href="/style.css"><main class="card"><p class="eyebrow">DESKTOP BRIDGE</p><h1>连接你的电脑</h1><p>正在为 <strong>${escapeHtml(grant.clientName)}</strong> 授权。</p><p>授权后，此客户端可调用已绑定电脑上的文件和终端工具。只会连接你当前账号绑定的设备。可在设备管理页撤销授权。</p><p class="error">${escapeHtml(error)}</p><form method="post" action="/oauth/approve"><input type="hidden" name="request" value="${escapeHtml(request)}"><input type="hidden" name="csrf" value="${escapeHtml(grant.csrf)}"><label>账号<input name="username" maxlength="48" value="owner" required autocomplete="username"></label><label>账号密码<input name="password" type="password" maxlength="256" required autocomplete="current-password" autofocus></label><button name="decision" value="approve">授权连接</button><button class="secondary" name="decision" value="deny" formnovalidate>取消</button></form></main></html>`);
+    res.set('Content-Security-Policy',`default-src 'self'; style-src 'self'; script-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self' ${new URL(grant.redirectUri).origin}`);
+    const active=sessions?.session(req);
+    const account=active&&store.accountById(active.owner);
+    const credentials=account?`<p>当前账号：<strong>${escapeHtml(account.username)}</strong></p><input type="hidden" name="authMode" value="session"><input type="hidden" name="ownerId" value="${escapeHtml(account.id)}"><input type="hidden" name="sessionCsrf" value="${escapeHtml(active.csrf)}">`:`<label>账号<input name="username" maxlength="48" value="owner" required autocomplete="username"></label><label>账号密码<input name="password" type="password" maxlength="256" required autocomplete="current-password" autofocus></label>`;
+    const google=!account&&googleEnabled(config)?'<button id="google-consent-login" type="button">使用 Google 登录</button><script defer src="/oauth-google.js"></script>':'';
+    res.type('html').send(`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>连接你的电脑</title><link rel="stylesheet" href="/style.css"><main class="card"><p class="eyebrow">DESKTOP BRIDGE</p><h1>连接你的电脑</h1><p>正在为 <strong>${escapeHtml(grant.clientName)}</strong> 授权。</p><p>授权后，此客户端可调用已绑定电脑上的文件和终端工具。只会连接你当前账号绑定的设备。可在设备管理页撤销授权。</p><p class="error">${escapeHtml(error)}</p><form method="post" action="/oauth/approve"><input type="hidden" name="request" value="${escapeHtml(request)}"><input type="hidden" name="csrf" value="${escapeHtml(grant.csrf)}">${credentials}<button name="decision" value="approve">授权连接</button><button class="secondary" name="decision" value="deny" formnovalidate>取消</button></form>${google}</main></html>`);
   }
   app.get('/oauth/consent',(req,res)=>consentPage(req,res));
   app.post('/oauth/approve',loginLimiter,async(req,res)=>{
@@ -130,15 +135,25 @@ export function installOAuth(app, config, store, loginLimiter) {
       return res.redirect(303,redirect.href);
     }
     if (req.body.decision!=='approve') return res.status(400).type('html').send('<p>无效的授权操作。</p>');
-    const account=store.account(String(req.body.username??'owner'));
-    const valid=await checkPassword(req.body.password,account?.password??config.ownerPasswordHash);
-    if (!account || !valid) return consentPage(req,res,'账号或密码不正确，请重试。');
+    const browserSession=req.body.authMode==='session'?sessions?.session(req):null;
+    let account;
+    if(req.body.authMode==='session') {
+      if(!browserSession||browserSession.csrf!==req.body.sessionCsrf||browserSession.owner!==req.body.ownerId)return res.status(403).type('html').send('<p>登录状态已变更，请刷新后重新授权。</p>');
+      account=store.db.prepare('SELECT * FROM accounts WHERE id=?').get(browserSession.owner);
+      if(!account)return res.status(403).type('html').send('<p>请重新登录。</p>');
+    } else {
+      account=store.account(String(req.body.username??'owner'));
+      const valid=await checkPassword(req.body.password,account?.password??config.ownerPasswordHash);
+      if (!account || !valid) return consentPage(req,res,'账号或密码不正确，请重试。');
+    }
     const code=opaque();
     const issued=store.transaction(()=>{
       // Password verification yields to other requests; consume only a still-live request.
       const current=store.grant(hash(request),'consent');
       const currentAccount=store.account(account.username);
-      if (!current || current.csrf!==grant.csrf || currentAccount?.id!==account.id || currentAccount.password!==account.password) return false;
+      const active=browserSession&&sessions.session(req);
+      const authenticated=browserSession?active?.hash===browserSession.hash&&active.csrf===req.body.sessionCsrf:currentAccount?.password===account.password;
+      if (!current || current.csrf!==grant.csrf || currentAccount?.id!==account.id || !authenticated) return false;
       store.deleteGrant(hash(request));
       store.saveGrant(hash(code),'code',grant.clientId,{...grant,ownerId:account.id},Date.now()+60000);
       return true;

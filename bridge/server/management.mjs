@@ -3,7 +3,7 @@ import { rateLimit } from 'express-rate-limit';
 import { opaque,hash,passwordHash,checkPassword,cookieValue } from './security.mjs';
 
 const codeHash=value=>hash(String(value??'').toUpperCase().replace(/[^A-Z0-9]/g,''));
-export function installManagement(app,config,store,broker,loginLimiter) {
+export function createSessions(config,store) {
   const cookieOptions={httpOnly:true,secure:new URL(config.baseUrl).protocol==='https:',sameSite:'strict',path:'/'};
   const sameOrigin=req=>req.get('origin')===new URL(config.baseUrl).origin && req.get('sec-fetch-site')!=='cross-site';
   const json=(res,status,error)=>res.status(status).json({error});
@@ -21,19 +21,25 @@ export function installManagement(app,config,store,broker,loginLimiter) {
   function newSession(res,owner) {
     const token=opaque(),csrf=opaque();
     store.db.prepare('INSERT INTO sessions VALUES (?,?,?,?)').run(hash(token),owner,csrf,Date.now()+7*86400000);
-    res.cookie('bridge_session',token,{...cookieOptions,maxAge:7*86400000});
+    res.cookie('bridge_session',token,{...cookieOptions,sameSite:'lax',maxAge:7*86400000});
     return {account:store.accountById(owner),csrf};
   }
+  function loginCsrf(req,res,next) {
+    if(!sameOrigin(req)||req.get('x-csrf-token')!==cookieValue(req,'bridge_login')||!cookieValue(req,'bridge_login'))return json(res,403,'请刷新登录页面');
+    next();
+  }
+  return {session,requireSession,newSession,loginCsrf,cookieOptions};
+}
+
+export function installManagement(app,config,store,broker,loginLimiter,sessions=createSessions(config,store)) {
+  const {session,requireSession,newSession,loginCsrf,cookieOptions}=sessions;
+  const json=(res,status,error)=>res.status(status).json({error});
   app.get('/api/session',(req,res)=>{
     res.set('Cache-Control','no-store');
     const s=session(req);
     if(s&&store.accountById(s.owner))return res.json({account:store.accountById(s.owner),csrf:s.csrf});
     const csrf=opaque();res.cookie('bridge_login',csrf,{...cookieOptions,maxAge:600000});res.json({account:null,csrf});
   });
-  function loginCsrf(req,res,next) {
-    if(!sameOrigin(req)||req.get('x-csrf-token')!==cookieValue(req,'bridge_login')||!cookieValue(req,'bridge_login'))return json(res,403,'请刷新登录页面');
-    next();
-  }
   app.post('/api/login',loginLimiter,loginCsrf,async(req,res)=>{
     const a=store.account(String(req.body.username??''));
     const valid=await checkPassword(req.body.password,a?.password??config.ownerPasswordHash);
