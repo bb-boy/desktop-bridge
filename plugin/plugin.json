@@ -2,7 +2,7 @@
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "desktop-bridge-p111",
   "version": "0.2.0",
-  "description": "通过统一的自托管 MCP 服务连接 Windows、macOS 和 Linux；支持账号配对、设备授权隔离、健康检查与断线结果恢复。",
+  "description": "通过同一自托管 MCP 插件连接 Windows、macOS 和 Linux；Google 身份隔离、自动配对、设备授权管理、健康检查与断线结果恢复。",
   "license": "MIT",
   "homepage": "https://mcp.ilovestudy.de",
   "extensions": {
@@ -10,7 +10,7 @@
       "interface": {
         "displayName": "Desktop Bridge",
         "shortDescription": "跨系统连接电脑、管理授权与找回结果",
-        "longDescription": "通过统一的自托管 MCP 服务连接 Windows、macOS 和 Linux；支持账号配对、设备授权隔离、健康检查与断线结果恢复。",
+        "longDescription": "通过同一自托管 MCP 插件连接 Windows、macOS 和 Linux；Google 身份隔离、自动配对、设备授权管理、健康检查与断线结果恢复。",
         "category": "Productivity",
         "capabilities": [
           "Interactive"
