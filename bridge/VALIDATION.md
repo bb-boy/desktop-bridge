@@ -25,3 +25,12 @@ GitHub rejected active workflow writes because the current OAuth credential lack
 A Git push or plugin ZIP does not deploy the self-hosted endpoint. An installer prepares the target computer and pairs through the configured service; the service must run the matching release. Actual Google end-to-end login requires a configured Google OAuth web client, secret and exact redirect URI. Locally signed test tokens validate protocol and isolation behavior but are not a real Google account login.
 
 Retention is bounded: cloud task/results expire after 30 days; local journal output has an overall capacity limit and may retain an unknown-outcome marker. Recovery never automatically repeats an original modifying command.
+
+## Production activation · 2026-10-17 (Asia/Shanghai)
+
+- Deployed service 0.2.0 to the existing `https://mcp.ilovestudy.de` endpoint after private configuration and SQLite backups. Existing owner, device and refresh authorizations were retained.
+- Installed the supplied Google web-client credential only in the protected server configuration (mode 0400); no credential was added to Git, plugin ZIP or public files. Its redirect URI matches `/auth/google/callback`.
+- Public HTTPS checks passed: version 0.2.0 health, Google enabled, browser-login page available, Google authorization start pointing to the configured client and exact callback with state/nonce/PKCE S256, and anonymous MCP access denied. Google token/JWKS endpoints are reachable from the server.
+- The existing Windows p111 device was upgraded to protocol v2 and reconnected; local MCP health passed. This is an actual Windows agent compatibility check, not a full Windows universal-installer or boot/startup acceptance test.
+- The public plugin download matches the accepted universal ZIP SHA256 `609cf2d35fe882967bc0114b952e493866a81749c221bb9adfe9e455c5f82e31`.
+- No browser automation was used. A real Google account sign-in still requires the user to complete Google's interactive authentication; successful account login, account binding and real two-user isolation are not claimed yet.
