@@ -8,9 +8,9 @@
   "homepage": "https://github.com/wonderwhy-er/DesktopCommanderMCP",
   "repository": {
     "type": "git",
-    "url": "https://github.com/wonderwhy-er/DesktopCommanderMCP.git"
+    "url": "https://github.com/bb-boy/desktop-bridge.git"
   },
-  "bugs": "https://github.com/wonderwhy-er/DesktopCommanderMCP/issues",
+  "bugs": "https://github.com/bb-boy/desktop-bridge/issues",
   "type": "module",
   "engines": {
     "node": ">=22.12.0"
@@ -65,7 +65,10 @@
     "logs:clear": "npm run build && node scripts/clear-fuzzy-logs.js",
     "logs:export": "npm run build && node scripts/export-fuzzy-logs.js",
     "count-tokens": "npm run build && node scripts/count-tokens.js",
-    "count-tokens:json": "npm run build && node scripts/count-tokens.js --json"
+    "count-tokens:json": "npm run build && node scripts/count-tokens.js --json",
+    "bridge:install": "npm --prefix bridge ci --ignore-scripts",
+    "bridge:test": "npm --prefix bridge test",
+    "bridge:start": "npm --prefix bridge start"
   },
   "publishConfig": {
     "access": "public"
@@ -157,5 +160,6 @@
     },
     "proxy-addr": "^2.0.8",
     "argparse": "^2.0.1"
-  }
+  },
+  "private": true
 }

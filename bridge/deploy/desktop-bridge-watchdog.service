@@ -1,0 +1,7 @@
+[Unit]
+Description=Recover a stopped or unresponsive Desktop Bridge
+
+[Service]
+Type=oneshot
+ExecCondition=/usr/bin/test ! -e /var/lib/desktop-bridge/maintenance.flag
+ExecStart=/bin/sh -c '/usr/bin/curl --silent --fail --max-time 8 http://127.0.0.1:8787/healthz >/dev/null || /usr/bin/systemctl restart desktop-bridge.service'

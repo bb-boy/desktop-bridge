@@ -1,0 +1,16 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "desktop-bridge-p111",
+  "version": "0.1.0",
+  "description": "通过自托管 MCP 中继，管理 p111 的文件并执行终端命令。单用户测试版。",
+  "license": "MIT",
+  "homepage": "https://mcp.ilovestudy.de",
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Desktop Bridge 测试版",
+        "shortDescription": "连接 p111 的文件和终端工具"
+      }
+    }
+  }
+}

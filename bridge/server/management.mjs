@@ -1,0 +1,150 @@
+import { randomUUID, randomInt } from 'node:crypto';
+import { rateLimit } from 'express-rate-limit';
+import { opaque,hash,passwordHash,checkPassword,cookieValue } from './security.mjs';
+
+const codeHash=value=>hash(String(value??'').toUpperCase().replace(/[^A-Z0-9]/g,''));
+export function installManagement(app,config,store,broker,loginLimiter) {
+  const cookieOptions={httpOnly:true,secure:new URL(config.baseUrl).protocol==='https:',sameSite:'strict',path:'/'};
+  const sameOrigin=req=>req.get('origin')===new URL(config.baseUrl).origin && req.get('sec-fetch-site')!=='cross-site';
+  const json=(res,status,error)=>res.status(status).json({error});
+  function session(req) {
+    const token=cookieValue(req,'bridge_session');
+    return token&&store.db.prepare('SELECT * FROM sessions WHERE hash=? AND expires>?').get(hash(token),Date.now());
+  }
+  function requireSession(req,res,next) {
+    const s=session(req);
+    if(!s || !store.accountById(s.owner))return json(res,401,'请先登录');
+    req.session=s;
+    if(!['GET','HEAD'].includes(req.method) && (!sameOrigin(req)||req.get('x-csrf-token')!==s.csrf))return json(res,403,'页面验证失败，请刷新后重试');
+    res.set('Cache-Control','no-store'); next();
+  }
+  function newSession(res,owner) {
+    const token=opaque(),csrf=opaque();
+    store.db.prepare('INSERT INTO sessions VALUES (?,?,?,?)').run(hash(token),owner,csrf,Date.now()+7*86400000);
+    res.cookie('bridge_session',token,{...cookieOptions,maxAge:7*86400000});
+    return {account:store.accountById(owner),csrf};
+  }
+  app.get('/api/session',(req,res)=>{
+    res.set('Cache-Control','no-store');
+    const s=session(req);
+    if(s)return res.json({account:store.accountById(s.owner),csrf:s.csrf});
+    const csrf=opaque();res.cookie('bridge_login',csrf,{...cookieOptions,maxAge:600000});res.json({account:null,csrf});
+  });
+  function loginCsrf(req,res,next) {
+    if(!sameOrigin(req)||req.get('x-csrf-token')!==cookieValue(req,'bridge_login')||!cookieValue(req,'bridge_login'))return json(res,403,'请刷新登录页面');
+    next();
+  }
+  app.post('/api/login',loginLimiter,loginCsrf,async(req,res)=>{
+    const a=store.account(String(req.body.username??''));
+    const valid=await checkPassword(req.body.password,a?.password??config.ownerPasswordHash);
+    if(!a||!valid)return json(res,401,'账号或密码错误');
+    const old=cookieValue(req,'bridge_session');if(old)store.db.prepare('DELETE FROM sessions WHERE hash=?').run(hash(old));
+    res.clearCookie('bridge_login',cookieOptions);res.json(newSession(res,a.id));
+  });
+  app.post('/api/signup',loginLimiter,loginCsrf,async(req,res)=>{
+    const {username,password,invitation}=req.body;
+    if(typeof username!=='string'||!/^\p{L}[\p{L}\p{N}_.-]{2,47}$/u.test(username)||typeof password!=='string'||password.length<12||password.length>256)return json(res,400,'账号需为 3–48 位；密码至少 12 位');
+    const passwordEncoded=await passwordHash(password);
+    try {
+      const id=store.transaction(()=>{
+        const invite=store.db.prepare('SELECT hash FROM invitations WHERE hash=? AND expires>?').get(hash(String(invitation??'')),Date.now());
+        if(!invite)throw new Error('邀请已失效');
+        if(store.account(username))throw new Error('账号已存在');
+        const id=randomUUID();store.db.prepare('INSERT INTO accounts VALUES (?,?,?,?,?)').run(id,username,passwordEncoded,0,Date.now());
+        store.db.prepare('DELETE FROM invitations WHERE hash=?').run(invite.hash);return id;
+      });
+      res.status(201).json(newSession(res,id));
+    } catch(e){json(res,400,e.message);}
+  });
+  app.post('/api/logout',requireSession,(req,res)=>{store.db.prepare('DELETE FROM sessions WHERE hash=?').run(req.session.hash);res.clearCookie('bridge_session',cookieOptions);res.json({ok:true});});
+  app.post('/api/invitations',requireSession,(req,res)=>{
+    if(!store.accountById(req.session.owner).admin)return json(res,403,'仅管理员可邀请用户');
+    const token=opaque();store.db.prepare('INSERT INTO invitations VALUES (?,?)').run(hash(token),Date.now()+86400000);
+    res.json({url:new URL('/?invite='+token,config.baseUrl).href,expiresIn:86400});
+  });
+  app.post('/api/password',requireSession,loginLimiter,async(req,res)=>{
+    const a=store.db.prepare('SELECT * FROM accounts WHERE id=?').get(req.session.owner);
+    if(!await checkPassword(req.body.currentPassword,a.password))return json(res,403,'当前密码错误');
+    if(typeof req.body.password!=='string'||req.body.password.length<12||req.body.password.length>256)return json(res,400,'新密码至少 12 位');
+    const encoded=await passwordHash(req.body.password);
+    store.transaction(()=>{
+      store.db.prepare('UPDATE accounts SET password=? WHERE id=?').run(encoded,a.id);
+      store.db.prepare('DELETE FROM sessions WHERE owner=? AND hash<>?').run(a.id,req.session.hash);
+      store.db.prepare("DELETE FROM grants WHERE json_extract(value,'$.ownerId')=? AND kind IN ('access','refresh','code')").run(a.id);
+    });res.json({ok:true});
+  });
+  app.get('/api/manage/devices',requireSession,(req,res)=>res.json({devices:broker.devices(req.session.owner)}));
+  app.post('/api/manage/devices/:id/:action',requireSession,(req,res)=>{
+    const d=store.device(req.params.id);
+    if(!d||d.owner!==req.session.owner)return json(res,404,'设备不存在');
+    switch(req.params.action) {
+      case 'rename': {
+        const name=String(req.body.name??'').trim();if(!name||name.length>100)return json(res,400,'名称需为 1–100 字');
+        store.db.prepare('UPDATE registry SET name=? WHERE id=?').run(name,d.id);break;
+      }
+      case 'pause':store.db.prepare('UPDATE registry SET paused=1 WHERE id=?').run(d.id);broker.disconnect(d.id,'Device paused');break;
+      case 'resume':store.db.prepare('UPDATE registry SET paused=0 WHERE id=?').run(d.id);break;
+      case 'unlink':
+        store.db.prepare('UPDATE registry SET revoked=1,tokenHash=NULL,pendingHash=NULL WHERE id=?').run(d.id);broker.disconnect(d.id,'Device unlinked');break;
+      case 'rotate': {
+        const conn=broker.connections.get(d.id);
+        if(!conn?.ready||conn.protocol<2)return json(res,409,'请先连接新版客户端；离线设备可解绑后重新配对');
+        if(d.pendingHash)return json(res,409,'上次密钥轮换尚未确认，请等待设备重连');
+        const token=opaque();store.db.prepare('UPDATE registry SET pendingHash=? WHERE id=?').run(hash(token),d.id);
+        conn.ws.send(JSON.stringify({type:'rotate',token}));break;
+      }
+      default:return json(res,404,'未知操作');
+    }
+    res.json({ok:true});
+  });
+  app.get('/api/manage/calls',requireSession,(req,res)=>res.json({calls:store.recentCalls(req.session.owner)}));
+  app.get('/api/manage/calls/:id',requireSession,(req,res)=>{
+    const call=broker.recover(req.params.id,req.session.owner);if(!call)return json(res,404,'任务不存在');res.json(call);
+  });
+  app.get('/api/manage/authorizations',requireSession,(req,res)=>{
+    const grants=store.db.prepare("SELECT client,value,expires FROM grants WHERE kind IN ('access','refresh') AND json_extract(value,'$.ownerId')=? AND expires>? ORDER BY expires DESC").all(req.session.owner,Date.now());
+    const families=new Map();
+    for(const g of grants){const v=JSON.parse(g.value);if(!families.has(v.family))families.set(v.family,{id:v.family,clientId:g.client,name:store.getClient(g.client)?.client_name??'MCP Client',expires:g.expires});}
+    res.json({authorizations:[...families.values()]});
+  });
+  app.post('/api/manage/authorizations/:id/revoke',requireSession,(req,res)=>{
+    store.db.prepare("DELETE FROM grants WHERE json_extract(value,'$.ownerId')=? AND json_extract(value,'$.family')=?").run(req.session.owner,req.params.id);res.json({ok:true});
+  });
+  const pairingLimiter=rateLimit({windowMs:60000,limit:30,standardHeaders:'draft-8',legacyHeaders:false});
+  app.post('/api/pair/start',pairingLimiter,(req,res)=>{
+    if(store.db.prepare('SELECT count(*) AS n FROM pairings WHERE expires>?').get(Date.now()).n>=1000)return json(res,429,'配对繁忙，请稍后重试');
+    const secret=opaque(),device=randomUUID();
+    const alphabet='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let code='';for(let i=0;i<8;i++)code+=alphabet[randomInt(alphabet.length)];
+    store.db.prepare('INSERT INTO pairings VALUES (?,?,?,?,?,?,?,?,?)').run(hash(secret),codeHash(code),device,String(req.body.name??'新电脑').slice(0,100),String(req.body.platform??'unknown').slice(0,60),String(req.body.version??'unknown').slice(0,40),null,'pending',Date.now()+600000);
+    res.set('Cache-Control','no-store').json({deviceCode:secret,userCode:code.slice(0,4)+'-'+code.slice(4),verificationUri:new URL('/?pair='+code,config.baseUrl).href,expiresIn:600,interval:5});
+  });
+  app.post('/api/pair/poll',rateLimit({windowMs:60000,limit:60,standardHeaders:'draft-8',legacyHeaders:false}),(req,res)=>{
+    res.set('Cache-Control','no-store');
+    const p=store.db.prepare('SELECT * FROM pairings WHERE hash=? AND expires>?').get(hash(String(req.body.deviceCode??'')),Date.now());
+    if(!p||p.status==='claimed')return json(res,410,'配对已过期或已领取');
+    if(p.status==='pending')return res.status(202).json({status:'pending'});
+    if(p.status==='denied')return json(res,403,'配对已拒绝');
+    const token=opaque();
+    store.transaction(()=>{
+      const d=store.device(p.device);if(!d||d.owner!==p.owner)throw new Error('Pairing device missing');
+      store.db.prepare('UPDATE registry SET tokenHash=? WHERE id=?').run(hash(token),p.device);
+      store.db.prepare("UPDATE pairings SET status='claimed' WHERE hash=?").run(p.hash);
+    });res.json({deviceId:p.device,deviceToken:token});
+  });
+  app.get('/api/manage/pair',requireSession,(req,res)=>{
+    const p=store.db.prepare("SELECT name,platform,version,status FROM pairings WHERE userHash=? AND expires>? AND status='pending'").get(codeHash(req.query.code),Date.now());
+    if(!p)return json(res,404,'配对码已过期或不存在');res.json(p);
+  });
+  app.post('/api/manage/pair',requireSession,loginLimiter,(req,res)=>{
+    const p=store.db.prepare("SELECT * FROM pairings WHERE userHash=? AND expires>? AND status='pending'").get(codeHash(req.body.code),Date.now());
+    if(!p)return json(res,404,'配对码已过期或已使用');
+    if(store.devices(req.session.owner).length>=50)return json(res,409,'每个账号最多绑定 50 台设备');
+    store.transaction(()=>{
+      if(req.body.decision==='deny'){store.db.prepare("UPDATE pairings SET status='denied' WHERE hash=?").run(p.hash);return;}
+      if(req.body.decision!=='approve')throw new Error('Invalid decision');
+      store.db.prepare('INSERT INTO registry(id,owner,name,version,platform) VALUES (?,?,?,?,?)').run(p.device,req.session.owner,p.name,p.version,p.platform);
+      store.db.prepare("UPDATE pairings SET status='approved',owner=? WHERE hash=?").run(req.session.owner,p.hash);
+    });res.json({ok:true});
+  });
+  return {requireSession};
+}

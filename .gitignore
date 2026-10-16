@@ -58,3 +58,21 @@ test_files/
 test_fix.js
 test_search.js
 .ripgrep-downloads/
+
+# Desktop Bridge local credentials, state and generated packages
+**/agent-config.json
+**/server-config.json
+**/owner-password.txt
+**/credentials*
+**/journal.json
+**/heartbeat.json
+**/agent.lock
+**/maintenance.flag
+**/*.db
+**/*.db-*
+**/*.db.*
+**/*.sqlite*
+bridge/data/
+bridge/public/downloads/
+.env.*
+!.env.example

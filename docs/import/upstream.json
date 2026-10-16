@@ -1,0 +1,17 @@
+{
+  "upstreamRepository": "https://github.com/wonderwhy-er/DesktopCommanderMCP",
+  "upstreamBranch": "main",
+  "upstreamCommit": "f508e524469c26f6366e17dbfd3ee5a69d112127",
+  "upstreamCommitCount": 904,
+  "importedAt": "2026-10-16T18:25:47.950374+00:00",
+  "history": "Full main branch ancestry, not a shallow clone. Other upstream branches and release tags are not imported.",
+  "bridgeSource": "Snapshot of the existing work/desktop-bridge source, captured in docs/import/bridge-snapshot.json. Original workspace is unchanged.",
+  "validation": {
+    "bridgeIntegrationTests": {
+      "passed": 10,
+      "failed": 0
+    },
+    "upstreamBuild": "Not run during repository import.",
+    "clientInstaller": "Development snapshot; installation/release validation remains in the original development task."
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "desktop_bridge": {
+      "type": "streamable-http",
+      "url": "https://mcp.ilovestudy.de/mcp",
+      "extensions": {
+        "com.openai": {
+          "auth": {
+            "type": "oauth",
+            "client": {
+              "mode": "dcr"
+            },
+            "baseScopes": [
+              "desktop"
+            ],
+            "resource": "https://mcp.ilovestudy.de/mcp"
+          }
+        }
+      }
+    }
+  }
+}

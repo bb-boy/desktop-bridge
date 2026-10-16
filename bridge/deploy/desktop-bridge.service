@@ -1,0 +1,30 @@
+[Unit]
+Description=Personal Desktop Bridge MCP relay
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+ConditionPathExists=!/var/lib/desktop-bridge/maintenance.flag
+
+[Service]
+Type=simple
+User=desktopbridge
+Group=desktopbridge
+WorkingDirectory=/var/lib/desktop-bridge
+Environment=NODE_ENV=production
+Environment=BRIDGE_CONFIG=/etc/desktop-bridge/config.json
+ExecStart=/usr/bin/node /opt/desktop-bridge/current/server/index.mjs
+Restart=always
+RestartSec=3
+TimeoutStopSec=15
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/desktop-bridge
+UMask=0077
+MemoryMax=256M
+TasksMax=64
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

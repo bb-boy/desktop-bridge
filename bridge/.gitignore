@@ -1,0 +1,9 @@
+node_modules/
+data/
+*.env
+*.db*
+agent-config.json
+server-config.json
+owner-password.txt
+credentials*
+test-results/

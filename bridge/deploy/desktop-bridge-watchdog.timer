@@ -1,0 +1,11 @@
+[Unit]
+Description=Check Desktop Bridge every minute
+
+[Timer]
+OnBootSec=90s
+OnUnitActiveSec=60s
+AccuracySec=5s
+Unit=desktop-bridge-watchdog.service
+
+[Install]
+WantedBy=timers.target

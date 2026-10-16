@@ -1,0 +1,162 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
+import { createHash } from 'node:crypto';
+import { pairDevice,saveConfig } from './pair.mjs';
+
+const configPath=process.env.BRIDGE_AGENT_CONFIG??process.argv[2];
+if(!configPath) throw new Error('Usage: node agent.mjs path/to/agent-config.json');
+const config=JSON.parse(fs.readFileSync(configPath,'utf8'));
+if(process.argv.includes('--pair')){delete config.deviceToken;delete config.deviceId;saveConfig(configPath,config);}
+const directory=path.dirname(path.resolve(configPath));
+if(fs.existsSync(path.join(directory,'maintenance.flag'))) process.exit(0);
+
+const lockPath=path.join(directory,'agent.lock');
+try {
+  const fd=fs.openSync(lockPath,'wx',0o600);fs.writeFileSync(fd,String(process.pid));fs.closeSync(fd);
+} catch(e) {
+  if(e.code!=='EEXIST') throw e;
+  const old=Number(fs.readFileSync(lockPath,'utf8'));
+  let alive=false;
+  if(Number.isInteger(old) && old>0 && old!==process.pid) {try{process.kill(old,0);alive=true;}catch(err){if(err.code!=='ESRCH')alive=true;}}
+  if(alive) process.exit(0);
+  fs.unlinkSync(lockPath);
+  const fd=fs.openSync(lockPath,'wx',0o600);fs.writeFileSync(fd,String(process.pid));fs.closeSync(fd);
+}
+const logPath=path.join(directory,'agent.log');
+function log(event,fields={}) {
+  try {
+    if(fs.existsSync(logPath) && fs.statSync(logPath).size>1024*1024) fs.renameSync(logPath,logPath+'.1');
+    fs.appendFileSync(logPath,JSON.stringify({time:new Date().toISOString(),event,...fields})+'\n',{mode:0o600});
+  } catch {}
+}
+function unlock(){try{if(fs.readFileSync(lockPath,'utf8')===String(process.pid))fs.unlinkSync(lockPath);}catch{}}
+process.on('exit',unlock);
+
+if(!config.deviceToken||!config.deviceId)await pairDevice(config,configPath);
+const requireRuntime=createRequire(path.join(config.runtimeDir,'package.json'));
+const {Client}=await import(pathToFileURL(requireRuntime.resolve('@modelcontextprotocol/sdk/client/index.js')));
+const {StdioClientTransport}=await import(pathToFileURL(requireRuntime.resolve('@modelcontextprotocol/sdk/client/stdio.js')));
+const WebSocket=requireRuntime('ws');
+const client=new Client({name:'personal-desktop-bridge-agent',version:'0.2.0'},{capabilities:{}});
+const transport=new StdioClientTransport({command:process.execPath,args:[config.mcpEntry],cwd:config.workingDirectory??directory,env:{...process.env},stderr:'pipe'});
+let ws,retryTimer,stopping=false,attempt=0,localHealthy=false,checkingHealth=false,healthFailures=0;
+const heartbeatPath=path.join(directory,'heartbeat.json');
+function writeHeartbeat(){try{fs.writeFileSync(heartbeatPath,JSON.stringify({pid:process.pid,time:Date.now(),connected:ws?.readyState===1,localToolsAvailable:localHealthy}),{mode:0o600});}catch{}}
+writeHeartbeat();
+const processHeartbeat=setInterval(writeHeartbeat,15000);processHeartbeat.unref();
+const journalPath=path.join(directory,'journal.json');
+let journal={};
+try{journal=JSON.parse(fs.readFileSync(journalPath,'utf8'));}catch(e){if(e.code!=='ENOENT'){log('journal_corrupt');process.exit(78);}}
+function persist() {
+  const entries=Object.entries(journal).filter(([,v])=>v.status==='executing'||Date.now()-(v.time??0)<30*86400000).sort((a,b)=>(b[1].time??0)-(a[1].time??0));
+  let bytes=0;
+  journal=Object.fromEntries(entries.map(([id,value])=>{
+    bytes+=JSON.stringify(value).length;
+    return [id,bytes>12*1024*1024?{status:'unknown',time:value.time}:value];
+  }));
+  fs.writeFileSync(journalPath+'.tmp',JSON.stringify(journal),{mode:0o600});
+  fs.renameSync(journalPath+'.tmp',journalPath);
+}
+for(const entry of Object.values(journal)) if(entry.status==='executing') entry.status='unknown';
+persist();
+const running=new Map();
+async function execute(message,socket) {
+  if(!/^[0-9a-f-]{36}$/.test(message.id) || typeof message.name!=='string' || !message.arguments || typeof message.arguments!=='object' || Array.isArray(message.arguments)) return socket.close(1008,'Invalid call');
+  const cached=journal[message.id];
+  if(cached) {
+    if(cached.status==='completed') return send(socket,{type:'result',id:message.id,result:cached.result});
+    if(cached.status==='executing') return; // Original execution will answer; never run a duplicate.
+    return send(socket,{type:'result',id:message.id,status:'unknown',error:'An earlier execution has an unknown outcome. Inspect the computer before retrying.'});
+  }
+  if(running.size>=4) return send(socket,{type:'result',id:message.id,error:'Agent is busy; no command was executed.'});
+  journal[message.id]={status:'executing',time:Date.now()};
+  persist();
+  running.set(message.id,true);
+  log('call_started',{id:message.id,tool:message.name});
+  try {
+    const args={...message.arguments};
+    if(process.platform==='win32' && message.name==='start_process') {
+      args.shell??=config.defaultShell;
+      if(typeof args.command==='string' && /(?:^|[\\/])(powershell|pwsh)(?:\.exe)?$/i.test(args.shell??'')) {
+        args.command='[Console]::OutputEncoding=[Text.Encoding]::UTF8;$OutputEncoding=[Text.UTF8Encoding]::new($false);'+args.command;
+      }
+    }
+    let result=await client.callTool({name:message.name,arguments:args},undefined,{timeout:110000,maxTotalTimeout:110000});
+    if(Buffer.byteLength(JSON.stringify(result))>8*1024*1024) result={isError:true,content:[{type:'text',text:'Tool ran, but its result exceeded the transfer limit. Use smaller pages or save output to a file.'}]};
+    journal[message.id]={status:'completed',time:Date.now(),result};persist();
+    send(ws,{type:'result',id:message.id,result});
+    log('call_finished',{id:message.id,isError:!!result.isError});
+  } catch(e) {
+    journal[message.id]={status:'unknown',time:Date.now()};persist();
+    send(ws,{type:'result',id:message.id,status:'unknown',error:'Local tool request failed; its execution outcome may be unknown. '+String(e.message).slice(0,500)});
+    log('call_failed',{id:message.id});
+  } finally {running.delete(message.id);}
+}
+function send(socket,message) {if(socket?.readyState===WebSocket.OPEN)socket.send(JSON.stringify(message));}
+async function shutdown(code=0) {
+  if(stopping)return;stopping=true;clearTimeout(retryTimer);
+  clearInterval(processHeartbeat);
+  ws?.close();
+  const timeout=setTimeout(()=>process.exit(code),8000);timeout.unref();
+  try{await client.close();}catch{}
+  process.exit(code);
+}
+process.on('SIGINT',()=>void shutdown());process.on('SIGTERM',()=>void shutdown());
+process.on('uncaughtException',error=>{log('fatal',{type:error.name});void shutdown(1);});
+process.on('unhandledRejection',error=>{log('fatal_rejection',{type:error?.name});void shutdown(1);});
+client.onclose=()=>{if(!stopping){log('local_mcp_closed');void shutdown(1);}};
+client.onerror=error=>log('local_mcp_error',{type:error.name});
+try{await client.connect(transport,{timeout:30000});}catch(error){log('local_mcp_start_failed',{message:String(error.message).slice(0,300)});await shutdown(1);}
+// Drain stderr to prevent a full pipe from blocking the local MCP process.
+transport.stderr?.on('data',()=>{});
+let tools=[],cursor;
+do {const page=await client.listTools(cursor?{cursor}:{});tools.push(...page.tools);cursor=page.nextCursor;}while(cursor);
+log('local_mcp_ready',{toolCount:tools.length,pid:process.pid,childPid:transport.pid});
+function recover(id,socket) {
+  const entry=journal[id];
+  if(entry?.status==='completed')send(socket,{type:'result',id,result:entry.result});
+  else if(entry?.status==='executing')send(socket,{type:'result',id,status:'executing'});
+  else send(socket,{type:'result',id,status:'unknown',error:'客户端未保留确定结果。请检查电脑上的实际状态；不会自动重试。'});
+}
+async function checkHealth(socket) {
+  if(checkingHealth)return;
+  checkingHealth=true;
+  try{await client.ping({timeout:5000});const probe=tools.find(t=>['get_config','list_sessions'].includes(t.name));if(probe){const result=await client.callTool({name:probe.name,arguments:{}},undefined,{timeout:5000});if(result.isError)throw new Error('Probe failed');}else await client.listTools({}, {timeout:5000});localHealthy=true;healthFailures=0;}
+  catch{localHealthy=false;if(++healthFailures>=3){log('local_health_failed');void shutdown(1);}}
+  finally{checkingHealth=false;send(socket,{type:'health',ok:localHealthy});writeHeartbeat();}
+}
+function connect() {
+  if(stopping)return;
+  const url=new URL('/agent',config.serverUrl);
+  url.protocol=url.protocol==='https:'?'wss:':'ws:';
+  if(url.protocol!=='wss:' && !['localhost','127.0.0.1'].includes(url.hostname)) throw new Error('Remote connection requires HTTPS');
+  const socket=new WebSocket(url,{headers:{Authorization:'Bearer '+config.deviceToken},handshakeTimeout:15000,perMessageDeflate:false,maxPayload:10*1024*1024});
+  ws=socket;
+  let lastSeen=Date.now(),welcomed=false;
+  const heartbeat=setInterval(()=>{if(Date.now()-lastSeen>65000)socket.terminate();},15000);
+  socket.on('ping',()=>lastSeen=Date.now());
+  socket.on('open',()=>{send(socket,{type:'hello',protocol:2,deviceId:config.deviceId,tools,version:'0.2.0',platform:process.platform});});
+  socket.on('message',data=>{
+    lastSeen=Date.now();
+    try {
+      const message=JSON.parse(data.toString());
+      if(message.type==='welcome'){welcomed=true;attempt=0;log('connected');for(const id of message.recover??[])recover(id,socket);}
+      else if(message.type==='recover'&&welcomed){for(const id of message.ids??[])recover(id,socket);}
+      else if(message.type==='health_check'&&welcomed)void checkHealth(socket);
+      else if(message.type==='rotate'&&welcomed){if(!/^[A-Za-z0-9_-]{43}$/.test(message.token))throw new Error('Invalid token');config.deviceToken=message.token;saveConfig(configPath,config);send(socket,{type:'rotate_ack',tokenHash:createHash('sha256').update(message.token).digest('hex')});}
+      else if(message.type==='call' && welcomed) void execute(message,socket);
+      else socket.close(1008,'Invalid server message');
+    } catch {socket.close(1008,'Invalid server message');}
+  });
+  socket.on('error',error=>log('connection_error',{message:String(error.message).slice(0,240)}));
+  socket.on('close',(code)=>{
+    clearInterval(heartbeat);
+    if(stopping)return;
+    const delay=Math.min(60000,1000*2**Math.min(attempt++,6))+Math.floor(Math.random()*1000);
+    log('disconnected',{code,retryInMs:delay});
+    retryTimer=setTimeout(connect,delay);
+  });
+}
+connect();
