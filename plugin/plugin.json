@@ -1,16 +1,24 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "desktop-bridge-p111",
-  "version": "0.1.0",
-  "description": "通过自托管 MCP 中继，管理 p111 的文件并执行终端命令。单用户测试版。",
+  "version": "0.2.0",
+  "description": "通过统一的自托管 MCP 服务连接 Windows、macOS 和 Linux；支持账号配对、设备授权隔离、健康检查与断线结果恢复。",
   "license": "MIT",
   "homepage": "https://mcp.ilovestudy.de",
   "extensions": {
     "com.openai": {
       "interface": {
-        "displayName": "Desktop Bridge 测试版",
-        "shortDescription": "连接 p111 的文件和终端工具"
+        "displayName": "Desktop Bridge",
+        "shortDescription": "跨系统连接电脑、管理授权与找回结果",
+        "longDescription": "通过统一的自托管 MCP 服务连接 Windows、macOS 和 Linux；支持账号配对、设备授权隔离、健康检查与断线结果恢复。",
+        "category": "Productivity",
+        "capabilities": [
+          "Interactive"
+        ],
+        "logo": "./assets/logo.svg",
+        "composerIcon": "./assets/logo.svg"
       }
     }
-  }
+  },
+  "repository": "https://github.com/bb-boy/desktop-bridge"
 }

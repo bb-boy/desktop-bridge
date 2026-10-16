@@ -92,3 +92,5 @@ bridge/public/downloads/
 **/*.db
 **/*.db-*
 release-output/
+**/test/test_output/
+plugin/assets/client/
