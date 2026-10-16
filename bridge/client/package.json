@@ -3,10 +3,21 @@
   "version": "0.2.0",
   "private": true,
   "type": "module",
-  "engines": {"node": ">=24"},
+  "engines": {
+    "node": ">=24"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",
     "@wonderwhy-er/desktop-commander": "0.3.0",
     "ws": "8.22.0"
+  },
+  "overrides": {
+    "md-to-pdf": {
+      "chokidar": "^4.0.3"
+    },
+    "exceljs": {
+      "uuid": "^11.1.1"
+    },
+    "argparse": "^2.0.1"
   }
 }
