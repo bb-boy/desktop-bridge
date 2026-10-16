@@ -19,7 +19,7 @@ const server=http.createServer((request,response)=>{
  if(request.url==='/api/pair/poll')return response.end(JSON.stringify({deviceId:'smoke-device',deviceToken:String(pairs).repeat(43)}));
  response.statusCode=404;response.end('{}');
 });
-async function run(command,args,env){const child=spawn(command,args,{env,stdio:['ignore','pipe','pipe']});let output='';child.stdout.on('data',data=>output+=data);child.stderr.on('data',data=>output+=data);const [code]=await once(child,'exit');assert.equal(code,0,output);}
+async function run(command,args,env){const child=spawn(command,args,{env,stdio:['ignore','pipe','pipe']});let output='';child.stdout.on('data',data=>output+=data);child.stderr.on('data',data=>output+=data);const [code]=await once(child,'exit');assert.equal(code,0,output);return output;}
 try{
  fs.cpSync(path.join(bridge,'client'),source,{recursive:true,filter:file=>path.basename(file)!=='node_modules'});
  fs.cpSync(path.join(bridge,'agent'),path.join(source,'agent'),{recursive:true});
@@ -27,6 +27,7 @@ try{
  const env={...process.env,HOME:path.join(temp,'home'),XDG_CONFIG_HOME:path.join(temp,'config')};
  // Fresh bootstrap: official archive download + pinned checksum + npm ci + headless pairing.
  await run('/bin/sh',[path.join(source,'Install.sh'),'--root',data,'--no-browser','--no-start'],env);
+ assert.equal(JSON.parse(fs.readFileSync(path.join(data,'client-settings.json'))).mode,'manual');assert.equal(fs.existsSync(path.join(data,'runner-lock')),false);assert.match(fs.readFileSync(path.join(data,'START-HERE.txt'),'utf8'),/Ctrl\+C/);
  const config=JSON.parse(fs.readFileSync(path.join(data,'agent-config.json')));assert.equal(pairs,1);assert.equal(config.deviceId,'smoke-device');
  const installedNode=path.join(data,'runtime',`node-v24.19.0-${process.platform}-${process.arch}`,'bin/node');assert.ok(fs.existsSync(installedNode));
  const require=createRequire(path.join(config.runtimeDir,'package.json'));
@@ -40,9 +41,15 @@ try{
  const ExcelJS=require('exceljs');const workbook=new ExcelJS.Workbook();workbook.addWorksheet('Smoke').addRow(['works']);assert.ok((await workbook.xlsx.writeBuffer()).length>0);
  const mdRequire=createRequire(require.resolve('md-to-pdf/package.json'));const matter=mdRequire('gray-matter');assert.equal(matter('---\ntitle: smoke\n---\nbody').data.title,'smoke');
  await client.close();client=null;
+ // A same-version reinstall retains manual mode and does not run npm or pair again.
+ const dependencyTime=fs.statSync(path.join(config.runtimeDir,'node_modules')).mtimeMs;
+ const reused=await run('/bin/sh',[path.join(source,'Install.sh'),'--root',data,'--no-browser'],env);assert.equal(pairs,1);assert.equal(fs.statSync(path.join(config.runtimeDir,'node_modules')).mtimeMs,dependencyTime);assert.match(reused,/本地工具验证通过/);
+ // Missing module code is automatically repaired even with an unchanged lockfile.
+ fs.rmSync(path.join(config.runtimeDir,'node_modules','ws','lib','websocket.js'));
+ const repaired=await run('/bin/sh',[path.join(source,'Install.sh'),'--root',data,'--no-browser'],env);assert.equal(pairs,1);assert.ok(fs.existsSync(path.join(config.runtimeDir,'node_modules','ws','lib','websocket.js')));assert.match(repaired,/自动安装或修复/);
  // Existing runtime reuse works without another runtime archive; repair gets new credentials.
  await run('/bin/sh',[path.join(source,'Install.sh'),'--root',data,'--repair','--no-browser','--no-start'],env);assert.equal(pairs,2);
  // Uninstallation keeps credentials for result recovery; purge is a separate explicit choice.
  await run('/bin/sh',[path.join(source,'Uninstall.sh'),'--root',data],env);assert.ok(fs.existsSync(path.join(data,'agent-config.json')));assert.equal(fs.existsSync(path.join(data,'runtime')),false);
- console.log('PASS: '+process.platform+'/'+process.arch+' official runtime download and checksum, isolated installation, headless pairing, real Desktop Commander MCP, ripgrep binary, ExcelJS/YAML override compatibility, repair and uninstall.');
+ console.log('PASS: '+process.platform+'/'+process.arch+' official runtime download and checksum, isolated installation, headless pairing, real Desktop Commander MCP, ripgrep binary, ExcelJS/YAML override compatibility, manual mode persistence and saved commands, automatic missing-module repair, no duplicate npm on reuse, repair and uninstall.');
 }finally{await client?.close();server.close();fs.rmSync(temp,{recursive:true,force:true});}

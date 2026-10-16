@@ -12,15 +12,9 @@ export function elevationRequest(action,{source,mode,purge=false,root=protectedR
   if(action==='mode'&&!['manual','background'].includes(mode))throw new Error('Mode must be manual or background.');
   if(purge&&action!=='uninstall')throw new Error('--purge requires uninstall.');
   const installer=action==='install'?path.join(source,'admin-service.mjs'):path.join(root,'admin-service.mjs');
-  const node=action==='install'?process.execPath:JSON.parse(fs.readFileSync(path.join(root,'launch.json'),'utf8')).node;
-  // launch.json uses the original private node when installed by a normal user,
-  // so for privileged operations always choose the copy inside the protected root.
-  let safeNode=node;
-  if(action!=='install') {
-    const entries=fs.readdirSync(path.join(root,'runtime')).filter(x=>/^node-v24\./.test(x));
-    if(entries.length!==1)throw new Error('Cannot resolve a single protected Node runtime.');
-    safeNode=path.join(root,'runtime',entries[0],platform==='win32'?'node.exe':'bin/node');
-  }
+  // The protected root is intentionally unreadable to ordinary users.
+  // Derive the known runtime path without inspecting privileged files.
+  const safeNode=action==='install'?process.execPath:path.join(root,'runtime',`node-v24.19.0-${platform}-${process.arch}`,platform==='win32'?'node.exe':'bin/node');
   const args=[installer,action];
   if(action==='install')args.push(source,mode);
   if(action==='mode')args.push(mode);

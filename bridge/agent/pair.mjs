@@ -8,7 +8,7 @@ export function saveConfig(filename,config) {
 export async function pairDevice(config,filename,{openBrowser=true,intervalMs}={}) {
   const server=new URL(config.serverUrl);
   if(server.protocol!=='https:'&&!['127.0.0.1','localhost'].includes(server.hostname))throw new Error('配对需要 HTTPS');
-  const response=await fetch(new URL('/api/pair/start',server),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:config.deviceName??os.hostname(),platform:process.platform,version:'0.2.0'}),signal:AbortSignal.timeout(15000)});
+  const response=await fetch(new URL('/api/pair/start',server),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:config.deviceName??os.hostname(),platform:process.platform,version:'0.2.1'}),signal:AbortSignal.timeout(15000)});
   if(!response.ok)throw new Error('无法开始配对，请检查网络');
   const p=await response.json();
   console.log('请在网页登录并确认这台电脑。配对码：'+p.userCode+'\n'+p.verificationUri);

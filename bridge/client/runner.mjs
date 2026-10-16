@@ -18,7 +18,9 @@ function stopChild(){
  forceTimer=setTimeout(()=>{if(child)killTree(child);},10000);
 }
 function stop(){if(stopping)return;stopping=true;clearTimeout(restartTimer);if(child)stopChild();else process.exit(0);}
-for(const signal of ['SIGTERM','SIGINT'])process.on(signal,stop);
+process.on('message',message=>{if(message?.type==='stop')stop();});
+if(process.connected)process.on('disconnect',stop);
+for(const signal of ['SIGTERM','SIGINT','SIGHUP'])process.on(signal,stop);
 const watch=setInterval(()=>{
  if(fs.existsSync(flag))return stop();
  if(!child||childStopping)return;

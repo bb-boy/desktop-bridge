@@ -43,7 +43,7 @@ function stopService() {
  }else if(platform==='darwin'){
    if(fs.existsSync(serviceFile))cmd('launchctl',['bootout','system',serviceFile],true);
    fs.rmSync(serviceFile,{force:true});
- }else{
+ }else if(fs.existsSync(serviceFile)){
    cmd('systemctl',['disable','--now','desktop-bridge-administrator.service'],true);
    fs.rmSync(serviceFile,{force:true});
    cmd('systemctl',['daemon-reload']);
@@ -80,7 +80,7 @@ function relocate(source,mode) {
  const stage=path.join(parent,'.desktop-bridge-admin-stage-'+process.pid);
  const backup=path.join(parent,'.desktop-bridge-admin-backup-'+process.pid);
  fs.mkdirSync(stage,{mode:0o700});
- const selected=['.desktop-bridge-client','agent-config.json','launch.json','runner.mjs','lifecycle.mjs','control.mjs','startup.mjs','install-options.mjs','admin-runtime.mjs','admin-service.mjs','runtime','releases'];
+ const selected=['.desktop-bridge-client','agent-config.json','launch.json','runner.mjs','lifecycle.mjs','control.mjs','startup.mjs','install-options.mjs','admin-runtime.mjs','admin-service.mjs','admin-elevate.mjs','runtime','releases'];
  try{
    for(const entry of selected){const file=path.join(base,entry);if(fs.existsSync(file))copyTreeSafe(file,path.join(stage,entry));}
    const oldConfig=fs.existsSync(path.join(root,'agent-config.json'))?JSON.parse(fs.readFileSync(path.join(root,'agent-config.json'),'utf8')):null;
@@ -146,7 +146,7 @@ if(action==='install'){
  if(value&&value!=='--purge')throw new Error('Only --purge is accepted for uninstall');
  if(purge)fs.rmSync(root,{recursive:true,force:true});
  else{
-   for(const entry of ['runtime','releases','runner.mjs','lifecycle.mjs','control.mjs','startup.mjs','install-options.mjs','admin-runtime.mjs','admin-service.mjs','launch.json'])fs.rmSync(path.join(root,entry),{recursive:true,force:true});
+   for(const entry of ['runtime','releases','runner.mjs','lifecycle.mjs','control.mjs','startup.mjs','install-options.mjs','admin-runtime.mjs','admin-service.mjs','admin-elevate.mjs','launch.json'])fs.rmSync(path.join(root,entry),{recursive:true,force:true});
  }
  console.log('Administrator service uninstalled. Device revocation is separate.');
 }

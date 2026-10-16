@@ -47,8 +47,10 @@ export function assertProtectedParents(root,platform=process.platform) {
   const absolute=path.resolve(root);
   if(absolute!==path.resolve(protectedRoot(platform)))throw new Error('Administrative directory must be the fixed protected path.');
   if(platform!=='win32'){
-    let current=absolute;
-    while(current!==path.dirname(current)){
+    let current=absolute,checked=0;
+    // The dedicated installation and its own parent must be protected.
+    // macOS may legitimately mark /Library/Application Support group-admin writable.
+    while(current!==path.dirname(current)&&checked++<2){
       if(!fs.existsSync(current)){current=path.dirname(current);continue;}
       const st=fs.lstatSync(current);
       if(st.isSymbolicLink()||!st.isDirectory())throw new Error('Administrative directory contains an unsafe symlink.');
