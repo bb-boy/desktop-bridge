@@ -20,7 +20,28 @@ $('#login-form').onsubmit=e=>{e.preventDefault();action(async()=>{const s=await 
 $('#signup-form').onsubmit=e=>{e.preventDefault();action(async()=>{const s=await api('/api/signup',{...Object.fromEntries(new FormData(e.target)),invitation});csrf=s.csrf;account=s.account;e.target.reset();await boot();});};
 $('#logout').onclick=()=>action(async()=>{await api('/api/logout',{});account=null;await boot();});
 $('#refresh').onclick=()=>action(refresh);
-for(const tab of document.querySelectorAll('[data-tab]'))tab.onclick=()=>{for(const b of document.querySelectorAll('[data-tab]')){b.classList.toggle('active',b===tab);$('#'+b.dataset.tab+'-tab').hidden=b!==tab;}action(refresh);};
+const tabs=[...document.querySelectorAll('[data-tab]')];
+function selectTab(tab){
+ for(const b of tabs){
+  const active=b===tab;
+  b.classList.toggle('active',active);
+  b.setAttribute('aria-selected',String(active));
+  b.tabIndex=active?0:-1;
+  $('#'+b.dataset.tab+'-tab').hidden=!active;
+ }
+ action(refresh);
+}
+for(const tab of tabs){
+ tab.onclick=()=>selectTab(tab);
+ tab.onkeydown=e=>{
+  const delta=e.key==='ArrowRight'?1:e.key==='ArrowLeft'?-1:0;
+  if(!delta&&e.key!=='Home'&&e.key!=='End')return;
+  e.preventDefault();
+  const index=e.key==='Home'?0:e.key==='End'?tabs.length-1:(tabs.indexOf(tab)+delta+tabs.length)%tabs.length;
+  tabs[index].focus();selectTab(tabs[index]);
+ };
+}
+for(const tab of tabs)tab.tabIndex=tab.classList.contains('active')?0:-1;
 async function refresh(){if(!account||refreshing)return;refreshing=true;try{const [d,c,a]=await Promise.all([api('/api/manage/devices'),api('/api/manage/calls'),api('/api/manage/authorizations')]);renderDevices(d.devices);renderCalls(c.calls);renderAuth(a.authorizations);if(googleEnabled)await renderGoogle();$('#stat-total').textContent=d.devices.length;$('#stat-ready').textContent=d.devices.filter(x=>x.toolsAvailable).length;$('#stat-waiting').textContent=c.calls.filter(x=>['executing','awaiting_result'].includes(x.status)).length;}finally{refreshing=false;}}
 function renderDevices(devices){const parent=$('#devices');if(!devices.length)return empty(parent,'还没有绑定电脑。下载客户端，运行后在下方确认配对。');if(parent.contains(document.activeElement)&&document.activeElement.tagName==='INPUT')return;parent.replaceChildren();for(const d of devices){const card=el('article',undefined,'device'),title=el('div',undefined,'section-title');title.append(el('h3',d.name),el('span',healthLabels[d.health]??d.health,'badge '+(d.toolsAvailable?'ready':d.networkConnected?'warn':'')));card.append(title);const dl=el('dl');for(const [k,v]of [['设备编号',d.id],['客户端版本',d.clientVersion??'未知'],['系统',d.platform??'未知'],['最后在线',time(d.lastSeen)],['密钥轮换',d.rotationPending?'等待设备确认':'已同步']])dl.append(el('dt',k),el('dd',v));card.append(dl);const actions=el('div',undefined,'actions');const run=async(action,body={})=>{await api('/api/manage/devices/'+encodeURIComponent(d.id)+'/'+action,body);await refresh();};actions.append(button('重命名',()=>{const form=el('form'),input=el('input');input.value=d.name;input.required=true;input.maxLength=100;input.setAttribute('aria-label','设备新名称');const save=el('button','保存');form.append(input,save);card.prepend(form);input.focus();form.onsubmit=e=>{e.preventDefault();action(async()=>{await run('rename',{name:input.value});form.remove();});};}),button(d.paused?'恢复':'暂停',()=>run(d.paused?'resume':'pause')),button('轮换密钥',async()=>{if(confirm('轮换这台设备的连接密钥？设备会自动保存新密钥。'))await run('rotate');}),button('解绑',async()=>{if(confirm('解绑“'+d.name+'”？它需要重新配对才能连接，正在运行的操作可能继续执行。'))await run('unlink');},'danger'));card.append(actions);parent.append(card);}}
 function renderCalls(calls){const parent=$('#calls');if(!calls.length)return empty(parent,'暂无任务。通过插件执行工具后，任务会出现在这里。');parent.replaceChildren();for(const c of calls){const row=el('article',undefined,'row'),info=el('div',undefined,'grow');info.append(el('strong',c.tool),el('p',c.id,'muted'),el('p',time(c.started),'muted'));row.append(info,el('span',statusLabels[c.status]??c.status,'badge '+(c.status==='completed'?'ready':'')),button('查看结果',async()=>{const r=await api('/api/manage/calls/'+encodeURIComponent(c.id));$('#result-content').textContent=JSON.stringify(r,null,2);$('#result-dialog').showModal();}));parent.append(row);}}
