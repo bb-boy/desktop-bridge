@@ -1,67 +1,61 @@
 # Desktop Bridge
 
-基于 [Desktop Commander MCP](https://github.com/wonderwhy-er/DesktopCommanderMCP) 完整源码开发的自托管远程电脑管理项目。本仓库包含原项目代码、上游主分支历史，以及我们开发的远程连接、账号和设备管理扩展。
+一份通用插件 ZIP，连接 Windows、macOS 和 Linux。基于 [Desktop Commander MCP](https://github.com/wonderwhy-er/DesktopCommanderMCP) 的本地工具引擎，增加自托管中继、Google 身份隔离、账号配对、设备管理和断线任务恢复。
 
-当前是开发版本。创建私有仓库和导入代码不代表安装包已经完成发布，也不会变更现有线上服务。
+这是独立的私有开发仓库，保留上游完整源码和历史。上游发布命名空间不用于本项目发行；根包保持 `private: true`。
 
-## 代码布局
+## 功能
+
+- 使用 Google OAuth / OpenID Connect 识别用户，每个经验证的 Google 账号对应独立空间；原有本地账号可显式绑定 Google，不按同邮箱自动合并。
+- 安装器自动识别系统和 x64/ARM64，下载并校验官方运行时，准备本地依赖，然后网页确认或输入配对码。设备密钥自动保存。
+- 设备重命名、暂停/恢复、解绑、密钥轮换、客户端版本与最后在线时间；客户端授权可查看及撤销。
+- 区分网络连通和本地工具可执行。暂停、解绑或健康探测失败时，不向设备分发新命令。
+- 持久化任务编号、状态和结果；支持超时后的晚到结果、断线补交、中继重启后补领，绝不因重连自动重放原操作。
+- 工具目录、设备、授权和任务均按账号隔离。MCP 客户端通过独立 OAuth/PKCE 关联到用户账号。
+
+## 一份 ZIP
+
+在支持 portable Agent Plugins 格式的宿主中安装生成的 `desktop-bridge-plugin.zip`。首次连接某台电脑时，在目标电脑解压同一个 ZIP，运行对应入口：
+
+| 系统 | 入口 |
+| --- | --- |
+| Windows x64 / ARM64 | `Install.cmd` |
+| macOS x64 / ARM64 | `Install.command` |
+| Linux x64 / ARM64 | `Install.sh` |
+
+其余步骤自动完成，首次只需登录并确认绑定。插件、服务地址和账号体系共用，用户不需要手工编写 MCP 配置或复制设备密钥。客户端运行于安装它的系统账号权限下。
+
+Google 身份服务需先配置自己的 Google OAuth 网页客户端，见 [配置 Google 登录](docs/google-oauth.md)。插件 ZIP 不包含 Google 客户端密钥、用户密码、设备令牌、数据库或安装后的依赖。
+
+## 开发与打包
+
+使用 Node.js 24，在仓库根目录执行：
+
+```sh
+npm ci --prefix bridge --ignore-scripts
+npm test --prefix bridge
+python3 bridge/scripts/package-plugin.py --output release-output/desktop-bridge-plugin.zip
+```
+
+模块分支使用独立 worktree 并发开发：[模块与协作](docs/modules.md)。测试覆盖 API、真实 MCP/WSS、实际代理进程和客户端生命周期，不使用浏览器测试。实际验证范围见 [验证记录](bridge/VALIDATION.md)，服务运行、迁移与保留期限见 [扩展说明](bridge/README.md)。
+
+`.github/workflows/bridge.yml` 定义 Windows、macOS、Linux 非浏览器测试和通用 ZIP 构建。远端 CI 是否通过以 GitHub 实际运行结果为准；Git 推送和 ZIP 生成不会自动部署自托管服务。
+
+## 源码布局
 
 | 路径 | 内容 |
 | --- | --- |
-| `src/`、`test/`、`scripts/`、`vendor/` | Desktop Commander 原项目源码、测试、构建脚本和随附组件 |
-| `bridge/server/` | 自托管 MCP 中继、账号与 OAuth、设备配对、任务状态与结果保存 |
-| `bridge/agent/` | 电脑连接程序、网页配对、本地执行记录、连接恢复 |
-| `bridge/public/` | 登录、设备管理和授权管理网页 |
-| `bridge/client/` | 客户端运行依赖定义；安装包制作正在进行 |
-| `bridge/deploy/` | 现有 Linux 服务和 Windows 后台任务部署脚本 |
-| `bridge/test/` | MCP、OAuth、账号隔离、配对、健康检查、结果恢复和密钥轮换集成测试 |
-| `plugin/` | 当前自定义插件配置；与上游根目录的插件配置分开保留 |
-| `README.upstream.md` | 原项目 README，保留其使用说明和来源 |
-| `docs/import/` | 导入的上游提交、扩展文件快照及验证范围 |
+| `bridge/server/` | 中继、OAuth/Google 身份、会话、配对、归属和结果持久化 |
+| `bridge/agent/` | 电脑端配对、MCP 执行、健康检查、日志及结果恢复 |
+| `bridge/client/` | 通用安装源、官方运行时校验清单、启动/修复/卸载 |
+| `bridge/public/` | 登录、设备、任务结果和授权管理 |
+| `bridge/test/` | 非浏览器协议及进程验收 |
+| `plugin/` | 同一通用插件的 portable manifest、MCP 和技能说明 |
+| `src/`、`test/`、`vendor/` | 保留的 Desktop Commander 上游源码与测试 |
+| `README.upstream.md` | 上游原始 README |
 
-## 本地开发
+客户端目前固定使用官方 npm 工具引擎 `@wonderwhy-er/desktop-commander@0.3.0`。根目录源码的修改不会自动进入已安装客户端；更换引擎需要明确构建、固定版本并重新验收。
 
-使用 Node.js 24。
+## 来源
 
-构建仓库内的 Desktop Commander 工具引擎：
-
-```sh
-npm ci
-npm run build
-```
-
-安装扩展依赖并执行集成测试：
-
-```sh
-npm run bridge:install
-npm run bridge:test
-```
-
-本次导入的扩展快照已通过 10 项集成测试。上游完整构建、Windows 安装包以及实际宿主中的插件安装不属于本次仓库导入验证范围。
-
-服务端启动命令为 `npm run bridge:start`，通过 `BRIDGE_CONFIG` 指定仓库外的服务配置。电脑端通过 `BRIDGE_AGENT_CONFIG` 或命令行参数指定本地配置。账号密码、设备令牌、数据库及运行日志不提交到仓库。
-
-如需使用本仓库修改后的工具引擎，将电脑端配置的 `runtimeDir` 指向本仓库绝对路径，`mcpEntry` 指向构建生成的 `dist/index.js`。当前 `bridge/client/package.json` 的成品客户端运行依赖仍固定到官方 npm 版本 `0.3.0`；仅修改仓库内源码不会自动改变已安装客户端。
-
-## 开发状态
-
-新增功能的代码与测试已纳入本仓库，但整体仍在开发中：
-
-- 已有设备配对、管理网页、网络与工具健康状态区分、任务结果恢复及多账号隔离的实现与测试。
-- `bridge/README.md` 和 `bridge/VALIDATION.md` 保留此前版本的运行记录；其中单用户和手动部署说明属于历史版本，不能视为当前所有功能的说明。
-- 一键安装、插件 ZIP 的最终打包、线上迁移和真实电脑验证由后续开发完成。
-- `plugin/` 保留原有插件身份与 MCP 地址；导入不会自动更新已安装插件或部署服务器。
-
-## 上游与发布
-
-上游是 `wonderwhy-er/DesktopCommanderMCP`。本地将其保留为 `upstream`，私有仓库作为 `origin`；没有使用 GitHub Fork 关系。导入基点见 `docs/import/upstream.json`。
-
-更新上游时先获取代码并在独立分支合并、测试，再合入 `main`。不要直接覆盖自己的扩展。仓库保留了上游主分支完整历史，没有导入其他分支或上游发布标签。
-
-原项目 GitHub Actions 工作流保存在 `.github/upstream-workflows/`，不自动运行。原项目的 npm 和 MCP Registry 发布配置使用原作者命名空间；本仓库根包已标记 `private: true`。后续需要为本项目独立建立安装包和插件发布流程。
-
-## 许可证与来源
-
-原项目采用 MIT 许可证，原作者版权及许可全文保留在根目录 `LICENSE`。扩展代码的许可证在 `bridge/LICENSE`，第三方来源说明在 `bridge/THIRD_PARTY_NOTICES.md`。
-
-本项目独立开发维护，未声明与 Desktop Commander 官方托管服务存在隶属关系。
+上游与历史导入记录见 `docs/import/`。本地可增加 `upstream` remote 用于后续合并上游；不要覆盖扩展模块。原项目和本扩展采用 MIT 许可，版权与第三方声明保留于 `LICENSE`、`bridge/LICENSE` 与 `bridge/THIRD_PARTY_NOTICES.md`。本服务与官方托管服务无隶属关系。
