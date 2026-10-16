@@ -36,5 +36,5 @@ action(boot);
 async function googleStart(link=false){const r=await api(link?'/auth/google/link':'/auth/google/start',{returnTo:location.pathname+location.search});location.assign(r.url);}
 $('#google-login').onclick=()=>action(()=>googleStart());
 $('#google-link').onclick=()=>action(()=>googleStart(true));
-$('#google-unlink').onclick=()=>action(async()=>{if(confirm('解除 Google 绑定？之后可继续用已有密码登录。')){await api('/api/manage/google/unlink',{});await renderGoogle();}});
+$('#google-unlink').onclick=()=>action(async()=>{if(confirm('解除 Google 绑定？之后可继续用已有密码登录。')){const r=await api('/api/manage/google/unlink',{});if(r.csrf)csrf=r.csrf;await renderGoogle();}});
 async function renderGoogle(){const g=await api('/api/manage/google');$('#google-panel').hidden=!g.enabled;$('#google-status').textContent=g.linked?'已绑定：'+(g.identity?.email??'Google 账号'):'尚未绑定。绑定后可使用 Google 登录并保留现有设备。';$('#google-link').hidden=!!g.linked;$('#google-unlink').hidden=!g.linked;$('#google-unlink').disabled=!g.canUnlink;if(g.linked&&!g.canUnlink)$('#google-status').textContent+=' 当前账号仅使用 Google 登录，不能移除唯一登录方式。';}
