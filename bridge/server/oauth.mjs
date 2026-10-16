@@ -22,6 +22,7 @@ export function installOAuth(app, config, store, loginLimiter) {
     if (value && normalize(value)!==normalize(resource)) throw new InvalidTargetError('Wrong resource');
   };
   function issue(client, ownerId, family=opaque()) {
+    if (!store.accountById(ownerId)) throw new InvalidGrantError('Account no longer exists');
     const access=opaque(), refresh=opaque();
     const value={clientId:client,ownerId,family,resource,scopes:['desktop']};
     store.saveGrant(hash(access),'access',client,value,Date.now()+3600000);
@@ -35,7 +36,8 @@ export function installOAuth(app, config, store, loginLimiter) {
         if (store.clientCount()>=500) throw new InvalidClientMetadataError('Registration capacity reached');
         if (!client.redirect_uris?.length || client.redirect_uris.length>10) throw new InvalidClientMetadataError('Redirect URIs required');
         for (const value of client.redirect_uris) {
-          const u=new URL(value);
+          let u;
+          try {u=new URL(value);} catch {throw new InvalidClientMetadataError('Invalid redirect URI');}
           if (u.hash || u.username || u.password || (u.protocol!=='https:' && !(u.protocol==='http:' && ['localhost','127.0.0.1','[::1]'].includes(u.hostname)))) {
             throw new InvalidClientMetadataError('Use an HTTPS or localhost redirect URI');
           }
@@ -90,7 +92,7 @@ export function installOAuth(app, config, store, loginLimiter) {
     },
     async revokeToken(client,{token}) {
       const grant=store.grant(hash(token),'access') ?? store.grant(hash(token),'refresh');
-      if (grant?.clientId===client.client_id) store.db.prepare("DELETE FROM grants WHERE json_extract(value,'$.family')=?").run(grant.family);
+      if (grant?.clientId===client.client_id) store.db.prepare("DELETE FROM grants WHERE client=? AND json_extract(value,'$.ownerId')=? AND json_extract(value,'$.family')=?").run(client.client_id,grant.ownerId,grant.family);
     }
   };
   app.use(mcpAuthRouter({provider,issuerUrl:new URL(config.baseUrl),resourceServerUrl:new URL(resource),scopesSupported:['desktop'],resourceName:'Personal Desktop Bridge'}));
@@ -127,15 +129,21 @@ export function installOAuth(app, config, store, loginLimiter) {
       redirect.searchParams.set('error','access_denied');
       return res.redirect(303,redirect.href);
     }
+    if (req.body.decision!=='approve') return res.status(400).type('html').send('<p>无效的授权操作。</p>');
     const account=store.account(String(req.body.username??'owner'));
     const valid=await checkPassword(req.body.password,account?.password??config.ownerPasswordHash);
     if (!account || !valid) return consentPage(req,res,'账号或密码不正确，请重试。');
-    grant.ownerId=account.id;
     const code=opaque();
-    store.transaction(()=>{
+    const issued=store.transaction(()=>{
+      // Password verification yields to other requests; consume only a still-live request.
+      const current=store.grant(hash(request),'consent');
+      const currentAccount=store.account(account.username);
+      if (!current || current.csrf!==grant.csrf || currentAccount?.id!==account.id || currentAccount.password!==account.password) return false;
       store.deleteGrant(hash(request));
-      store.saveGrant(hash(code),'code',grant.clientId,grant,Date.now()+60000);
+      store.saveGrant(hash(code),'code',grant.clientId,{...grant,ownerId:account.id},Date.now()+60000);
+      return true;
     });
+    if (!issued) return res.status(403).type('html').send('<p>本次授权已过期或已使用，请重新连接。</p>');
     redirect.searchParams.set('code',code);
     res.clearCookie(grant.csrfCookie??'bridge_csrf',{path:'/oauth'});
     res.redirect(303,redirect.href);

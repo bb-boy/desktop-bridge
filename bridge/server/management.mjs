@@ -27,7 +27,7 @@ export function installManagement(app,config,store,broker,loginLimiter) {
   app.get('/api/session',(req,res)=>{
     res.set('Cache-Control','no-store');
     const s=session(req);
-    if(s)return res.json({account:store.accountById(s.owner),csrf:s.csrf});
+    if(s&&store.accountById(s.owner))return res.json({account:store.accountById(s.owner),csrf:s.csrf});
     const csrf=opaque();res.cookie('bridge_login',csrf,{...cookieOptions,maxAge:600000});res.json({account:null,csrf});
   });
   function loginCsrf(req,res,next) {
@@ -37,7 +37,8 @@ export function installManagement(app,config,store,broker,loginLimiter) {
   app.post('/api/login',loginLimiter,loginCsrf,async(req,res)=>{
     const a=store.account(String(req.body.username??''));
     const valid=await checkPassword(req.body.password,a?.password??config.ownerPasswordHash);
-    if(!a||!valid)return json(res,401,'账号或密码错误');
+    const current=a&&store.account(a.username);
+    if(!a||!valid||current?.id!==a.id||current.password!==a.password)return json(res,401,'账号或密码错误');
     const old=cookieValue(req,'bridge_session');if(old)store.db.prepare('DELETE FROM sessions WHERE hash=?').run(hash(old));
     res.clearCookie('bridge_login',cookieOptions);res.json(newSession(res,a.id));
   });
@@ -53,6 +54,8 @@ export function installManagement(app,config,store,broker,loginLimiter) {
         const id=randomUUID();store.db.prepare('INSERT INTO accounts VALUES (?,?,?,?,?)').run(id,username,passwordEncoded,0,Date.now());
         store.db.prepare('DELETE FROM invitations WHERE hash=?').run(invite.hash);return id;
       });
+      const old=cookieValue(req,'bridge_session');if(old)store.db.prepare('DELETE FROM sessions WHERE hash=?').run(hash(old));
+      res.clearCookie('bridge_login',cookieOptions);
       res.status(201).json(newSession(res,id));
     } catch(e){json(res,400,e.message);}
   });
@@ -67,14 +70,19 @@ export function installManagement(app,config,store,broker,loginLimiter) {
     if(!await checkPassword(req.body.currentPassword,a.password))return json(res,403,'当前密码错误');
     if(typeof req.body.password!=='string'||req.body.password.length<12||req.body.password.length>256)return json(res,400,'新密码至少 12 位');
     const encoded=await passwordHash(req.body.password);
-    store.transaction(()=>{
+    const changed=store.transaction(()=>{
+      const current=store.account(a.username);
+      if(current?.id!==a.id || current.password!==a.password || !session(req))return false;
       store.db.prepare('UPDATE accounts SET password=? WHERE id=?').run(encoded,a.id);
       store.db.prepare('DELETE FROM sessions WHERE owner=? AND hash<>?').run(a.id,req.session.hash);
       store.db.prepare("DELETE FROM grants WHERE json_extract(value,'$.ownerId')=? AND kind IN ('access','refresh','code')").run(a.id);
-    });res.json({ok:true});
+      return true;
+    });
+    if(!changed)return json(res,403,'会话或密码已变更，请重新登录');
+    res.json({ok:true});
   });
   app.get('/api/manage/devices',requireSession,(req,res)=>res.json({devices:broker.devices(req.session.owner)}));
-  app.post('/api/manage/devices/:id/:action',requireSession,(req,res)=>{
+  app.post('/api/manage/devices/:id/:action',requireSession,async(req,res)=>{
     const d=store.device(req.params.id);
     if(!d||d.owner!==req.session.owner)return json(res,404,'设备不存在');
     switch(req.params.action) {
@@ -88,10 +96,16 @@ export function installManagement(app,config,store,broker,loginLimiter) {
         store.db.prepare('UPDATE registry SET revoked=1,tokenHash=NULL,pendingHash=NULL WHERE id=?').run(d.id);broker.disconnect(d.id,'Device unlinked');break;
       case 'rotate': {
         const conn=broker.connections.get(d.id);
-        if(!conn?.ready||conn.protocol<2)return json(res,409,'请先连接新版客户端；离线设备可解绑后重新配对');
+        if(!conn?.ready||conn.protocol<2||conn.ws.readyState!==1)return json(res,409,'请先连接新版客户端；离线设备可解绑后重新配对');
         if(d.pendingHash)return json(res,409,'上次密钥轮换尚未确认，请等待设备重连');
         const token=opaque();store.db.prepare('UPDATE registry SET pendingHash=? WHERE id=?').run(hash(token),d.id);
-        conn.ws.send(JSON.stringify({type:'rotate',token}));break;
+        try {
+          await new Promise((resolve,reject)=>conn.ws.send(JSON.stringify({type:'rotate',token}),error=>error?reject(error):resolve()));
+        } catch {
+          store.db.prepare('UPDATE registry SET pendingHash=NULL WHERE id=? AND pendingHash=?').run(d.id,hash(token));
+          return json(res,503,'设备连接已断开，请重试');
+        }
+        break;
       }
       default:return json(res,404,'未知操作');
     }
@@ -124,27 +138,35 @@ export function installManagement(app,config,store,broker,loginLimiter) {
     if(!p||p.status==='claimed')return json(res,410,'配对已过期或已领取');
     if(p.status==='pending')return res.status(202).json({status:'pending'});
     if(p.status==='denied')return json(res,403,'配对已拒绝');
+    if(p.status!=='approved'||!store.accountById(p.owner))return json(res,410,'配对已失效');
     const token=opaque();
-    store.transaction(()=>{
-      const d=store.device(p.device);if(!d||d.owner!==p.owner)throw new Error('Pairing device missing');
+    const claimed=store.transaction(()=>{
+      const current=store.db.prepare("SELECT * FROM pairings WHERE hash=? AND expires>? AND status='approved'").get(p.hash,Date.now());
+      const d=current&&store.device(current.device);
+      if(!current||!d||d.owner!==current.owner||!store.accountById(current.owner))return false;
       store.db.prepare('UPDATE registry SET tokenHash=? WHERE id=?').run(hash(token),p.device);
       store.db.prepare("UPDATE pairings SET status='claimed' WHERE hash=?").run(p.hash);
-    });res.json({deviceId:p.device,deviceToken:token});
+      return true;
+    });
+    if(!claimed)return json(res,410,'配对设备已解绑，请重新配对');
+    res.json({deviceId:p.device,deviceToken:token});
   });
   app.get('/api/manage/pair',requireSession,(req,res)=>{
     const p=store.db.prepare("SELECT name,platform,version,status FROM pairings WHERE userHash=? AND expires>? AND status='pending'").get(codeHash(req.query.code),Date.now());
     if(!p)return json(res,404,'配对码已过期或不存在');res.json(p);
   });
   app.post('/api/manage/pair',requireSession,loginLimiter,(req,res)=>{
-    const p=store.db.prepare("SELECT * FROM pairings WHERE userHash=? AND expires>? AND status='pending'").get(codeHash(req.body.code),Date.now());
-    if(!p)return json(res,404,'配对码已过期或已使用');
-    if(store.devices(req.session.owner).length>=50)return json(res,409,'每个账号最多绑定 50 台设备');
-    store.transaction(()=>{
+    if(!['approve','deny'].includes(req.body.decision))return json(res,400,'无效的配对操作');
+    const outcome=store.transaction(()=>{
+      const p=store.db.prepare("SELECT * FROM pairings WHERE userHash=? AND expires>? AND status='pending'").get(codeHash(req.body.code),Date.now());
+      if(!p)return {status:404,error:'配对码已过期或已使用'};
       if(req.body.decision==='deny'){store.db.prepare("UPDATE pairings SET status='denied' WHERE hash=?").run(p.hash);return;}
-      if(req.body.decision!=='approve')throw new Error('Invalid decision');
+      if(store.devices(req.session.owner).length>=50)return {status:409,error:'每个账号最多绑定 50 台设备'};
       store.db.prepare('INSERT INTO registry(id,owner,name,version,platform) VALUES (?,?,?,?,?)').run(p.device,req.session.owner,p.name,p.version,p.platform);
       store.db.prepare("UPDATE pairings SET status='approved',owner=? WHERE hash=?").run(req.session.owner,p.hash);
-    });res.json({ok:true});
+    });
+    if(outcome)return json(res,outcome.status,outcome.error);
+    res.json({ok:true});
   });
   return {requireSession};
 }

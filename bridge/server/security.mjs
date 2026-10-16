@@ -9,7 +9,7 @@ export async function passwordHash(password) {
   return salt+':'+(await scrypt(password,salt,64)).toString('hex');
 }
 export async function checkPassword(password, encoded) {
-  if (typeof password!=='string' || password.length>256) return false;
+  if (typeof password!=='string' || password.length>256 || typeof encoded!=='string' || !/^[A-Za-z0-9_-]+:[0-9a-f]{128}$/.test(encoded)) return false;
   const [salt,digest]=encoded.split(':');
   const expected=Buffer.from(digest ?? '', 'hex');
   const actual=await scrypt(password,salt,64);
