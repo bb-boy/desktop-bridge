@@ -76,3 +76,19 @@ bridge/data/
 bridge/public/downloads/
 .env.*
 !.env.example
+
+# Private runtime state and release output
+bridge/data/
+bridge/public/downloads/
+**/runner-lock/
+**/launch.json
+**/runner.pid
+**/journal.json
+**/heartbeat.json
+**/maintenance.flag
+**/agent-config.json
+**/server-config.json
+**/owner-password.txt
+**/*.db
+**/*.db-*
+release-output/

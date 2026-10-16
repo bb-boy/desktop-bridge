@@ -7,8 +7,8 @@ import { pairDevice,saveConfig } from './pair.mjs';
 
 const configPath=process.env.BRIDGE_AGENT_CONFIG??process.argv[2];
 if(!configPath) throw new Error('Usage: node agent.mjs path/to/agent-config.json');
-const config=JSON.parse(fs.readFileSync(configPath,'utf8'));
-if(process.argv.includes('--pair')){delete config.deviceToken;delete config.deviceId;saveConfig(configPath,config);}
+const config=JSON.parse(fs.readFileSync(configPath,'utf8').replace(/^\uFEFF/,''));
+
 const directory=path.dirname(path.resolve(configPath));
 if(fs.existsSync(path.join(directory,'maintenance.flag'))) process.exit(0);
 
@@ -34,7 +34,9 @@ function log(event,fields={}) {
 function unlock(){try{if(fs.readFileSync(lockPath,'utf8')===String(process.pid))fs.unlinkSync(lockPath);}catch{}}
 process.on('exit',unlock);
 
-if(!config.deviceToken||!config.deviceId)await pairDevice(config,configPath);
+if(process.argv.includes('--pair')){delete config.deviceToken;delete config.deviceId;saveConfig(configPath,config);}
+if(!config.deviceToken||!config.deviceId)await pairDevice(config,configPath,{openBrowser:!process.argv.includes('--no-browser')});
+if(process.argv.includes('--setup-only'))process.exit(0);
 const requireRuntime=createRequire(path.join(config.runtimeDir,'package.json'));
 const {Client}=await import(pathToFileURL(requireRuntime.resolve('@modelcontextprotocol/sdk/client/index.js')));
 const {StdioClientTransport}=await import(pathToFileURL(requireRuntime.resolve('@modelcontextprotocol/sdk/client/stdio.js')));
@@ -103,6 +105,7 @@ async function shutdown(code=0) {
   try{await client.close();}catch{}
   process.exit(code);
 }
+process.on('message',message=>{if(message?.type==='stop')void shutdown();});
 process.on('SIGINT',()=>void shutdown());process.on('SIGTERM',()=>void shutdown());
 process.on('uncaughtException',error=>{log('fatal',{type:error.name});void shutdown(1);});
 process.on('unhandledRejection',error=>{log('fatal_rejection',{type:error?.name});void shutdown(1);});
