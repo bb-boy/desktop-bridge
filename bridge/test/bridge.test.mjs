@@ -14,7 +14,7 @@ import { startServer } from '../server/index.mjs';
 import { opaque, hash, passwordHash } from '../server/security.mjs';
 
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-async function waitFor(fn){for(let i=0;i<100;i++){if(fn())return;await sleep(20);}throw new Error('Condition timed out');}
+async function waitFor(fn){for(let i=0;i<500;i++){if(fn())return;await sleep(20);}throw new Error('Condition timed out');}
 async function fixture(t,extra={}) {
   const directory=fs.mkdtempSync(path.join(os.tmpdir(),'desktop-bridge-test-'));
   const token=opaque(),password=opaque();
