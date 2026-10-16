@@ -17,6 +17,8 @@ try {
   const fd=fs.openSync(lockPath,'wx',0o600);fs.writeFileSync(fd,String(process.pid));fs.closeSync(fd);
 } catch(e) {
   if(e.code!=='EEXIST') throw e;
+  // A concurrent process can create the file before writing its PID.
+  if(fs.statSync(lockPath).size===0 && Date.now()-fs.statSync(lockPath).mtimeMs<30000)process.exit(0);
   const old=Number(fs.readFileSync(lockPath,'utf8'));
   let alive=false;
   if(Number.isInteger(old) && old>0 && old!==process.pid) {try{process.kill(old,0);alive=true;}catch(err){if(err.code!=='ESRCH')alive=true;}}
@@ -99,13 +101,14 @@ async function execute(message,socket) {
 function send(socket,message) {if(socket?.readyState===WebSocket.OPEN)socket.send(JSON.stringify(message));}
 async function shutdown(code=0) {
   if(stopping)return;stopping=true;clearTimeout(retryTimer);
-  clearInterval(processHeartbeat);
+  clearInterval(processHeartbeat);clearInterval(maintenanceWatch);
   ws?.close();
   const timeout=setTimeout(()=>process.exit(code),8000);timeout.unref();
   try{await client.close();}catch{}
   process.exit(code);
 }
 process.on('message',message=>{if(message?.type==='stop')void shutdown();});
+const maintenanceWatch=setInterval(()=>{if(fs.existsSync(path.join(directory,'maintenance.flag')))void shutdown();},1000);maintenanceWatch.unref();
 process.on('SIGINT',()=>void shutdown());process.on('SIGTERM',()=>void shutdown());
 process.on('uncaughtException',error=>{log('fatal',{type:error.name});void shutdown(1);});
 process.on('unhandledRejection',error=>{log('fatal_rejection',{type:error?.name});void shutdown(1);});
