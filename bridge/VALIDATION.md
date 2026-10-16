@@ -16,6 +16,10 @@ Validation uses API, MCP/WSS protocol and real local processes. No browser tests
 
 Worktree pass counts overlap because each includes the shared baseline; they must not be added to infer the final count.
 
+## Remote CI
+
+GitHub rejected active workflow writes because the current OAuth credential lacks `workflow` scope. The tested source is pushed without expanding account permissions; CI is retained at `.github/workflow-templates/bridge.yml` and is not enabled. No remote CI pass is claimed.
+
 ## Delivery limits
 
 A Git push or plugin ZIP does not deploy the self-hosted endpoint. An installer prepares the target computer and pairs through the configured service; the service must run the matching release. Actual Google end-to-end login requires a configured Google OAuth web client, secret and exact redirect URI. Locally signed test tokens validate protocol and isolation behavior but are not a real Google account login.

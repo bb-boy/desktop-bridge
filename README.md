@@ -39,7 +39,7 @@ python3 bridge/scripts/package-plugin.py --output release-output/desktop-bridge-
 
 模块分支使用独立 worktree 并发开发：[模块与协作](docs/modules.md)。测试覆盖 API、真实 MCP/WSS、实际代理进程和客户端生命周期，不使用浏览器测试。实际验证范围见 [验证记录](bridge/VALIDATION.md)，服务运行、迁移与保留期限见 [扩展说明](bridge/README.md)。
 
-`.github/workflows/bridge.yml` 定义 Windows、macOS、Linux 非浏览器测试和通用 ZIP 构建。远端 CI 是否通过以 GitHub 实际运行结果为准；Git 推送和 ZIP 生成不会自动部署自托管服务。
+`.github/workflow-templates/bridge.yml` 提供 Windows、macOS、Linux 非浏览器测试及通用 ZIP 构建模板。当前 GitHub 授权没有工作流写权限，模板尚未启用，不声称远端 CI 已运行。Git 推送和 ZIP 生成不会自动部署自托管服务。
 
 ## 源码布局
 
