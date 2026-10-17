@@ -1,6 +1,9 @@
 # Desktop Bridge · 通用插件
 
-同一份 ZIP 适用于 Windows、macOS 和 Linux，不包含个人密码或设备密钥。
+同一份 ZIP 可分发给不同的人，适用于 Windows、macOS 和 Linux，不包含个人密码或设备密钥。
+
+首次使用：https://mcp.ilovestudy.de/start.html
+每个人在自己的 ChatGPT 网页端上传 ZIP，使用自己的 Google 账号。无需提供者逐个配置或发放设备令牌。
 
 1. 在 ChatGPT「插件」页选择「添加 → 上传插件压缩包」，直接上传此 ZIP，不需要先解压，也不需要填写 MCP 地址。
 2. 添加插件后连接 Desktop Bridge，选择「使用 Google 登录」，并确认客户端授权。

@@ -60,3 +60,11 @@ Retention is bounded: cloud task/results expire after 30 days; local journal out
 - 用户在 ChatGPT 上传 0.2.2 ZIP 时收到「无法添加插件」。排查发现该包缺少导入要求的 `author.name` 和 `interface.developerName`；通用 portable schema 允许缺省，不等于 ChatGPT 导入要求已通过。
 - 从同一身份 `desktop-bridge-p111` 的现有私人插件读取原作者名称，补齐这两个字段；不加入作者邮箱、密钥或设备凭据。版本更新为 0.2.3，并在打包前检查这两个必填项。新增三项元数据回归检查。
 - 通过 Plugin Creator 的实际账户更新接口成功导入 0.2.3，更新原有私人插件，保留同一插件身份及 OAuth MCP 地址。导入成功不等于 Google 登录或本地设备安装成功。
+
+## 0.2.4 面向独立使用者的首次连接
+
+- 新增无需登录的 `/start.html` 公开入口，提供同一份 GPT ZIP、三个系统的独立安装器、个人账号登录与设备配对步骤。入口不依赖提供者的私人插件链接。管理页增加「首次使用」导航，并移除预填的 `owner` 用户名。
+- 新增完整双用户协议集成测试：使用本地签名的模拟 Google 身份，在真实 HTTP、SQLite、OAuth/PKCE、WebSocket 与 MCP SDK 上执行首次登录、设备配对、同一客户端独立授权、设备健康与工具调用。两个身份即使具有同一个显示邮箱，也获得不同账号；互相看不到设备、工具目录和任务结果，越权调用不会发送到设备，原 owner 设备保持独立。
+- Google / 前端定向测试 27/27 通过；完整 Node.js 回归 90 项，89 通过、1 平台专项跳过、0 失败；Python 元数据测试 3/3 通过，安装器测试 6 项、5 通过、1 Windows 原生项在 macOS 跳过。此处协议测试使用模拟身份和无副作用设备工具，不代表两个真实 Google 账号的交互式登录验收。
+- 提供者确认 Google Cloud 应用已设为「外部用户 / 生产环境」；没有通过控制台独立核验。保留既有服务端 Google 配置，不在 ZIP 内加入登录凭据。
+- 0.2.4 仍为测试分发版：Windows CMD 未签名、Mac PKG 未签名和公证，使用者的网页首次上传与真实系统图形安装仍待验收。
