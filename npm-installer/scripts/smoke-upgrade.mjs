@@ -38,28 +38,32 @@ try{
   fs.writeFileSync(path.join(data,'.desktop-bridge-client'),'desktop-bridge-client\n');
   const frozen=['agent-config.json','client-settings.json','journal.json','.desktop-bridge-client'].map(n=>[n,fs.readFileSync(path.join(data,n))]);
 
-  const v1=path.join(source,first[0]);
-  npm(['install','--prefix',prefix,'--ignore-scripts','--no-audit','--no-fund','--no-save',v1]);
+  // Simulate the previous 0.2.5 npm release from this package's staged files.
+  // The second installation uses the ACTUAL new 0.2.6 tarball.
+  const currentTarball=path.join(source,first[0]);
+  const unpack=path.join(tmp,'previous');
+  fs.mkdirSync(unpack);
+  run('tar',['-xzf',currentTarball,'-C',unpack]);
+  const previousPackage=path.join(unpack,'package');
+  const previousManifest=path.join(previousPackage,'package.json');
+  const metadata=JSON.parse(fs.readFileSync(previousManifest,'utf8'));
+  assert.equal(metadata.version,'0.2.6','Expected the real 0.2.6 npm release under test');
+  metadata.version='0.2.5';
+  jwrite(previousManifest,metadata);
+  const previousTarballs=path.join(tmp,'previous-tarball');
+  fs.mkdirSync(previousTarballs);
+  npm(['pack',previousPackage,'--ignore-scripts','--pack-destination',previousTarballs]);
+  const oldArchive=fs.readdirSync(previousTarballs).filter(n=>n.endsWith('.tgz'));
+  assert.equal(oldArchive.length,1);
+
+  npm(['install','--prefix',prefix,'--ignore-scripts','--no-audit','--no-fund','--no-save',path.join(previousTarballs,oldArchive[0])]);
   const installed=path.join(prefix,'node_modules','@justlovepl','desktop-bridge');
   assert.equal(JSON.parse(fs.readFileSync(path.join(installed,'package.json'))).version,'0.2.5');
   const cli=path.join(installed,'bin','desktop-bridge.mjs');
   assert.equal(run(process.execPath,[cli,'--version']),'0.2.5');
   for(const [n,bytes] of frozen)assert.deepEqual(fs.readFileSync(path.join(data,n)),bytes,'npm install modified '+n);
 
-  const unpack=path.join(tmp,'next');
-  fs.mkdirSync(unpack);
-  run('tar',['-xzf',v1,'-C',unpack]);
-  const next=path.join(unpack,'package');
-  const nextPackage=path.join(next,'package.json');
-  const metadata=JSON.parse(fs.readFileSync(nextPackage,'utf8'));
-  metadata.version='0.2.6'; // simulated next release; never published
-  jwrite(nextPackage,metadata);
-  const output=path.join(tmp,'next-tarball');
-  fs.mkdirSync(output);
-  npm(['pack',next,'--ignore-scripts','--pack-destination',output]);
-  const nextTgz=fs.readdirSync(output).filter(n=>n.endsWith('.tgz'));
-  assert.equal(nextTgz.length,1);
-  npm(['install','--prefix',prefix,'--ignore-scripts','--no-audit','--no-fund','--no-save',path.join(output,nextTgz[0])]);
+  npm(['install','--prefix',prefix,'--ignore-scripts','--no-audit','--no-fund','--no-save',currentTarball]);
   assert.equal(JSON.parse(fs.readFileSync(path.join(installed,'package.json'))).version,'0.2.6');
   assert.equal(run(process.execPath,[cli,'--version']),'0.2.6');
   for(const [n,bytes] of frozen)assert.deepEqual(fs.readFileSync(path.join(data,n)),bytes,'npm replacement modified '+n);
