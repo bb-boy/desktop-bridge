@@ -1,0 +1,48 @@
+name: Desktop Bridge npm CLI
+
+on:
+  pull_request:
+    paths:
+      - 'npm-installer/**'
+      - 'bridge/client/**'
+      - 'bridge/agent/**'
+      - '.github/workflows/npm-cli.yml'
+  push:
+    branches:
+      - 'feat/npm-client-cli-*'
+    paths:
+      - 'npm-installer/**'
+      - 'bridge/client/**'
+      - 'bridge/agent/**'
+      - '.github/workflows/npm-cli.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package-and-cli:
+    name: npm CLI / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+      - name: Test CLI without installing services
+        run: npm test
+        working-directory: npm-installer
+      - name: Create dry-run npm package manifest
+        run: npm pack --dry-run --json > npm-pack.json
+        working-directory: npm-installer
+      - name: Verify package contents and avoid secrets
+        run: node scripts/verify-pack.mjs npm-pack.json
+        working-directory: npm-installer
+      - name: Build real npm package without publishing
+        run: npm pack --pack-destination .
+        working-directory: npm-installer
