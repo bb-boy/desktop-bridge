@@ -208,3 +208,25 @@ dialog pre { overflow: auto; max-height: 60vh; white-space: pre-wrap; overflow-w
 .install-section { margin-top: 30px; padding-top: 24px; border-top: 1px solid var(--border); }
 .installer-links { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 18px; }
 .installer-links .button { font-size: .83rem; padding: 9px 12px; min-height: 40px; }
+.header-link { margin-left: auto; font-size: .9rem; white-space: nowrap; }
+.header-inner > .account { margin-left: 0; }
+.start-workspace { max-width: 1000px; padding-bottom: 64px; }
+.start-workspace .intro h1 { font-size: clamp(2rem, 4vw, 3rem); margin-bottom: 30px; }
+.setup-steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 18px; }
+.setup-step { display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 22px; padding: 30px; background: #fff; border: 1px solid var(--border); border-radius: var(--radius); }
+.step-number { display: grid; place-items: center; align-self: start; width: 38px; height: 38px; border-radius: 12px; background: #e9eee7; color: var(--accent); font-size: 1.15rem; font-weight: 650; }
+.setup-step p, .setup-help p { font-size: 1rem; color: #4a5b50; margin: 14px 0 18px; }
+.setup-step p:last-child { margin-bottom: 0; }
+.setup-step .actions { gap: 10px; }
+.setup-prompt { margin: 16px 0; padding: 16px 20px; background: var(--surface-alt); border-left: 3px solid var(--accent); border-radius: 8px; font-size: 1.05rem; }
+.setup-help { margin-top: 26px; padding: 24px 30px; border: 1px solid var(--border); background: #fff; border-radius: var(--radius); }
+.setup-help summary { cursor: pointer; font-size: 1rem; font-weight: 600; }
+.setup-help section { margin-top: 26px; }
+.setup-help h2 { font-size: 1.1rem; }
+@media (max-width: 650px) {
+  .header-link { font-size: .8rem; }
+  .setup-step { grid-template-columns: 30px minmax(0, 1fr); padding: 22px 16px; gap: 12px; }
+  .step-number { width: 30px; height: 30px; font-size: 1rem; border-radius: 9px; }
+  .setup-step .button { width: 100%; }
+  .setup-help { padding: 22px 18px; }
+}
