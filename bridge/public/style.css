@@ -61,15 +61,6 @@ button:disabled { opacity: .52; cursor: wait; }
 .wide { width: 100%; justify-content: space-between; }
 .card { max-width: 720px; margin: auto; padding: 36px; border: 1px solid var(--border); background: #fff; border-radius: var(--radius); box-shadow: 0 14px 48px #142a190a; }
 .muted { color: var(--muted); font-size: .91rem; line-height: 1.68; }
-.eyebrow, .section-kicker {
-  text-transform: uppercase;
-  margin: 0;
-  font-weight: 650;
-  font-size: .72rem;
-  line-height: 1.5;
-  letter-spacing: .15em;
-  color: #577361;
-}
 .notice { background: #f1f6ef; border-left: 3px solid var(--accent); padding: 14px 16px; border-radius: 8px; margin: 18px 0; }
 .error { color: #a33a36; }
 strong, code { overflow-wrap: anywhere; }
@@ -104,7 +95,7 @@ input::placeholder { color: #a0aaa1; }
 .account { margin-left: auto; display: flex; align-items: center; gap: 16px; min-width: 0; }
 .account #account-name { font-size: .88rem; color: #536557; white-space: nowrap; overflow: hidden; max-width: 160px; text-overflow: ellipsis; }
 .account button { min-height: 34px; padding: 6px 11px; font-size: .8rem; white-space: nowrap; }
-.workspace { width: min(100%, 1200px); margin: 0 auto; padding: 39px 32px 0; }
+.workspace { width: min(100%, 1200px); margin: 0 auto; padding: 39px 32px 40px; }
 #message { margin: 0; min-height: 0; font-size: .89rem; }
 #message:not(:empty) { background: #fff5f2; border: 1px solid #f1d8d2; color: #a24239; margin: 0 0 17px; padding: 11px 15px; border-radius: 9px; }
 #login-panel { max-width: 980px; margin: 32px auto 75px; }
@@ -113,28 +104,22 @@ input::placeholder { color: #a0aaa1; }
 .login-intro::after { content: ""; position: absolute; width: 180px; height: 180px; border: 1px solid #d3ded2; border-radius: 50%; bottom: -110px; right: -80px; pointer-events: none; }
 .login-intro h1 { margin-top: 25px; font-size: clamp(2.2rem, 4vw, 3.65rem); }
 .login-intro h1 em { font-style: normal; color: var(--accent); }
-.login-intro .lead { max-width: 26em; color: #526359; font-size: .98rem; }
-.login-steps { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 60px; font-size: .77rem; font-weight: 570; color: #5a715f; }
-.login-steps span { border-top: 1px solid #bbcdc0; padding-top: 11px; flex: 1; min-width: 78px; }
 .login-form-panel { padding: clamp(30px, 5vw, 58px); align-self: center; }
 .login-form-panel h2 { margin: 9px 0 6px; font-size: 1.65rem; }
 .login-form-panel form { margin: 23px 0 0; }
 .login-form-panel .wide { margin-top: 22px; }
-.login-note { margin-top: 24px; font-size: .79rem; }
 .google-button { background: #fff; border-color: #d5ded3; color: var(--ink); margin-top: 20px; justify-content: center; }
 .google-button:hover:not(:disabled) { color: var(--ink); background: #f2f6f1; border-color: #afc0b1; }
 .intro { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 10px 0 2px; }
 .intro h1 { margin: 10px 0 8px; }
-.intro .muted { margin: 0; }
 .title-dot { color: var(--accent); }
 .downloads { display: flex; align-items: center; }
 .downloads a { padding: 12px 18px; white-space: nowrap; }
 .stats { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; margin: 35px 0 38px; }
-.stats article { position: relative; min-height: 150px; padding: 23px 26px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 5px 24px #18352406; }
+.stats article { position: relative; min-height: 128px; padding: 23px 26px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 5px 24px #18352406; }
 .stats article::before { content: ""; position: absolute; top: 22px; right: 24px; width: 8px; height: 8px; border: 1.5px solid #b6c8b8; border-radius: 50%; }
 .stats span { display: block; color: #536358; font-size: .87rem; font-weight: 580; }
 .stats strong { display: block; margin: 4px 0 0; font-size: 2.25rem; line-height: 1.28; letter-spacing: -.055em; font-weight: 650; }
-.stats small { display: block; color: #8a958b; font-size: .75rem; margin-top: 9px; }
 .tabs { display: flex; align-items: stretch; gap: 33px; border-bottom: 1px solid #dce4db; margin-bottom: 28px; overflow-x: auto; scrollbar-width: thin; }
 button.tab { color: #748175; margin: 0; padding: 13px 2px 14px; min-height: 49px; white-space: nowrap; border: 0; border-bottom: 2px solid transparent; background: transparent; border-radius: 0; font-size: .94rem; font-weight: 540; }
 button.tab:hover:not(:disabled) { color: var(--accent); background: transparent; }
@@ -157,8 +142,6 @@ button.tab.active { color: var(--accent); border-color: var(--accent); font-weig
 .actions button { min-height: 36px; padding: 7px 11px; font-size: .79rem; }
 .pair-box { display: grid; grid-template-columns: 1fr .92fr; gap: 36px; align-items: center; margin: 25px 0; padding: 30px; border: 1px solid var(--border); background: #fff; border-radius: var(--radius); }
 .pair-box h2 { margin: 6px 0 9px; }
-.pair-box .muted { max-width: 38em; }
-.platform-note { color: #7e8c81; font-size: .79rem; letter-spacing: .035em; margin: 17px 0 0; }
 .pair-box form { width: 100%; min-width: 0; }
 .pair-box input { font-size: 1rem; }
 #pair-preview:not([hidden]) { margin-top: 16px; padding: 17px; border-radius: 10px; border: 1px solid #dce8dc; background: #f7faf6; }
@@ -169,19 +152,17 @@ button.tab.active { color: var(--accent); border-color: var(--accent); font-weig
 .row strong { font-size: .93rem; font-weight: 640; }
 .row button { flex-shrink: 0; min-height: 36px; padding: 7px 13px; font-size: .8rem; }
 .empty { grid-column: 1/-1; padding: 52px 20px; background: #fff; border: 1px dashed #d5ded4; border-radius: 13px; text-align: center; font-size: .91rem; color: #839084; }
-.footnote { color: var(--muted); font-size: .81rem; margin: 14px 0 30px; }
 .account-section { margin-top: 16px; align-items: start; }
 .account-section h3, .list-heading { margin: 0 0 7px; }
 .list-heading { margin-top: 27px; font-size: 1.05rem; }
 .account-section .actions button { margin: 0; }
 .account-section #password-form label:first-child { margin-top: 0; }
 #invite-link { max-width: 100%; overflow-wrap: anywhere; }
-footer { display: flex; justify-content: space-between; align-items: center; gap: 18px; color: #849085; border-top: 1px solid var(--border); margin-top: 55px; padding: 25px 0 35px; font-size: .77rem; }
 dialog { width: min(92vw, 900px); max-height: 88vh; border: 1px solid var(--border); border-radius: 16px; padding: 25px; box-shadow: 0 24px 80px #10201530; color: var(--ink); }
 dialog::backdrop { background: #192a20a1; backdrop-filter: blur(3px); }
 dialog pre { overflow: auto; max-height: 60vh; white-space: pre-wrap; overflow-wrap: anywhere; border-radius: 10px; background: #f5f7f4; padding: 18px; font-size: .78rem; line-height: 1.7; }
 @media (max-width: 860px) {
-  .workspace { padding: 28px 22px 0; }
+  .workspace { padding: 28px 22px 32px; }
   .header-inner { padding-inline: 22px; }
   .login-shell { grid-template-columns: 1fr 1fr; }
   .login-intro, .login-form-panel { padding: 33px; }
@@ -198,13 +179,11 @@ dialog pre { overflow: auto; max-height: 60vh; white-space: pre-wrap; overflow-w
   .version { display: none; }
   .account { gap: 9px; }
   .account #account-name { max-width: 90px; }
-  .workspace { padding: 20px 16px 0; }
+  .workspace { padding: 20px 16px 28px; }
   #login-panel { padding: 0; margin: 14px auto 38px; }
   .login-shell { display: block; }
   .login-intro { padding: 33px 26px 23px; }
   .login-intro h1 { font-size: 2.35rem; margin: 13px 0; }
-  .login-intro .lead { margin: 0; }
-  .login-steps { margin-top: 22px; gap: 7px; }
   .login-form-panel { padding: 28px 26px 32px; }
   .intro { flex-direction: column; align-items: start; gap: 18px; }
   .intro h1 { font-size: 2.2rem; }
@@ -214,7 +193,6 @@ dialog pre { overflow: auto; max-height: 60vh; white-space: pre-wrap; overflow-w
   .stats article::before { display: none; }
   .stats span { font-size: .76rem; line-height: 1.35; }
   .stats strong { font-size: 1.85rem; margin: 6px 0 0; }
-  .stats small { font-size: .7rem; }
   .tabs { gap: 22px; }
   button.tab { font-size: .86rem; }
   .section-title { flex-wrap: wrap; align-items: center; }
@@ -222,7 +200,6 @@ dialog pre { overflow: auto; max-height: 60vh; white-space: pre-wrap; overflow-w
   .device { padding: 20px; }
   .device .section-title { flex-direction: column; align-items: start; gap: 8px; }
   .row { padding: 16px; align-items: start; flex-wrap: wrap; gap: 12px; }
-  footer { flex-direction: column; align-items: start; gap: 6px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
