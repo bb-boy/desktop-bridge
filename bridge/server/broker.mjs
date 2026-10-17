@@ -50,6 +50,8 @@ export class Broker {
           const recover=this.store.db.prepare("SELECT id FROM calls WHERE device=? AND owner=? AND status IN ('executing','awaiting_result','unknown') ORDER BY started DESC LIMIT 256").all(device.id,device.owner).map(r=>r.id);
           this.send(conn,{type:'welcome',heartbeatSeconds:20,...(conn.protocol>=2?{recover}:{} )});
           if(conn.protocol>=2){this.send(conn,{type:'health_check'});const d=this.store.device(device.id);if(d.pendingHash){const token=opaque();this.store.db.prepare('UPDATE registry SET pendingHash=? WHERE id=?').run(hash(token),device.id);this.send(conn,{type:'rotate',token});}}
+        } else if(m.type==='revoked_ack'&&!this.store.device(device.id)) {
+          ws.close(1008,'Device unlinked');
         } else if(m.type==='health'&&conn.ready&&conn.protocol>=2) {
           conn.healthOk=m.ok===true;conn.healthAt=Date.now();seen();
         } else if(m.type==='rotate_ack'&&conn.ready&&conn.protocol>=2) {
@@ -100,6 +102,16 @@ export class Broker {
     this.settle(id,null,message);
   }
   disconnect(id,reason){this.connections.get(id)?.ws.close(1008,reason);}
+  revoke(id) {
+    const conn=this.connections.get(id);
+    if(!conn)return; // Offline: credential validation on next Agent startup handles cleanup.
+    if(conn.ws.readyState!==WebSocket.OPEN){conn.ws.terminate();return;}
+    // Do not close immediately: give the Agent a chance to erase its local
+    // credential and acknowledge. Authorization was already revoked in the DB.
+    const timer=setTimeout(()=>this.disconnect(id,'Device unlinked'),1500);
+    timer.unref();
+    this.send(conn,{type:'revoked'},()=>{clearTimeout(timer);this.disconnect(id,'Device unlinked');});
+  }
   devices(owner='owner') {
     return this.store.devices(owner).map(d=>{
       const candidate=this.connections.get(d.id),c=candidate?.device.owner===d.owner?candidate:undefined;

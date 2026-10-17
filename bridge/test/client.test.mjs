@@ -10,6 +10,7 @@ import {createRequire} from 'node:module';
 import {randomUUID,createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {dataRoot,acquireLock,releaseLock,stopClient,livePid,sleep} from '../client/lifecycle.mjs';
+import {startBackground} from '../client/startup.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const runtime=path.join(root,'client');
 const require=createRequire(path.join(runtime,'package.json'));
@@ -68,6 +69,32 @@ test('agent protocol v2 reports health, deduplicates calls, rotates tokens and r
  await until(()=>messages.find(m=>m.type==='hello'));next.send(JSON.stringify({type:'welcome',recover:[id]}));
  const recovered=await until(()=>messages.find(m=>m.type==='result'&&m.id===id));assert.equal(recovered.result.content[0].text,'1');assert.equal(fs.readFileSync(path.join(dir,'counter.txt'),'utf8'),'1');
  const finish=exited(processAgent);fs.writeFileSync(path.join(dir,'maintenance.flag'),'stop');await finish;
+});
+
+test('re-pair required state blocks start, persists in status, and clears after explicit pairing',async t=>{
+ const dir=directory(t),configPath=path.join(dir,'agent-config.json');
+ const agent=path.join(dir,'mock-pair-agent.mjs');
+ fs.writeFileSync(agent,`import fs from 'node:fs';import path from 'node:path';
+ const filename=process.argv[2]; const c=JSON.parse(fs.readFileSync(filename,'utf8'));
+ if(!process.argv.includes('--pair')||!process.argv.includes('--setup-only'))process.exit(6);
+ c.deviceId='new-paired-id';c.deviceToken='new-paired-token';
+ fs.writeFileSync(filename,JSON.stringify(c));`);
+ fs.writeFileSync(configPath,JSON.stringify({deviceId:'old-id',deviceToken:'old-token'}));
+ fs.writeFileSync(path.join(dir,'launch.json'),JSON.stringify({node:process.execPath,agent,config:configPath}));
+ fs.writeFileSync(path.join(dir,'client-settings.json'),JSON.stringify({mode:'manual'}));
+ fs.writeFileSync(path.join(dir,'auth-status.json'),JSON.stringify({authStatus:'re_pair_required',reason:'device_revoked'}));
+ fs.writeFileSync(path.join(dir,'maintenance.flag'),'device authorization revoked');
+ const control=(action)=>child(process.execPath,[path.join(runtime,'control.mjs'),action,'--root',dir]);
+ const initial=control('status');await exited(initial);assert.match(initial.output(),/re_pair_required/);assert.match(initial.output(),/RePair.cmd|control.mjs pair/);
+ const blocked=control('start');const [blockedExit]=await once(blocked,'exit');assert.equal(blockedExit,2,blocked.output());assert.equal(fs.existsSync(path.join(dir,'runner-lock')),false);
+ await assert.rejects(startBackground(dir,process.execPath),/重新配对/,'background mode must not bypass a revoked credential');
+ const paired=control('pair');await exited(paired);
+ assert.equal(JSON.parse(fs.readFileSync(configPath,'utf8')).deviceToken,'new-paired-token');
+ assert.equal(fs.existsSync(path.join(dir,'auth-status.json')),false);
+ assert.equal(fs.existsSync(path.join(dir,'maintenance.flag')),false);
+ const status=control('status');await exited(status);assert.match(status.output(),/"authStatus": "ok"/);
+ assert.ok(fs.existsSync(path.join(runtime,'RePair.cmd')),'installed Windows helper exists in package source');
+ assert.match(fs.readFileSync(path.join(runtime,'RePair.cmd'),'utf8'),/-Action pair/);
 });
 
 test('uninstall preserves saved results unless purge is explicitly requested',async t=>{

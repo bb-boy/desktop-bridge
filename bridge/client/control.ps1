@@ -1,4 +1,4 @@
-param([ValidateSet('start','stop','status')][string]$Action,[string]$DataDirectory)
+param([ValidateSet('start','stop','status','pair')][string]$Action,[string]$DataDirectory)
 $ErrorActionPreference = 'Stop'
 for ($i = 0; $i -lt $args.Count; $i++) {
     if ($args[$i] -eq '--root') { $i++; if ($i -ge $args.Count) { throw '--root requires a directory.' }; $DataDirectory = $args[$i] }

@@ -11,13 +11,18 @@ const source=path.dirname(fileURLToPath(import.meta.url));
 const args=process.argv.slice(2);let customRoot;
 for(let index=0;index<args.length;index++)if(args[index]==='--root'){if(!args[index+1]||args[index+1].startsWith('--'))throw new Error('--root requires a directory');customRoot=args[index+1];args.splice(index,2);index--;}
 const [action,value,...extra]=args;
-if(!['start','stop','status','mode'].includes(action)||extra.length||(action==='mode'?!['manual','background'].includes(value):value!==undefined))throw new Error('Usage: control.mjs start|stop|status|mode manual|background [--root directory]');
+if(!['start','stop','status','mode','pair'].includes(action)||extra.length||(action==='mode'?!['manual','background'].includes(value):value!==undefined))throw new Error('Usage: control.mjs start|stop|status|pair|mode manual|background [--root directory]');
 const root=path.resolve(customRoot??(fs.existsSync(path.join(source,'.desktop-bridge-client'))?source:dataRoot()));
 const launch=JSON.parse(fs.readFileSync(path.join(root,'launch.json'),'utf8'));
 let settings={};try{settings=JSON.parse(fs.readFileSync(path.join(root,'client-settings.json'),'utf8'));}catch{}
+const authStatusPath=path.join(root,'auth-status.json');
+let authStatus={};try{authStatus=JSON.parse(fs.readFileSync(authStatusPath,'utf8'));}catch{}
+const needsPair=authStatus.authStatus==='re_pair_required';
+const pairHelp=process.platform==='win32'?path.join(root,'RePair.cmd'):'Run control.mjs pair locally';
 if(!launch.node||!fs.existsSync(launch.node))throw new Error('私有运行环境缺失，请重新运行安装器自动修复。');
 if(settings.privilege==='administrator'&&process.env.BRIDGE_ADMIN_CONTEXT!=='1'){
- if(action==='status'){console.log(JSON.stringify({mode:settings.mode,privilege:'administrator',note:'Administrator service status requires local system inspection.'},null,2));process.exit(0);}
+ if(action==='status'){console.log(JSON.stringify({mode:settings.mode,privilege:'administrator',authStatus:authStatus.authStatus??'unknown',note:'Administrator service status requires local system inspection.'},null,2));process.exit(0);}
+ if(action==='pair')throw new Error('管理员服务配对需要在受保护的服务安装器中操作；不能用普通用户命令修改管理员凭据。');
  const request=elevationRequest(action,{mode:value});
  await run(request.command,request.args);
  if(action==='mode'){
@@ -31,13 +36,32 @@ if(action==='status'){
  const running=livePid(path.join(root,'runner-lock','pid'));
  let agentPid;try{agentPid=Number(fs.readFileSync(path.join(root,'agent.lock'),'utf8'));}catch{}
  const fresh=running&&heartbeat&&heartbeat.pid===agentPid&&Date.now()-heartbeat.time<90000&&livePid(path.join(root,'agent.lock'));
- console.log(JSON.stringify({mode:savedMode(root),running,networkConnected:!!(fresh&&heartbeat.connected),localToolsAvailable:!!(fresh&&heartbeat.localToolsAvailable)},null,2));
+ console.log(JSON.stringify({mode:savedMode(root),running,networkConnected:!!(fresh&&heartbeat.connected),localToolsAvailable:!!(fresh&&heartbeat.localToolsAvailable),authStatus:needsPair?'re_pair_required':'ok',...(needsPair?{message:'设备授权已撤销，必须重新配对。',rePairCommand:pairHelp}: {})},null,2));
  process.exit(0);
 }
 const lock=path.join(root,'install-lock');if(!acquireLock(lock))throw new Error('Another client maintenance operation is running.');
 process.on('exit',()=>releaseLock(lock));
 if(action==='stop'){await stopClient(root);console.log('客户端已停止。设备凭据、日志和任务结果已保留。');process.exit(0);}
-if(action==='mode'){await setMode(root,launch.node,value);console.log(value==='manual'?'已保存手动模式，移除登录自启。使用时运行启动命令，保持窗口，按 Ctrl+C 结束。':'已保存后台模式：现在后台运行，登录系统后自动启动。');process.exit(0);}
+if(action==='mode'){await setMode(root,launch.node,value);console.log(value==='manual'?'已保存手动模式，移除登录自启。使用时运行启动命令，保持窗口，按 Ctrl+C 结束。':'已保存后台模式：登录系统后自动启动。');process.exit(0);}
+if(action==='pair') {
+  await stopClient(root);
+  fs.rmSync(path.join(root,'maintenance.flag'),{force:true});
+  try {
+    // A new device token is only issued after the user approves in the browser.
+    await run(launch.node,[launch.agent,launch.config,'--pair','--setup-only']);
+    const fresh=JSON.parse(fs.readFileSync(launch.config,'utf8'));
+    if(!fresh.deviceToken||!fresh.deviceId)throw new Error('配对尚未完成');
+    fs.rmSync(authStatusPath,{force:true});
+    if(savedMode(root)==='background')await startBackground(root,launch.node);
+    console.log('重新配对成功。'+(savedMode(root)==='background'?'后台连接已恢复。':'手动模式：可运行 Start.cmd 启动。'));
+  } catch(error) {
+    fs.writeFileSync(authStatusPath,JSON.stringify({authStatus:'re_pair_required',reason:'pairing_incomplete',detectedAt:new Date().toISOString(),notificationShown:true}),{mode:0o600});
+    fs.writeFileSync(path.join(root,'maintenance.flag'),'pairing incomplete',{mode:0o600});
+    throw error;
+  }
+  process.exit(0);
+}
+if(needsPair&&action==='start'){console.error('设备 Token 已失效，请先运行 '+pairHelp+' 重新配对。');process.exit(2);}
 if(livePid(path.join(root,'runner-lock','pid'))){console.log('客户端已在运行。若要重新以前台模式启动，请先运行停止命令。');process.exit(0);}
 if(savedMode(root)==='background'){await startBackground(root,launch.node);console.log('客户端已在后台启动。');process.exit(0);}
 fs.rmSync(path.join(root,'maintenance.flag'),{force:true});

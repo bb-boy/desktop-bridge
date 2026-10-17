@@ -87,7 +87,22 @@ export function installManagement(app,config,store,broker,loginLimiter,sessions=
     if(!changed)return json(res,403,'会话或密码已变更，请重新登录');
     res.json({ok:true});
   });
+  // A revoked device cannot authenticate with its erased old token hash.
+  // Report only the revoked bit for a high-entropy device ID, never device owner
+  // details or a replacement credential. Rate-limited for reconnect diagnostics.
+  app.post('/api/agent/revocation-status',rateLimit({windowMs:60000,limit:60,standardHeaders:'draft-8',legacyHeaders:false}),(req,res)=>{
+    const id=req.body?.deviceId;
+    if(typeof id!=='string'||!/^[A-Za-z0-9_-]{1,128}$/.test(id))return json(res,400,'Invalid device ID');
+    const record=store.db.prepare('SELECT revoked FROM registry WHERE id=?').get(id);
+    res.set('Cache-Control','no-store').json({revoked:record?.revoked===1});
+  });
   app.get('/api/manage/devices',requireSession,(req,res)=>res.json({devices:broker.devices(req.session.owner)}));
+  app.get('/api/manage/revoked-devices',requireSession,(req,res)=>{
+    const devices=store.db.prepare(
+      'SELECT id,name,platform,revokedAt FROM registry WHERE owner=? AND revoked=1 ORDER BY revokedAt DESC LIMIT 50'
+    ).all(req.session.owner);
+    res.json({devices});
+  });
   app.post('/api/manage/devices/:id/:action',requireSession,async(req,res)=>{
     const d=store.device(req.params.id);
     if(!d||d.owner!==req.session.owner)return json(res,404,'设备不存在');
@@ -99,7 +114,11 @@ export function installManagement(app,config,store,broker,loginLimiter,sessions=
       case 'pause':store.db.prepare('UPDATE registry SET paused=1 WHERE id=?').run(d.id);broker.disconnect(d.id,'Device paused');break;
       case 'resume':store.db.prepare('UPDATE registry SET paused=0 WHERE id=?').run(d.id);break;
       case 'unlink':
-        store.db.prepare('UPDATE registry SET revoked=1,tokenHash=NULL,pendingHash=NULL WHERE id=?').run(d.id);broker.disconnect(d.id,'Device unlinked');break;
+        // Invalidate first. An old credential must cease authorizing remote calls
+        // even if notifying the local Agent fails or the device is offline.
+        store.db.prepare('UPDATE registry SET revoked=1,tokenHash=NULL,pendingHash=NULL,revokedAt=? WHERE id=?').run(Date.now(),d.id);
+        broker.revoke(d.id);
+        break;
       case 'rotate': {
         const conn=broker.connections.get(d.id);
         if(!conn?.ready||conn.protocol<2||conn.ws.readyState!==1)return json(res,409,'请先连接新版客户端；离线设备可解绑后重新配对');
