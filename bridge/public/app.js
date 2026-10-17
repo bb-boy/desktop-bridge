@@ -43,12 +43,65 @@ for(const tab of tabs){
 }
 for(const tab of tabs)tab.tabIndex=tab.classList.contains('active')?0:-1;
 async function refresh(){if(!account||refreshing)return;refreshing=true;try{const [d,c,a]=await Promise.all([api('/api/manage/devices'),api('/api/manage/calls'),api('/api/manage/authorizations')]);renderDevices(d.devices);renderCalls(c.calls);renderAuth(a.authorizations);if(googleEnabled)await renderGoogle();$('#stat-total').textContent=d.devices.length;$('#stat-ready').textContent=d.readyDevices;$('#stat-tools').textContent=d.toolCount;$('#stat-waiting').textContent=c.calls.filter(x=>['executing','awaiting_result'].includes(x.status)).length;}finally{refreshing=false;}}
-function renderDevices(devices){const parent=$('#devices');if(!devices.length)return empty(parent,'暂无设备');if(parent.contains(document.activeElement)&&document.activeElement.tagName==='INPUT')return;parent.replaceChildren();for(const d of devices){const card=el('article',undefined,'device nes-container'),title=el('div',undefined,'section-title');title.append(el('h3',d.name),el('span',healthLabels[d.health]??d.health,'badge '+(d.toolsAvailable?'ready':d.networkConnected?'warn':'')));card.append(title);const dl=el('dl');for(const [k,v]of [['设备编号',d.id],['客户端版本',d.clientVersion??'未知'],['系统',d.platform??'未知'],['最后在线',time(d.lastSeen)],['密钥轮换',d.rotationPending?'等待设备确认':'已同步']])dl.append(el('dt',k),el('dd',v));card.append(dl);const actions=el('div',undefined,'actions');const run=async(action,body={})=>{await api('/api/manage/devices/'+encodeURIComponent(d.id)+'/'+action,body);await refresh();};actions.append(button('重命名',()=>{const form=el('form'),input=el('input');input.className='nes-input';input.value=d.name;input.required=true;input.maxLength=100;input.setAttribute('aria-label','设备新名称');const save=el('button','保存','nes-btn is-success');form.append(input,save);card.prepend(form);input.focus();form.onsubmit=e=>{e.preventDefault();action(async()=>{await run('rename',{name:input.value});form.remove();});};}),button(d.paused?'恢复':'暂停',()=>run(d.paused?'resume':'pause')),button('轮换密钥',async()=>{if(confirm('轮换这台设备的连接密钥？设备会自动保存新密钥。'))await run('rotate');}),button('解绑',async()=>{if(confirm('解绑“'+d.name+'”？它需要重新配对才能连接，正在运行的操作可能继续执行。'))await run('unlink');},'danger'));card.append(actions);parent.append(card);}}
+function osIcon(platform){
+ const raw=String(platform??'').toLowerCase();
+ const kind=/win/.test(raw)?'windows':/darwin|mac|osx/.test(raw)?'macos':/linux/.test(raw)?'linux':'generic';
+ const label={windows:'Windows',macos:'macOS',linux:'Linux',generic:'设备'}[kind];
+ const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+ svg.classList.add('os-icon',kind);svg.setAttribute('viewBox','0 0 48 48');
+ svg.setAttribute('aria-label',label);svg.setAttribute('role','img');
+ const use=document.createElementNS('http://www.w3.org/2000/svg','use');
+ use.setAttribute('href','#os-'+kind);svg.append(use);return svg;
+}
+function renderDevices(devices){
+ const parent=$('#devices');
+ if(!devices.length)return empty(parent,'暂无设备');
+ parent.replaceChildren();
+ for(const d of devices){
+  const card=el('article',undefined,'device nes-container');
+  const open=el('button',undefined,'device-open');
+  open.type='button';
+  open.title=d.name+' · '+(healthLabels[d.health]??d.health);
+  open.setAttribute('aria-label','查看 '+d.name+' 的设备详情');
+  open.append(osIcon(d.platform),el('span',d.name,'device-name'));
+  open.onclick=()=>showDeviceDetails(d);
+  card.append(open);parent.append(card);
+ }
+}
+function showDeviceDetails(d){
+ const dialog=$('#device-dialog'),content=$('#device-detail-content');
+ $('#device-detail-heading').textContent=d.name;
+ const status=el('span',healthLabels[d.health]??d.health,'badge '+(d.toolsAvailable?'ready':d.networkConnected?'warn':''));
+ const intro=el('div',undefined,'device-detail-top');
+ intro.append(osIcon(d.platform),status);
+ const dl=el('dl');
+ for(const [k,v] of [['设备编号',d.id],['客户端版本',d.clientVersion??'未知'],['系统',d.platform??'未知'],['最后在线',time(d.lastSeen)],['密钥轮换',d.rotationPending?'等待设备确认':'已同步']]){
+  dl.append(el('dt',k),el('dd',v));
+ }
+ const actions=el('div',undefined,'actions');
+ const run=async(operation)=>{
+  await api('/api/manage/devices/'+encodeURIComponent(d.id)+'/'+operation,{});
+  dialog.close();
+  await refresh();
+ };
+ actions.append(
+  button(d.paused?'恢复':'暂停',()=>run(d.paused?'resume':'pause')),
+  button('轮换密钥',async()=>{
+   if(confirm('轮换这台设备的连接密钥？设备会自动保存新密钥。'))await run('rotate');
+  }),
+  button('解绑',async()=>{
+   if(confirm('解绑“'+d.name+'”？它需要重新配对才能连接，正在运行的操作可能继续执行。'))await run('unlink');
+  },'danger')
+ );
+ content.replaceChildren(intro,dl,actions);
+ if(!dialog.open)dialog.showModal();
+}
 function renderCalls(calls){const parent=$('#calls'),recent=[...calls].sort((a,b)=>b.started-a.started).slice(0,100);if(!recent.length)return empty(parent,'暂无任务');parent.replaceChildren();for(const c of recent){const row=el('article',undefined,'row nes-container'),info=el('div',undefined,'grow');info.append(el('strong',c.tool),el('p',c.id,'muted'),el('p',time(c.started),'muted'));row.append(info,el('span',statusLabels[c.status]??c.status,'badge '+(c.status==='completed'?'ready':'')),button('查看结果',async()=>{const r=await api('/api/manage/calls/'+encodeURIComponent(c.id));$('#result-content').textContent=JSON.stringify(r,null,2);$('#result-dialog').showModal();}));parent.append(row);}}
 function renderAuth(items){const parent=$('#authorizations');if(!items.length)return empty(parent,'暂无授权');parent.replaceChildren();for(const a of items){const row=el('article',undefined,'row nes-container'),info=el('div',undefined,'grow');info.append(el('strong',a.name),el('p','授权有效至 '+time(a.expires),'muted'));row.append(info,button('撤销授权',async()=>{if(confirm('撤销该客户端的本次授权？')){await api('/api/manage/authorizations/'+encodeURIComponent(a.id)+'/revoke',{});await refresh();}},'danger'));parent.append(row);}}
 async function previewPair(){const code=$('#pair-code').value,p=await api('/api/manage/pair?code='+encodeURIComponent(code)),preview=$('#pair-preview');preview.hidden=false;preview.replaceChildren(el('h3',p.name),el('p',p.platform+' · 客户端 '+p.version));preview.append(button('确认绑定到 '+account.username,async()=>{await api('/api/manage/pair',{code,decision:'approve'});preview.replaceChildren(el('p','已绑定'));history.replaceState(null,'','/');query.delete('pair');$('#pair-code').value='';await refresh();},'success'),button('拒绝',async()=>{await api('/api/manage/pair',{code,decision:'deny'});preview.hidden=true;query.delete('pair');history.replaceState(null,'','/');},'secondary'));}
 $('#pair-form').onsubmit=e=>{e.preventDefault();action(previewPair);};
 $('#close-dialog').onclick=()=>$('#result-dialog').close();
+$('#close-device-dialog').onclick=()=>$('#device-dialog').close();
 $('#invite').onclick=()=>action(async()=>{const r=await api('/api/invitations',{}),link=el('a',r.url);link.href=r.url;$('#invite-link').replaceChildren(link);});
 $('#password-form').onsubmit=e=>{e.preventDefault();action(async()=>{await api('/api/password',Object.fromEntries(new FormData(e.target)));e.target.reset();message('密码已更新。其他浏览器已退出，客户端需要重新关联。');await refresh();});};
 setInterval(()=>{if(!document.hidden&&account)action(refresh);},10000);

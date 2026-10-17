@@ -125,3 +125,23 @@ test('new-user guide keeps both native and npm installation methods',()=>{
   assert.match(html,/href="\/start.html#installation-options"/);
   assert.match(css,/\.install-methods \{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
 });
+
+test('device cards are compact four-column launchers with platform icons and modal-only details',()=>{
+  assert.match(css,/\.device-grid \{grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
+  assert.match(css,/@media\(max-width:950px\) \{[\s\S]*?\.device-grid \{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(css,/@media\(max-width:560px\) \{[\s\S]*?\.device-grid \{grid-template-columns:1fr/);
+  for(const kind of ['windows','macos','linux'])assert.match(html,new RegExp('id="os-'+kind+'"'));
+  assert.match(js,/function osIcon\(platform\)/);
+  assert.match(js,/open\.onclick=\(\)=>showDeviceDetails\(d\)/);
+  assert.match(js,/if\(!dialog\.open\)dialog\.showModal\(\)/);
+  assert.match(html,/id="device-dialog"[^>]*aria-labelledby="device-detail-heading"/);
+  assert.match(js,/\['客户端版本',d\.clientVersion/);
+  assert.match(js,/\['系统',d\.platform/);
+  assert.match(js,/\['最后在线',time\(d\.lastSeen\)/);
+  assert.doesNotMatch(js,/button\('重命名'|run\('rename'|编辑设备名/);
+});
+test('device refresh uses an accessible icon instead of visible button text',()=>{
+  assert.match(html,/<button id="refresh"[^>]*aria-label="刷新状态"[^>]*title="刷新状态"/);
+  assert.match(html,/class="refresh-icon"[^>]*aria-hidden="true"/);
+  assert.doesNotMatch(html,/<button id="refresh"[^>]*>刷新状态<\/button>/);
+});

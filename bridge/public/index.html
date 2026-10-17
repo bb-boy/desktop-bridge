@@ -23,6 +23,12 @@
       <div class="account"><span id="account-name" aria-label="当前登录账号"></span><button id="logout" class="secondary nes-btn" type="button" hidden>退出登录</button></div>
     </div>
   </header>
+    <svg class="os-icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="os-windows" viewBox="0 0 48 48"><path fill="currentColor" d="M5 8 22 5v18H5zm20-3 18-3v21H25zM5 26h17v18L5 41zm20 0h18v20l-18-2z"/></symbol>
+    <symbol id="os-macos" viewBox="0 0 48 48"><rect x="5" y="7" width="38" height="29" rx="5" fill="none" stroke="currentColor" stroke-width="4"/><rect x="10" y="12" width="28" height="18" rx="1.5" fill="currentColor" opacity=".18"/><path d="M24 36v6M16 43h16" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></symbol>
+    <symbol id="os-linux" viewBox="0 0 48 48"><ellipse cx="24" cy="28" rx="13" ry="17" fill="currentColor"/><ellipse cx="24" cy="31" rx="8" ry="11" fill="#fffef8"/><ellipse cx="19.5" cy="12.5" rx="2" ry="3.5" fill="#fffef8"/><ellipse cx="28.5" cy="12.5" rx="2" ry="3.5" fill="#fffef8"/><path d="m20 18 4 4 4-4-4-2z" fill="#e3a93e"/><path d="m13 41-8 3 1-6 8-2m20 5 8 3-1-6-8-2" fill="#e3a93e"/></symbol>
+    <symbol id="os-generic" viewBox="0 0 48 48"><rect x="5" y="6" width="38" height="28" rx="3" fill="none" stroke="currentColor" stroke-width="4"/><path d="M24 34v8m-11 0h22" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></symbol>
+  </svg>
   <main class="workspace" id="main">
     <p id="message" role="status" aria-live="polite"></p>
     <section id="login-panel" class="card login-shell nes-container">
@@ -72,7 +78,7 @@
         <button id="tab-authorizations" class="tab" data-tab="authorizations" type="button" role="tab" aria-controls="authorizations-tab" aria-selected="false">授权与账号</button>
       </nav>
       <section id="devices-tab" role="tabpanel" aria-labelledby="tab-devices">
-        <div class="section-title"><div><h2>设备状态</h2></div><button id="refresh" class="secondary nes-btn" type="button">刷新状态</button></div>
+        <div class="section-title"><div><h2>设备状态</h2></div><button id="refresh" class="secondary nes-btn refresh-icon-btn" type="button" aria-label="刷新状态" title="刷新状态"><svg class="refresh-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 5v5h-5M4 19v-5h5"/><path d="M5.6 9a7 7 0 0 1 12-2.6L20 10M4 14l2.4 3.6A7 7 0 0 0 18.4 15"/></svg></button></div>
         <div id="devices" class="device-grid"></div>
         <section class="pair-box nes-container" id="device-install">
           <div><h2>安装并连接</h2><div class="installer-links"><a class="button secondary nes-btn" href="/downloads/DesktopBridge-macOS.pkg" download>Mac 安装器</a><a class="button secondary nes-btn" href="/downloads/DesktopBridge-Windows.cmd" download>Windows 安装器</a><a class="button secondary nes-btn" href="/downloads/DesktopBridge-Linux.sh" download>Linux 安装器</a></div></div>
@@ -91,6 +97,7 @@
       </section>
     </section>
   </main>
+  <dialog class="nes-dialog device-dialog" id="device-dialog" aria-labelledby="device-detail-heading"><div class="section-title"><div><h2 id="device-detail-heading">设备详情</h2></div><button id="close-device-dialog" class="secondary nes-btn" type="button">关闭</button></div><div id="device-detail-content" class="device-detail-content"></div></dialog>
   <dialog class="nes-dialog" id="result-dialog" aria-labelledby="result-heading"><div class="section-title"><div><h2 id="result-heading">任务结果</h2></div><button id="close-dialog" class="secondary nes-btn" type="button">关闭</button></div><pre id="result-content"></pre></dialog>
 </body>
 </html>
