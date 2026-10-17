@@ -8,10 +8,15 @@ export class Broker {
     this.config=config;this.store=store;this.connections=new Map();this.pending=new Map();this.closing=false;
     this.wss=new WebSocketServer({noServer:true,maxPayload:10*1024*1024,perMessageDeflate:false});
     httpServer.on('upgrade',(req,socket,head)=>{
+      // Upgrade events bypass Express error handling. Invalid request targets
+      // must not throw out of this listener and terminate the relay.
+      let pathname;
+      try {pathname=new URL(req.url,'http://localhost').pathname;}
+      catch {return socket.end('HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n');}
       const credential=(req.headers.authorization??'').match(/^Bearer ([A-Za-z0-9_-]{43})$/)?.[1];
       const digest=credential&&hash(credential);
       const device=digest&&store.db.prepare('SELECT * FROM registry WHERE revoked=0 AND paused=0 AND (tokenHash=? OR pendingHash=?)').get(digest,digest);
-      if(new URL(req.url,'http://localhost').pathname!=='/agent'||!device||(req.headers.origin&&req.headers.origin!==new URL(config.baseUrl).origin))return socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
+      if(pathname!=='/agent'||!device||(req.headers.origin&&req.headers.origin!==new URL(config.baseUrl).origin))return socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
       if(this.connections.has(device.id))return socket.end('HTTP/1.1 409 Conflict\r\nConnection: close\r\n\r\n');
       if(this.closing)return socket.end('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n');
       this.wss.handleUpgrade(req,socket,head,ws=>this.connect(device,ws,digest));

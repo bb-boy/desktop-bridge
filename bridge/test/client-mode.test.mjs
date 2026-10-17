@@ -17,7 +17,7 @@ async function waitFor(condition,timeout=15000){const deadline=Date.now()+timeou
 async function success(p){const [code]=await once(p,'exit');assert.equal(code,0,p.output());return p.output();}
 function pidAlive(pid){try{process.kill(pid,0);return true;}catch{return false;}}
 async function fixture(t){
- const dir=directory(t),root=path.join(dir,'client');fs.mkdirSync(root);
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'bridge-mode-')),root=path.join(dir,'client');fs.mkdirSync(root);
  for(const name of ['control.mjs','install-options.mjs','startup.mjs','runner.mjs','lifecycle.mjs','admin-elevate.mjs','admin-runtime.mjs'])fs.copyFileSync(path.join(client,name),path.join(root,name));
  fs.writeFileSync(path.join(root,'.desktop-bridge-client'),'client');fs.writeFileSync(path.join(root,'client-settings.json'),JSON.stringify({mode:'manual',version:'0.2.1'}));
  fs.writeFileSync(path.join(root,'agent-config.json'),'{}');fs.writeFileSync(path.join(root,'journal.json'),'saved-results');
@@ -28,7 +28,8 @@ async function fixture(t){
  const bin=path.join(dir,'bin');fs.mkdirSync(bin);fs.writeFileSync(path.join(bin,'launchctl'),'#!/bin/sh\nexit 0\n',{mode:0o700});
  const env={HOME:path.join(dir,'home'),APPDATA:path.join(dir,'appdata'),LOCALAPPDATA:path.join(dir,'localdata'),XDG_CONFIG_HOME:path.join(dir,'config'),PATH:bin+path.delimiter+process.env.PATH};
  const invoke=(...args)=>spawnClient([path.join(root,'control.mjs'),...args],{env});
- t.after(async()=>{if(livePid(path.join(root,'runner-lock','pid')))await success(invoke('stop'));});
+ // Stop the fixture before removing its PID files, including after an assertion fails.
+ t.after(async()=>{try{if(livePid(path.join(root,'runner-lock','pid')))await success(invoke('stop'));}finally{fs.rmSync(dir,{recursive:true,force:true});}});
  return {root,env,invoke};
 }
 
@@ -54,7 +55,7 @@ test('manual start is foreground; stopping preserves credentials and results wit
  const f=await fixture(t),foreground=f.invoke('start');const finished=success(foreground);
  await waitFor(()=>fs.existsSync(path.join(f.root,'heartbeat.json')));assert.equal(foreground.exitCode,null);assert.match(foreground.output(),/Ctrl\+C/);
  const grandchild=Number(fs.readFileSync(path.join(f.root,'grandchild.pid')));assert.ok(pidAlive(grandchild));
- const status=JSON.parse(await success(f.invoke('status')));assert.deepEqual(status,{mode:'manual',running:true,networkConnected:true,localToolsAvailable:true});
+ const status=JSON.parse(await success(f.invoke('status')));assert.deepEqual(status,{mode:'manual',running:true,networkConnected:true,localToolsAvailable:true,authStatus:'ok'});
  await success(f.invoke('stop'));await finished;await waitFor(()=>!pidAlive(grandchild));
  assert.equal(fs.readFileSync(path.join(f.root,'agent-config.json'),'utf8'),'{}');assert.equal(fs.readFileSync(path.join(f.root,'journal.json'),'utf8'),'saved-results');assert.equal(fs.readFileSync(path.join(f.root,'dependencies-sentinel'),'utf8'),'unchanged');
  assert.equal(fs.existsSync(path.join(f.root,'node_modules')),false);
