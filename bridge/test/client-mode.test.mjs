@@ -36,9 +36,11 @@ test('mode options are explicit, retain prior choice and reject contradictory fl
  assert.equal(parseInstallerOptions(['--no-start']).mode,'manual');assert.equal(parseInstallerOptions(['--administrator','--mode','background']).administrator,true);
  assert.throws(()=>parseInstallerOptions(['--administrator','--uninstall']),/maintenance/);assert.equal(parseInstallerOptions(['--mode','background']).mode,'background');
  for(const flags of [['--mode','background','--no-start'],['--mode','manual','--mode','background'],['--mode','invalid'],['--mode'],['--stop','--mode','manual']])assert.throws(()=>parseInstallerOptions(flags));
- assert.equal(await chooseMode({}, {interactive:true,ask:async()=>''}),'manual');
- assert.equal(await chooseMode({}, {interactive:true,previous:'background',ask:async()=>''}),'background');
- assert.equal(await chooseMode({}, {interactive:false,previous:'background'}),'background');
+ let prompts=0;
+ assert.equal(await chooseMode({}, {interactive:true,ask:async()=>++prompts===1?'':'2'}),'background');
+ assert.equal(prompts,2,'empty answer must not silently select manual mode');
+ assert.equal(await chooseMode({}, {interactive:true,previous:'background',ask:async()=> '1'}),'manual');
+ await assert.rejects(()=>chooseMode({}, {interactive:false,previous:'background'}),/--mode manual/);
  await assert.rejects(()=>chooseMode({}, {interactive:false}),/--mode manual/);
  assert.equal(await chooseMode({stop:true},{interactive:false}),undefined);
 });
