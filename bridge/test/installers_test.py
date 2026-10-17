@@ -97,11 +97,14 @@ class StandaloneTests(unittest.TestCase):
         installer.write_bytes(downloads.render('windows.cmd.in', output.getvalue()).replace('\n', '\r\n').encode())
         self.env['TEMP'] = str(self.root)
         self.env['TMP'] = str(self.root)
-        p = subprocess.run([os.environ.get('ComSpec', 'cmd.exe'), '/d', '/c', str(installer)],
-                           env=self.env, input='', capture_output=True, text=True, timeout=30)
-        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-        self.assertEqual(self.result.read_text(), 'background')
-        self.assertEqual(list(self.root.glob('desktop-bridge-setup-*')), [])
+        for mode in ('manual', 'background'):
+            with self.subTest(mode=mode):
+                self.env['DESKTOP_BRIDGE_INSTALL_MODE'] = mode
+                p = subprocess.run([os.environ.get('ComSpec', 'cmd.exe'), '/d', '/c', str(installer)],
+                                   env=self.env, input='', capture_output=True, text=True, timeout=30)
+                self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+                self.assertEqual(self.result.read_text(), mode)
+                self.assertEqual(list(self.root.glob('desktop-bridge-setup-*')), [])
 
     def test_windows_payload_is_complete_and_checked(self):
         output = io.BytesIO()
@@ -113,7 +116,9 @@ class StandaloneTests(unittest.TestCase):
         self.assertEqual(base64.b64decode(content), payload)
         self.assertIn(hashlib.sha256(payload).hexdigest(), text)
         self.assertLess(text.index('Get-FileHash'), text.index('Expand-Archive'))
-        self.assertIn('-Mode background', text)
+        self.assertIn('Read-Host', text)
+        self.assertIn('DESKTOP_BRIDGE_INSTALL_MODE', text)
+        self.assertIn('-Mode $mode', text)
         self.assertIn('Remove-Item -LiteralPath $temp -Recurse', text)
 
 
