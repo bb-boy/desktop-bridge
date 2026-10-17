@@ -149,9 +149,7 @@ async function shutdown(code=0) {
   ws?.close();
   const timeout=setTimeout(()=>process.exit(code),8000);timeout.unref();
   try{await client.close();}catch{}
-  // Windows Node/undici can fail native handle assertions during immediate exit.
-  // The existing unref'd timeout remains an 8-second last-resort fallback.
-  process.exitCode=code;
+  process.exit(code);
 }
 process.on('message',message=>{if(message?.type==='stop')void shutdown();});
 const maintenanceWatch=setInterval(()=>{if(fs.existsSync(path.join(directory,'maintenance.flag')))void shutdown();},1000);maintenanceWatch.unref();
