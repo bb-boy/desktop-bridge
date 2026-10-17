@@ -97,6 +97,12 @@ export function installManagement(app,config,store,broker,loginLimiter,sessions=
     res.set('Cache-Control','no-store').json({revoked:record?.revoked===1});
   });
   app.get('/api/manage/devices',requireSession,(req,res)=>res.json({devices:broker.devices(req.session.owner)}));
+  app.get('/api/manage/revoked-devices',requireSession,(req,res)=>{
+    const devices=store.db.prepare(
+      'SELECT id,name,platform,revokedAt FROM registry WHERE owner=? AND revoked=1 ORDER BY revokedAt DESC LIMIT 50'
+    ).all(req.session.owner);
+    res.json({devices});
+  });
   app.post('/api/manage/devices/:id/:action',requireSession,async(req,res)=>{
     const d=store.device(req.params.id);
     if(!d||d.owner!==req.session.owner)return json(res,404,'设备不存在');
@@ -110,7 +116,7 @@ export function installManagement(app,config,store,broker,loginLimiter,sessions=
       case 'unlink':
         // Invalidate first. An old credential must cease authorizing remote calls
         // even if notifying the local Agent fails or the device is offline.
-        store.db.prepare('UPDATE registry SET revoked=1,tokenHash=NULL,pendingHash=NULL WHERE id=?').run(d.id);
+        store.db.prepare('UPDATE registry SET revoked=1,tokenHash=NULL,pendingHash=NULL,revokedAt=? WHERE id=?').run(Date.now(),d.id);
         broker.revoke(d.id);
         break;
       case 'rotate': {
