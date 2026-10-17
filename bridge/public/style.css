@@ -49,8 +49,8 @@ button, .button {
 }
 button:hover:not(:disabled), .button:hover { background: var(--accent-hover); color: #fff; }
 button:active:not(:disabled), .button:active { transform: translateY(1px); }
-button.secondary { border-color: var(--border); background: #fff; color: #394a3f; }
-button.secondary:hover:not(:disabled) { background: var(--surface-alt); border-color: #cad7cb; }
+button.secondary, .button.secondary { border-color: var(--border); background: #fff; color: #394a3f; }
+button.secondary:hover:not(:disabled), .button.secondary:hover { background: var(--surface-alt); border-color: #cad7cb; }
 button.danger { border-color: #f1d6d1; background: #fff6f3; color: #aa4e40; }
 button.danger:hover:not(:disabled) { background: #faeae6; }
 button:focus-visible, input:focus-visible, a:focus-visible {
@@ -204,3 +204,7 @@ dialog pre { overflow: auto; max-height: 60vh; white-space: pre-wrap; overflow-w
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
+
+.install-section { margin-top: 30px; padding-top: 24px; border-top: 1px solid var(--border); }
+.installer-links { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 18px; }
+.installer-links .button { font-size: .83rem; padding: 9px 12px; min-height: 40px; }

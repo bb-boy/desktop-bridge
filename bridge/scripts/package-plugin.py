@@ -26,6 +26,10 @@ def manifest(root):
     for field in ['logo','composerIcon']:
         p = (root / interface[field]).resolve()
         assert p.is_relative_to(root.resolve()) and p.is_file()
+    onboarding = m['extensions']['com.openai'].get('onboardingSkill')
+    if onboarding:
+        p = (root / onboarding).resolve()
+        assert onboarding.startswith('./skills/') and p.is_relative_to(root.resolve()) and p.is_file()
     servers = json.loads((root / 'mcp.json').read_text())
     assert servers['$schema'] == 'https://agent-plugins.org/schemas/1.0.0/mcp.schema.json'
     assert servers['mcpServers']['desktop_bridge']['url'] == 'https://mcp.ilovestudy.de/mcp'

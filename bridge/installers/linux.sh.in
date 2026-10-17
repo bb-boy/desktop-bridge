@@ -1,0 +1,29 @@
+#!/bin/sh
+set -eu
+umask 077
+fail() { printf '%s\n' "$*" >&2; exit 1; }
+[ "$(uname -s)" = Linux ] || fail '请下载与你的操作系统对应的安装器。'
+for TOOL in mktemp rm awk base64 tar gzip; do command -v "$TOOL" >/dev/null 2>&1 || fail "缺少基础工具：$TOOL"; done
+if command -v sha256sum >/dev/null 2>&1; then HASHER=sha256sum
+elif command -v shasum >/dev/null 2>&1; then HASHER=shasum
+else fail '需要 sha256sum 或 shasum 来校验安装器。'; fi
+TEMP=$(mktemp -d "${TMPDIR:-/tmp}/desktop-bridge-setup.XXXXXXXX")
+trap 'rm -rf "$TEMP"' 0
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+awk 'payload {print} /^__DESKTOP_BRIDGE_PAYLOAD__$/ {payload=1}' "$0" | base64 -d > "$TEMP/payload.tar.gz"
+if [ "$HASHER" = sha256sum ]; then SUM=$(sha256sum "$TEMP/payload.tar.gz"); else SUM=$(shasum -a 256 "$TEMP/payload.tar.gz"); fi
+[ "${SUM%% *}" = '@@SHA256@@' ] || fail '安装器内容校验失败，未执行安装。'
+tar -xzf "$TEMP/payload.tar.gz" -C "$TEMP"
+printf '\nDesktop Bridge · 安装并连接\n\n'
+RESULT=0
+/bin/sh "$TEMP/payload/Install.sh" --mode background || RESULT=$?
+if [ "$RESULT" -eq 0 ]; then
+ printf '\n连接设置完成。请返回 GPT，告诉它“已安装，检查我的电脑”。\n'
+else
+ printf '\n安装未完成，请保留上方错误信息后重试。\n' >&2
+fi
+exit "$RESULT"
+__DESKTOP_BRIDGE_PAYLOAD__
+@@PAYLOAD@@

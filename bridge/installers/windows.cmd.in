@@ -1,0 +1,45 @@
+@echo off
+setlocal
+set "DESKTOP_BRIDGE_SETUP_FILE=%~f0"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $text=[IO.File]::ReadAllText($env:DESKTOP_BRIDGE_SETUP_FILE); $parts=$text -split '(?m)^:__DESKTOP_BRIDGE_POWERSHELL__\r?\n',2; if($parts.Count -ne 2){throw 'Invalid installer'}; & ([scriptblock]::Create($parts[1]))"
+set "DESKTOP_BRIDGE_SETUP_RESULT=%ERRORLEVEL%"
+if not "%DESKTOP_BRIDGE_SETUP_RESULT%"=="0" pause
+exit /b %DESKTOP_BRIDGE_SETUP_RESULT%
+:__DESKTOP_BRIDGE_POWERSHELL__
+$ErrorActionPreference = 'Stop'
+$temp = Join-Path ([IO.Path]::GetTempPath()) ('desktop-bridge-setup-' + [guid]::NewGuid().ToString('N'))
+$payload = @'
+@@PAYLOAD@@
+'@
+try {
+    [IO.Directory]::CreateDirectory($temp) | Out-Null
+    # Create with an ACL owned by this user before placing executable content.
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent().User
+    $acl = New-Object Security.AccessControl.DirectorySecurity
+    $acl.SetAccessRuleProtection($true, $false)
+    $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($identity, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
+    $system = New-Object Security.Principal.SecurityIdentifier('S-1-5-18')
+    $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($system, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
+    Set-Acl -LiteralPath $temp -AclObject $acl
+    $archive = Join-Path $temp 'payload.zip'
+    [IO.File]::WriteAllBytes($archive, [Convert]::FromBase64String($payload))
+    if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant() -cne '@@SHA256@@') { throw 'Installer integrity check failed. No installation was run.' }
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip = [IO.Compression.ZipFile]::OpenRead($archive)
+    try {
+        foreach ($entry in $zip.Entries) {
+            $target = [IO.Path]::GetFullPath((Join-Path $temp $entry.FullName))
+            if (!$target.StartsWith($temp + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe archive path' }
+        }
+    } finally { $zip.Dispose() }
+    Expand-Archive -LiteralPath $archive -DestinationPath (Join-Path $temp 'payload')
+    $root = Get-ChildItem -LiteralPath (Join-Path $temp 'payload') -Directory
+    if (@($root).Count -ne 1) { throw 'Invalid installer layout' }
+    Write-Host 'Desktop Bridge - Install and connect'
+    $installer = Join-Path $root.FullName 'assets\client\install.ps1'
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer -Mode background
+    if ($LASTEXITCODE -ne 0) { throw ('Installation did not finish (exit ' + $LASTEXITCODE + ').') }
+    Write-Host 'Setup complete. Return to GPT and ask it to check your computers.'
+} finally {
+    Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue
+}
