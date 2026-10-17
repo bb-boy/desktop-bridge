@@ -38,6 +38,12 @@ class StandaloneTests(unittest.TestCase):
         self.env = dict(os.environ, FIXTURE_RESULT=str(self.result),
                         HOME=self.env_home, XDG_DATA_HOME=str(self.root / 'user-data'))
         self.env.pop('DESKTOP_BRIDGE_INSTALL_MODE', None)
+        if os.name == 'nt':
+            # Keep the CMD fixture path quoted; isolate PowerShell's TEMP outside
+            # the apostrophe-containing fixture so system module autoload still works.
+            self.native_temp = pathlib.Path(tempfile.mkdtemp(prefix='bridge-native-temp-'))
+            self.addCleanup(lambda: shutil.rmtree(self.native_temp, ignore_errors=True))
+            self.env['TEMP'] = self.env['TMP'] = str(self.native_temp)
 
     def linux_fixture(self):
         binary = self.root / 'bin'
@@ -186,8 +192,6 @@ class StandaloneTests(unittest.TestCase):
             archive.writestr('fixture/assets/client/install.ps1', "param([string]$Mode)\n[IO.File]::WriteAllText($env:FIXTURE_RESULT,$Mode)\nexit 0\n")
         installer = self.root / 'download.cmd'
         installer.write_bytes(downloads.render('windows.cmd.in', output.getvalue()).replace('\n', '\r\n').encode())
-        self.env['TEMP'] = str(self.root)
-        self.env['TMP'] = str(self.root)
         for mode in ('manual', 'background'):
             with self.subTest(mode=mode):
                 self.env['DESKTOP_BRIDGE_INSTALL_MODE'] = mode
@@ -199,7 +203,7 @@ class StandaloneTests(unittest.TestCase):
                 self.assertIn('Start.cmd', p.stdout)
                 self.assertIn('Stop.cmd', p.stdout)
                 self.assertIn('control.ps1', p.stdout)
-                self.assertEqual(list(self.root.glob('desktop-bridge-setup-*')), [])
+                self.assertEqual(list(self.native_temp.glob('desktop-bridge-setup-*')), [])
 
     @unittest.skipUnless(os.name == 'nt', 'Windows native execution test')
     def test_windows_noninteractive_requires_explicit_mode(self):
@@ -208,8 +212,6 @@ class StandaloneTests(unittest.TestCase):
             archive.writestr('fixture/assets/client/install.ps1', 'exit 0\n')
         installer = self.root / 'no-default.cmd'
         installer.write_bytes(downloads.render('windows.cmd.in', output.getvalue()).replace('\n', '\r\n').encode())
-        self.env['TEMP'] = str(self.root)
-        self.env['TMP'] = str(self.root)
         self.env.pop('DESKTOP_BRIDGE_INSTALL_MODE', None)
         p = subprocess.run([os.environ.get('ComSpec', 'cmd.exe'), '/d', '/c', str(installer)],
                            env=self.env, input='', capture_output=True, text=True, timeout=30)
