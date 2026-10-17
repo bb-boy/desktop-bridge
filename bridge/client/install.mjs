@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import {fileURLToPath} from 'node:url';
+import {execFileSync} from 'node:child_process';
 import {ensureRuntime,prepareDependencies,verifyLocalTools} from './environment.mjs';
 import {parseInstallerOptions,chooseMode,savedMode} from './install-options.mjs';
 import {setMode,commandFor,writeInstructions} from './startup.mjs';
@@ -20,9 +21,13 @@ const installLock=path.join(root,'install-lock');
 if(!acquireLock(installLock))throw new Error('Another client maintenance operation is running.');
 process.on('exit',()=>releaseLock(installLock));
 if(process.platform==='win32'){
-  const identity=process.env.USERDOMAIN?`${process.env.USERDOMAIN}\\${process.env.USERNAME}`:process.env.USERNAME;
-  if(!identity)throw new Error('Cannot identify the signed-in Windows account.');
-  await run('icacls.exe',[root,'/inheritance:r','/grant:r',identity+':(OI)(CI)F','*S-1-5-18:(OI)(CI)F','/T','/Q']);
+  // SSH can set USERDOMAIN to WORKGROUP. Resolve the actual Windows token SID.
+  const account=execFileSync('whoami.exe',['/user','/fo','csv','/nh'],{encoding:'utf8',windowsHide:true});
+  const sid=account.match(/\bS-1-\d+(?:-\d+)+\b/)?.[0];
+  if(!sid)throw new Error('Cannot identify the signed-in Windows account SID.');
+  const identity='*'+sid;
+  // Change only the root ACL. Recursive /inheritance:r clears file ACLs on Windows.
+  await run('icacls.exe',[root,'/inheritance:r','/grant:r',identity+':(OI)(CI)F','*S-1-5-18:(OI)(CI)F','/Q']);
 }
 if(options.uninstall&&!fs.existsSync(path.join(root,'.desktop-bridge-client'))){
  let legacy;try{legacy=JSON.parse(fs.readFileSync(path.join(root,'agent-config.json'),'utf8'));}catch{}

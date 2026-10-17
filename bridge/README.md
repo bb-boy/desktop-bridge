@@ -1,12 +1,12 @@
-# Desktop Bridge 客户端 0.2.1 · 通用插件
+# Desktop Bridge 客户端 · 远程 MCP
 
-同一份插件 ZIP 连接 Windows、macOS 和 Linux。服务端提供 MCP/OAuth、用户身份、设备配对与隔离、管理网页和持久化任务结果；电脑端自动准备运行环境并通过向外的连接接收任务。
+通过远程 MCP 连接 Windows、macOS 和 Linux。服务端提供 MCP/OAuth、用户身份、设备配对与隔离、管理网页和持久化任务结果；电脑端自动准备运行环境并通过向外的连接接收任务。
 
 ## 使用
 
-安装 `desktop-bridge-plugin.zip` 到支持 portable Agent Plugins 格式的宿主。首次绑定一台电脑时，在那台电脑上解压同一份 ZIP，运行 `Install.cmd`（Windows）、`Install.command`（macOS）或 `Install.sh`（Linux）。安装器自动选择操作系统和处理器、校验 Node.js 下载、安装锁定依赖、启动配对并保存凭据。
+使用 [开始使用页面](https://mcp.ilovestudy.de/start.html) 的引导，在 ChatGPT 添加自定义 MCP 服务器：`https://mcp.ilovestudy.de/mcp`，认证选择 OAuth。授权后，在目标电脑下载并打开对应系统的独立安装器；安装器自动准备运行环境、启动配对并保存凭据。
 
-登录管理页后确认电脑名称，完成绑定。在无法打开浏览器的电脑上，可把配对码输入到另一台设备的管理页。每个人使用同一份插件和服务地址，无需复制设备密钥、修改配置文件或另外注册一个 MCP 地址。
+使用与 MCP 授权相同的账号登录配对网页，确认电脑名称并完成绑定。在无法打开浏览器的电脑上，可把配对码输入到另一台设备的管理页。配对码有效期 10 分钟，设备密钥由客户端自动保存。
 
 Google 登录启用后，每个经验证的 Google 用户标识对应独立账号，首次登录自动创建隔离的用户空间。已有所有者应先用原账号登录，再显式绑定 Google，以保留原设备；不会凭相同邮箱自动合并账号。本地密码登录继续可用。Google 连接配置见 [Google 配置](../docs/google-oauth.md)。
 

@@ -84,3 +84,11 @@ Retention is bounded: cloud task/results expire after 30 days; local journal out
 - Google / 前端定向测试 27/27 通过；完整 Node.js 回归 90 项，89 通过、1 平台专项跳过、0 失败；Python 元数据测试 3/3 通过，安装器测试 6 项、5 通过、1 Windows 原生项在 macOS 跳过。此处协议测试使用模拟身份和无副作用设备工具，不代表两个真实 Google 账号的交互式登录验收。
 - 提供者确认 Google Cloud 应用已设为「外部用户 / 生产环境」；没有通过控制台独立核验。保留既有服务端 Google 配置，不在 ZIP 内加入登录凭据。
 - 0.2.4 仍为测试分发版：Windows CMD 未签名、Mac PKG 未签名和公证，使用者的网页首次上传与真实系统图形安装仍待验收。
+
+## 手动 MCP 引导与 Windows 权限修复（2026-10-17）
+
+- 更正开始使用页、设备管理入口和当前使用文档：用户手动添加 `https://mcp.ilovestudy.de/mcp`，选择 OAuth，再用同一账号完成设备配对。移除插件 ZIP 安装入口；公开下载清单仅列原生客户端安装器。
+- 在 p111 的隔离临时目录复现 Windows 安装器递归 ACL 更新清空 PID 文件权限的问题。修正为仅设置根目录权限，并从 Windows 登录令牌解析 SID，兼容 SSH 环境的 `USERDOMAIN=WORKGROUP`。
+- p111 已实际完成修正版安装和由用户确认的设备配对，25 个本地工具验证通过；独立 SSH 会话确认后台运行、服务器连通和本地工具可用。登录自启入口已核对，未执行重启验收。
+- 前端、Google/OAuth 双用户隔离、客户端生命周期与下载接口的定向 Node 测试 38/38 通过。原生安装器 Python 测试 5 通过、1 Windows 原生项在 macOS 跳过；p111 另外实际执行卸载保留数据与锁清理回归测试，在 `USERDOMAIN=WORKGROUP` 条件下通过，没有改动真实安装数据。
+- 已发布 start/index 页面、修正后的 Windows 安装器及两个下载校验清单，公开 HTTPS 内容散列核对通过；旧插件 ZIP 和其校验地址返回 404。Mac/Linux 安装器保持原有散列。部署前已备份，服务未重启，配置未更改。

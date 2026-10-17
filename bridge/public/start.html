@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f7f8f5">
-  <meta name="description" content="在 ChatGPT 网页端安装 Desktop Bridge，使用自己的 Google 账号连接自己的电脑。">
+  <meta name="description" content="在 ChatGPT 手动添加 Desktop Bridge MCP 服务器，通过 OAuth 授权并绑定自己的电脑。">
   <title>Desktop Bridge · 开始使用</title>
   <link rel="stylesheet" href="/style.css">
 </head>
@@ -20,34 +20,36 @@
     <ol class="setup-steps">
       <li class="setup-step">
         <span class="step-number" aria-hidden="true">1</span>
-        <div><h2>上传 GPT 插件</h2>
-          <p>下载 ZIP，不用解压。在 ChatGPT 网页的「插件 → 添加 → 上传插件压缩包」中上传。</p>
-          <div class="actions"><a class="button" href="/downloads/desktop-bridge-plugin.zip" download>下载 GPT 插件 ZIP</a><a class="button secondary" href="https://chatgpt.com/plugins" target="_blank" rel="noopener noreferrer">打开 ChatGPT 插件页 ↗</a></div>
+        <div><h2>手动添加 MCP 连接</h2>
+          <p>当前通过手动配置连接。打开 ChatGPT「插件」页，选择「添加 → 添加自定义 MCP 服务器」，填写以下内容：</p>
+          <p>名称：<strong>Desktop Bridge</strong><br>服务器地址：<code>https://mcp.ilovestudy.de/mcp</code><br>认证方式：<strong>OAuth</strong></p>
+          <div class="actions"><a class="button" href="https://chatgpt.com/plugins" target="_blank" rel="noopener noreferrer">打开 ChatGPT 插件页 ↗</a></div>
         </div>
       </li>
       <li class="setup-step">
         <span class="step-number" aria-hidden="true">2</span>
-        <div><h2>连接你的账号</h2><p>在 ChatGPT 中连接 Desktop Bridge，使用自己的 Google 账号登录，并确认授权。首次登录会创建独立账号。</p></div>
+        <div><h2>登录并授权</h2><p>创建连接后，按提示使用自己的 Google 账号登录并确认授权。首次登录会创建独立账号。授权完成后，继续安装电脑端客户端并确认设备绑定。</p></div>
       </li>
       <li class="setup-step">
         <span class="step-number" aria-hidden="true">3</span>
         <div><h2>在要控制的电脑上安装</h2>
-          <p>下载对应系统的安装器并打开。它会自动准备 Node.js 和 Desktop Commander，再打开配对网页。用第 2 步的同一个账号登录，核对电脑名称并确认绑定。</p>
+          <p>下载对应系统的安装器并打开。它会自动准备 Node.js 和 Desktop Commander，再打开配对网页。用第 2 步的同一个账号登录，在 10 分钟内核对电脑名称并确认绑定。保持安装窗口打开，直到显示安装和配对完成。</p>
           <div class="installer-links"><a class="button" href="/downloads/DesktopBridge-Windows.cmd" download>Windows 安装器</a><a class="button secondary" href="/downloads/DesktopBridge-macOS.pkg" download>Mac 安装器</a><a class="button secondary" href="/downloads/DesktopBridge-Linux.sh" download>Linux 安装器</a></div>
         </div>
       </li>
       <li class="setup-step">
         <span class="step-number" aria-hidden="true">4</span>
-        <div><h2>回到 GPT 使用</h2><p>在对话中输入 @，选择 Desktop Bridge，再发送：</p><blockquote class="setup-prompt">列出我的电脑，检查它是否可用。</blockquote><p>确认「工具可用」后，就可以让 GPT 查看文件或执行任务。以后保持电脑开机、联网、客户端运行即可。</p></div>
+        <div><h2>回到 ChatGPT 使用</h2><p>在新对话中输入 @，选择你刚创建的 Desktop Bridge 连接，再发送：</p><blockquote class="setup-prompt">列出我的电脑，检查它是否可用。</blockquote><p>确认「工具可用」后，就可以让 GPT 查看文件或执行任务。以后保持电脑开机、联网、客户端运行即可。</p></div>
       </li>
     </ol>
     <details class="setup-help"><summary>安装说明与常见问题</summary>
-      <section><h2>为什么还要打开电脑端安装器？</h2><p>GPT 插件负责连接对话与服务。电脑端安装器负责让你自己的电脑接收任务。首次需要本人打开一次，后续环境准备自动完成，不需要安装 ChatGPT 桌面版。</p></section>
-      <section><h2>每个人都要用自己的账号吗？</h2><p>是。每个人在 GPT 连接插件和电脑配对时都使用自己的同一个 Google 账号。不需要服务提供者的密码、邀请或设备密钥，也不应使用别人的账号。</p></section>
+      <section><h2>为什么授权后还要安装电脑端客户端？</h2><p>MCP 连接负责让 ChatGPT 访问服务，电脑端客户端负责接收并执行任务。首次需要本人下载并打开对应电脑的安装器，再确认设备绑定。</p></section>
+      <section><h2>每个人都要用自己的账号吗？</h2><p>是。每个人都在自己的 ChatGPT 中添加 MCP 服务器，并在 OAuth 授权和电脑配对时使用自己的同一个 Google 账号。</p></section>
       <section><h2>系统阻止安装怎么办？</h2><p>当前是测试分发版。Windows 安装器未签名，Mac 安装包未签名、公证，系统可能阻止打开。请保留完整提示并联系提供此页面的人；安装器不会自动关闭系统防护。</p></section>
       <section><h2>Linux 可以直接双击吗？</h2><p>Linux 文件管理器的行为不同。桌面支持时选择「在终端中运行」；否则需要通过 shell 运行下载的自解包脚本。</p></section>
       <section><h2>GPT 看不到我的电脑</h2><p>先确认安装窗口已显示完成，配对网页与 GPT 登录的是同一个账号，电脑保持联网，再让 GPT 检查设备。如果已绑定但离线，启动原有客户端，无需反复安装。</p></section>
-      <section><h2>上传失败</h2><p>重新下载本页的最新 ZIP，再尝试上传。不要重复使用旧文件，也不要使用服务提供者的私人插件链接。保留错误提示，便于排查。网页首次上传、真实账号登录与图形安装仍需在使用者的设备上验收。</p></section>
+      <section><h2>配对码过期怎么办？</h2><p>配对码有效期为 10 分钟。尚未绑定时，重新运行安装器生成新码，再确认绑定。已完成绑定后，请在设备管理页检查设备状态，旧配对码不能用于检查连接是否正常。</p></section>
+      <section><h2>找不到「添加自定义 MCP 服务器」怎么办？</h2><p>请先确认当前账号或工作空间允许创建自定义 MCP 连接。若由组织管理，请联系管理员检查相关权限。</p></section>
     </details>
   </main>
 </body>

@@ -75,5 +75,6 @@ test('installers are shown only inside authenticated device management',()=>{
   assert.doesNotMatch(login,/install-section|Mac 安装器|Windows 安装器|Linux 安装器/);
   assert.match(app,/id="device-install"/);
   for(const name of ['Mac 安装器','Windows 安装器','Linux 安装器'])assert.match(app,new RegExp(name));
-  assert.match(app,/下载通用插件 ZIP/);
+  assert.match(app,/href="\/start\.html">配置 ChatGPT 连接/);
+  assert.doesNotMatch(html,/href="\/downloads\/desktop-bridge-plugin\.zip"/);
 });

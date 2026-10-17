@@ -100,7 +100,8 @@ def build(output, skip_macos=False):
                             '--version', version, '--install-location', '/', '--ownership', 'recommended',
                             '--component-plist', str(components), '--scripts', str(scripts),
                             str(output / 'DesktopBridge-macOS.pkg')], check=True)
-    names = ['desktop-bridge-plugin.zip', 'DesktopBridge-Windows.cmd', 'DesktopBridge-Linux.sh']
+    # The ZIP is an internal installer payload, not a ChatGPT web installation entry.
+    names = ['DesktopBridge-Windows.cmd', 'DesktopBridge-Linux.sh']
     if not skip_macos:
         names.append('DesktopBridge-macOS.pkg')
     artifacts = {name: {'sha256': hashlib.sha256((output / name).read_bytes()).hexdigest(),

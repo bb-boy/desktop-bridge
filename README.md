@@ -1,6 +1,6 @@
 # Desktop Bridge
 
-一份通用插件 ZIP，连接 Windows、macOS 和 Linux。基于 [Desktop Commander MCP](https://github.com/wonderwhy-er/DesktopCommanderMCP) 的本地工具引擎，增加自托管中继、Google 身份隔离、账号配对、设备管理和断线任务恢复。
+通过远程 MCP 连接 Windows、macOS 和 Linux。基于 [Desktop Commander MCP](https://github.com/wonderwhy-er/DesktopCommanderMCP) 的本地工具引擎，增加自托管中继、Google 身份隔离、账号配对、设备管理和断线任务恢复。
 
 这是独立的私有开发仓库，保留上游完整源码和历史。上游发布命名空间不用于本项目发行；根包保持 `private: true`。
 
@@ -15,17 +15,17 @@
 
 ## 分发给其他人
 
-把公开入口 https://mcp.ilovestudy.de/start.html 发给使用者即可。该页无需登录，提供 GPT 插件 ZIP、各系统安装器及首次连接步骤。每个人在自己的 ChatGPT 网页端上传同一份包，使用自己的 Google 账号，在自己的电脑上安装并确认绑定。不要把你个人账号中的私人插件详情链接当成公共安装入口。当前为测试分发版，原生安装器签名及使用者实机首装验收尚未完成。
+把公开入口 https://mcp.ilovestudy.de/start.html 发给使用者即可。该页无需登录，提供手动 MCP 配置说明、各系统安装器及设备绑定步骤。每个人在自己的 ChatGPT 中添加服务器，使用自己的 Google 账号完成 OAuth 授权，再在自己的电脑上安装并确认绑定。当前为测试分发版，原生安装器尚未签名。
 
-## 一份 ZIP
+## 在 ChatGPT 配置连接
 
-在 ChatGPT「插件」页选择「添加 → 上传插件压缩包」，直接上传 `desktop-bridge-plugin.zip`，然后连接插件、使用 Google 登录并确认客户端授权。插件已包含服务地址和 OAuth 配置，无需手动添加 MCP 地址。在对话中选择 Desktop Bridge 并说「列出我的电脑」，即可使用账号下已绑定且工具可用的设备。
+在 ChatGPT「插件」页选择「添加 → 添加自定义 MCP 服务器」，名称填写 `Desktop Bridge`，服务器地址填写 `https://mcp.ilovestudy.de/mcp`，认证选择 **OAuth**。创建后使用 Google 登录并确认授权。在对话中选择这个连接并说「列出我的电脑」，即可检查账号下的设备。
 
-0.2.2 的首次设置引导会提供「安装并连接」下载入口。新电脑优先使用无需解压的独立安装器：[Mac PKG](https://mcp.ilovestudy.de/downloads/DesktopBridge-macOS.pkg)、[Windows CMD](https://mcp.ilovestudy.de/downloads/DesktopBridge-Windows.cmd)、[Linux 自解包脚本](https://mcp.ilovestudy.de/downloads/DesktopBridge-Linux.sh)。下载后打开，安装器自动准备环境、选择普通用户后台模式，并打开网页登录确认绑定。Mac / Windows 无需输入命令；Linux 的打开方式取决于桌面环境。详见 [GPT 首次连接指南](docs/quick-start.md)。
+新电脑使用无需解压的独立安装器：[Mac PKG](https://mcp.ilovestudy.de/downloads/DesktopBridge-macOS.pkg)、[Windows CMD](https://mcp.ilovestudy.de/downloads/DesktopBridge-Windows.cmd)、[Linux 自解包脚本](https://mcp.ilovestudy.de/downloads/DesktopBridge-Linux.sh)。下载后打开，安装器自动准备环境、选择普通用户后台模式，并打开网页登录确认绑定。Mac / Windows 无需输入命令；Linux 的打开方式取决于桌面环境。详见 [首次连接指南](docs/quick-start.md)。
 
-当前独立安装器尚未签名，Mac PKG 尚未公证，系统可能阻止打开；图形安装和 ChatGPT 上传仍需实际验收。
+当前独立安装器尚未签名，Mac PKG 尚未公证，系统可能阻止打开。
 
-原有通用 ZIP 仍包含以下安装入口，作为高级使用方式；上传插件不会自动在远端电脑安装或启动程序：
+源码打包保留以下跨平台客户端入口，供开发和高级使用；网页用户使用上面的独立安装器：
 
 | 系统 | 入口 |
 | --- | --- |
@@ -33,7 +33,7 @@
 | macOS x64 / ARM64 | `Install.command` |
 | Linux x64 / ARM64 | `Install.sh` |
 
-其余步骤自动完成，首次只需登录并确认绑定。插件、服务地址和账号体系共用，用户不需要手工编写 MCP 配置或复制设备密钥。普通模式下客户端运行于安装它的系统账号权限下；0.2.1 起还可主动选择手动提权或管理员后台系统服务，详见下文。
+首次还需在配对页面使用与 MCP 授权相同的账号确认绑定；配对码有效期 10 分钟。设备密钥由客户端自动保存。普通模式下客户端运行于安装它的系统账号权限下；还可主动选择手动提权或管理员后台系统服务，详见下文。
 
 Google 身份服务需先配置自己的 Google OAuth 网页客户端，见 [配置 Google 登录](docs/google-oauth.md)。插件 ZIP 不包含 Google 客户端密钥、用户密码、设备令牌、数据库或安装后的依赖。
 
