@@ -50,17 +50,26 @@ test('Dashboard: Apple, Windows and Linux have visibly different SVG logos acros
   assert.match(css,/\.pair-platform \.os-icon/);
 });
 
-test('Dashboard: Google unlink belongs to account settings, accessible from avatar menu',()=>{
+test('Dashboard: Google account settings opens from the avatar menu, not a top-level tab',()=>{
   assert.match(html,/id="account-settings"[^>]*>账号设置<\/button>/);
-  assert.match(html,/id="tab-account"[^>]*>账号设置<\/button>/);
-  const authorizationPanel=html.split('<section id="authorizations-tab"')[1].split('<section id="account-tab"')[0];
-  const accountPanel=html.split('<section id="account-tab"')[1];
+  assert.doesNotMatch(html,/id="tab-account"/);
+  assert.doesNotMatch(html,/id="account-tab"/);
+  assert.equal((html.match(/class="tab(?: active)?"/g)||[]).length,3);
+  const authorizationPanel=html.split('<section id="authorizations-tab"')[1].split('</main>')[0];
+  const accountDialog=html.split('<dialog class="nes-dialog account-dialog"')[1].split('<dialog class="nes-dialog device-dialog"')[0];
   assert.ok(authorizationPanel&&!authorizationPanel.includes('google-panel'));
   assert.match(authorizationPanel,/id="authorizations"/);
-  assert.match(accountPanel,/id="google-panel"/);
-  assert.match(accountPanel,/id="google-unlink"[^>]*>解除 Google 绑定<\/button>/);
-  assert.match(accountPanel,/id="google-unlink-hint"/);
-  assert.match(accountPanel,/id="password-form"/);
-  assert.ok(script.includes("$('#account-settings').onclick=()=>{closeAccountMenu();selectTab($('#tab-account'))"));
+  assert.match(accountDialog,/id="account-dialog"/);
+  assert.match(accountDialog,/id="google-panel"/);
+  assert.match(accountDialog,/id="google-unlink"[^>]*>解除 Google 绑定<\/button>/);
+  assert.match(accountDialog,/id="google-unlink-hint"/);
+  assert.match(accountDialog,/id="password-form"/);
+  assert.match(accountDialog,/id="close-account-dialog"/);
+  assert.ok(script.includes("$('#account-settings').onclick=()=>{"));
+  assert.ok(script.includes("if(!dialog.open)dialog.showModal()"));
+  assert.ok(script.includes("$('#close-account-dialog').onclick=()=>$('#account-dialog').close()"));
   assert.ok(script.includes("$('#google-unlink').disabled=!g.canUnlink"));
+  assert.match(css,/\.account-dialog\.nes-dialog\{[^}]*overflow-y:auto/);
+  assert.match(html,/app\.js\?v=20261018-account-dialog/);
+  assert.match(html,/style\.css\?v=20261018-account-dialog/);
 });

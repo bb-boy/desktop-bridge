@@ -220,6 +220,11 @@ button.tab.active:hover{background:var(--yellow)}
 #google-unlink-hint{margin:14px 0 0;color:#79501e}
 .account-settings form{max-width:580px;margin-top:15px}
 .account-settings form button{margin-top:12px}
+.account-dialog.nes-dialog{width:min(92vw,710px);max-height:85dvh;overflow-y:auto;overscroll-behavior:contain}
+.account-dialog .section-title{align-items:flex-start}
+.account-dialog .account-settings.nes-container{margin-bottom:18px}
+.account-feedback{margin:0 0 18px;padding:11px 14px;background:#e4f2e8;border:3px solid var(--ink);font-weight:750}
+@media(max-width:650px){.account-dialog.nes-dialog{padding:19px 14px}.account-dialog .account-settings.nes-container{padding:19px 15px}}
 .pair-platform{display:flex;align-items:center;gap:9px}
 .pair-platform .os-icon{width:28px;height:28px}
 .list-heading{margin:28px 0 20px}

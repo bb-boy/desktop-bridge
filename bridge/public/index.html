@@ -7,8 +7,8 @@
   <meta name="description" content="Desktop Bridge — 管理设备、连接状态、授权与任务结果。">
   <title>Desktop Bridge · 我的电脑</title>
   <link rel="stylesheet" href="/vendor/nes.css/nes.min.css">
-  <link rel="stylesheet" href="/style.css">
-  <script defer src="/app.js"></script>
+  <link rel="stylesheet" href="/style.css?v=20261018-account-dialog">
+  <script defer src="/app.js?v=20261018-account-dialog"></script>
 </head>
 <body class="dashboard pixel-dashboard">
   <a class="skip-link" href="#main">跳转到主要内容</a>
@@ -86,7 +86,6 @@
         <button id="tab-devices" class="tab active" data-tab="devices" type="button" role="tab" aria-controls="devices-tab" aria-selected="true">设备管理</button>
         <button id="tab-calls" class="tab" data-tab="calls" type="button" role="tab" aria-controls="calls-tab" aria-selected="false">任务与结果</button>
         <button id="tab-authorizations" class="tab" data-tab="authorizations" type="button" role="tab" aria-controls="authorizations-tab" aria-selected="false">授权管理</button>
-        <button id="tab-account" class="tab" data-tab="account" type="button" role="tab" aria-controls="account-tab" aria-selected="false">账号设置</button>
       </nav>
       <section id="devices-tab" role="tabpanel" aria-labelledby="tab-devices">
         <div class="section-title"><div><h2>设备状态</h2></div><button id="refresh" class="secondary nes-btn refresh-icon-btn" type="button" aria-label="刷新状态" title="刷新状态"><svg class="refresh-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 5v5h-5M4 19v-5h5"/><path d="M5.6 9a7 7 0 0 1 12-2.6L20 10M4 14l2.4 3.6A7 7 0 0 0 18.4 15"/></svg></button></div>
@@ -104,17 +103,18 @@
         <h3 class="list-heading">已授权的客户端</h3><div id="authorizations"></div>
         <section class="pair-box account-section nes-container" id="invite-panel" hidden><div><h3>邀请新用户</h3><p id="invite-link"></p></div><button id="invite" type="button">生成邀请链接</button></section>
       </section>
-      <section id="account-tab" role="tabpanel" aria-labelledby="tab-account" hidden>
-        <div class="section-title"><div><h2>账号设置</h2></div></div>
-        <section class="account-settings nes-container" id="google-panel" hidden>
-          <div class="section-title"><div><h3>Google 账号</h3><p id="google-status" class="muted" aria-live="polite"></p></div></div>
-          <div class="account-actions"><button id="google-link" class="nes-btn is-primary" type="button">绑定 Google 账号</button><button id="google-unlink" class="nes-btn is-error" type="button" hidden>解除 Google 绑定</button></div>
-          <p id="google-unlink-hint" class="muted" hidden>当前账号没有可用的密码登录方式，无法解除唯一的 Google 登录绑定。</p>
-        </section>
-        <section class="account-settings nes-container"><h3>修改账号密码</h3><form id="password-form"><label>当前密码<input class="nes-input" name="currentPassword" type="password" required autocomplete="current-password"></label><label>新密码<input class="nes-input" name="password" type="password" required minlength="12" maxlength="256" autocomplete="new-password"></label><button class="nes-btn is-primary" type="submit">修改密码</button></form></section>
-      </section>
     </section>
   </main>
+  <dialog class="nes-dialog account-dialog" id="account-dialog" aria-labelledby="account-heading">
+    <div class="section-title"><h2 id="account-heading">账号设置</h2><button id="close-account-dialog" class="secondary nes-btn" type="button">关闭</button></div>
+    <p id="account-feedback" class="account-feedback" role="status" aria-live="polite" hidden></p>
+    <section class="account-settings nes-container" id="google-panel" hidden>
+      <div class="section-title"><div><h3>Google 账号</h3><p id="google-status" class="muted" aria-live="polite"></p></div></div>
+      <div class="account-actions"><button id="google-link" class="nes-btn is-primary" type="button">绑定 Google 账号</button><button id="google-unlink" class="nes-btn is-error" type="button" hidden>解除 Google 绑定</button></div>
+      <p id="google-unlink-hint" class="muted" hidden>当前账号没有可用的密码登录方式，无法解除唯一的 Google 登录绑定。</p>
+    </section>
+    <section class="account-settings nes-container"><h3>修改账号密码</h3><form id="password-form"><label>当前密码<input class="nes-input" name="currentPassword" type="password" required autocomplete="current-password"></label><label>新密码<input class="nes-input" name="password" type="password" required minlength="12" maxlength="256" autocomplete="new-password"></label><button class="nes-btn is-primary" type="submit">修改密码</button></form></section>
+  </dialog>
   <dialog class="nes-dialog device-dialog" id="device-dialog" aria-labelledby="device-detail-heading"><div class="section-title"><div><h2 id="device-detail-heading">设备详情</h2></div><button id="close-device-dialog" class="secondary nes-btn" type="button">关闭</button></div><div id="device-detail-content" class="device-detail-content"></div></dialog>
   <dialog class="nes-dialog" id="result-dialog" aria-labelledby="result-heading"><div class="section-title"><div><h2 id="result-heading">任务结果</h2></div><button id="close-dialog" class="secondary nes-btn" type="button">关闭</button></div><pre id="result-content"></pre></dialog>
 </body>
