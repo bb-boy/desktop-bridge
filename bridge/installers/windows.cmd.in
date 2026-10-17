@@ -31,18 +31,21 @@ try {
         $sha256.Dispose()
     }
     if ($actual -cne '@@SHA256@@') { throw 'Installer integrity check failed. No installation was run.' }
-    [void][Reflection.Assembly]::Load('System.IO.Compression.FileSystem')
-    $zip = [IO.Compression.ZipFile]::OpenRead($archive)
+    # Windows 10/11 include bsdtar. It reads ZIP files without relying on optional
+    # PowerShell archive modules or .NET compression assemblies.
+    $tar = [IO.Path]::Combine($env:WINDIR, 'System32', 'tar.exe')
+    if (![IO.File]::Exists($tar)) { throw 'Windows built-in tar.exe is required to unpack the verified installer.' }
     $extract = [IO.Path]::Combine($temp, 'payload')
-    try {
-        foreach ($entry in $zip.Entries) {
-            $target = [IO.Path]::GetFullPath([IO.Path]::Combine($extract, $entry.FullName))
-            if (!$target.StartsWith($extract + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe archive path' }
-        }
-    } finally {
-        $zip.Dispose()
+    [void][IO.Directory]::CreateDirectory($extract)
+    $entries = @(& $tar -tf $archive)
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot read the verified installer ZIP.' }
+    foreach ($entry in $entries) {
+        if (!$entry) { continue }
+        $target = [IO.Path]::GetFullPath([IO.Path]::Combine($extract, $entry))
+        if (!$target.StartsWith($extract + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe archive path' }
     }
-    [IO.Compression.ZipFile]::ExtractToDirectory($archive, $extract)
+    & $tar -xf $archive -C $extract
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot extract the verified installer ZIP.' }
     $roots = [IO.Directory]::GetDirectories($extract)
     if ($roots.Length -ne 1) { throw 'Invalid installer layout' }
     $root = $roots[0]
