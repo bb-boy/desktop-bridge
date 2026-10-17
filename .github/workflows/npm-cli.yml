@@ -49,3 +49,9 @@ jobs:
       - name: Smoke test packed CLI
         run: node scripts/smoke-tarball.mjs
         working-directory: npm-installer
+      - name: Validate isolated npm package upgrade preserves local data
+        run: node scripts/smoke-upgrade.mjs
+        working-directory: npm-installer
+      - name: Validate sandbox agent reinstall preserves credentials and mode
+        run: node scripts/smoke-client-upgrade.mjs
+        working-directory: npm-installer
