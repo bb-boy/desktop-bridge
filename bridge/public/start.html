@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f7f8f5">
-  <meta name="description" content="在 ChatGPT 手动添加 Desktop Bridge MCP 服务器，通过 OAuth 授权并绑定自己的电脑。">
+  <meta name="description" content="在 ChatGPT 网页端手动添加 Desktop Bridge MCP 服务器，通过 OAuth 授权并绑定自己的电脑。">
   <title>Desktop Bridge · 新手指引</title>
   <link rel="stylesheet" href="/style.css">
 </head>
@@ -21,9 +21,9 @@
       <li class="setup-step">
         <span class="step-number" aria-hidden="true">1</span>
         <div><h2>手动添加 MCP 连接</h2>
-          <p>当前通过手动配置连接。打开 ChatGPT「插件」页，选择「添加 → 添加自定义 MCP 服务器」，填写以下内容：</p>
+          <p>当前通过手动配置连接。打开 ChatGPT 网页端「插件」页，选择「添加 → 添加自定义 MCP 服务器」，填写以下内容：</p>
           <p>名称：<strong>Desktop Bridge</strong><br>服务器地址：<code>https://mcp.ilovestudy.de/mcp</code><br>认证方式：<strong>OAuth</strong></p>
-          <div class="actions"><a class="button" href="https://chatgpt.com/plugins" target="_blank" rel="noopener noreferrer">打开 ChatGPT 插件页 ↗</a></div>
+          <div class="actions"><a class="button" href="https://chatgpt.com/plugins" target="_blank" rel="noopener noreferrer">打开 ChatGPT 网页端插件页 ↗</a></div>
         </div>
       </li>
       <li class="setup-step">
@@ -70,12 +70,12 @@ desktop-bridge pair</code></pre>
       </li>
       <li class="setup-step">
         <span class="step-number" aria-hidden="true">4</span>
-        <div><h2>回到 ChatGPT 使用</h2><p>在新对话中输入 @，选择你刚创建的 Desktop Bridge 连接，再发送：</p><blockquote class="setup-prompt">列出我的电脑，检查它是否可用。</blockquote><p>确认「工具可用」后，就可以让 GPT 查看文件或执行任务。以后保持电脑开机、联网、客户端运行即可。</p></div>
+        <div><h2>回到 ChatGPT 网页端使用</h2><p>在 ChatGPT 网页端新对话中输入 @，选择你刚创建的 Desktop Bridge 连接，再发送：</p><blockquote class="setup-prompt">在桌面创建一个测试文件</blockquote><p>确认桌面成功创建测试文件后，就可以让 ChatGPT 网页端查看文件或执行任务。以后保持电脑开机、联网、客户端运行即可。</p></div>
       </li>
     </ol>
     <details class="setup-help"><summary>安装说明与常见问题</summary>
-      <section><h2>为什么授权后还要安装电脑端客户端？</h2><p>MCP 连接负责让 ChatGPT 访问服务，电脑端客户端负责接收并执行任务。首次可以使用图形安装器或 npm，随后由本人确认设备绑定。</p></section>
-      <section><h2>每个人都要用自己的账号吗？</h2><p>是。每个人都在自己的 ChatGPT 中添加 MCP 服务器，并在 OAuth 授权和电脑配对时使用自己的同一个 Google 账号。</p></section>
+      <section><h2>为什么授权后还要安装电脑端客户端？</h2><p>MCP 连接负责让 ChatGPT 网页端访问服务，电脑端客户端负责接收并执行任务。首次可以使用图形安装器或 npm，随后由本人确认设备绑定。</p></section>
+      <section><h2>每个人都要用自己的账号吗？</h2><p>是。每个人都在自己的 ChatGPT 网页端中添加 MCP 服务器，并在 OAuth 授权和电脑配对时使用自己的同一个 Google 账号。</p></section>
       <section><h2>系统阻止安装怎么办？</h2><p>当前是测试分发版。Windows 安装器未签名，Mac 安装包未签名、公证，系统可能阻止打开。请保留完整提示并联系提供此页面的人；安装器不会自动关闭系统防护。</p></section>
       <section><h2>npm 命令找不到怎么办？</h2><p>先确认 Node.js 主版本是 24，系统有 npm，并且已经重新打开终端。执行 <code>node -v</code> 和 <code>npm -v</code> 检查环境。</p></section>
       <section><h2>Linux 可以直接双击吗？</h2><p>Linux 文件管理器的行为不同。桌面支持时选择「在终端中运行」；否则需要通过 shell 运行下载的自解包脚本。</p></section>
