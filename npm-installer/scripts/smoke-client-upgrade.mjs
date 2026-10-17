@@ -74,7 +74,18 @@ try{
       "export function writeInstructions(){}\n");
     put(path.join(source,'admin-elevate.mjs'),"export function elevationRequest(){throw new Error('admin unsupported in sandbox');}\n");
 
-    run(process.execPath,[path.join(source,'install.mjs'),'--root',data],{
+    // A re-install with no explicit selection must fail before stopping the existing Agent.
+    const untouchedConfig=fs.readFileSync(path.join(data,'agent-config.json'));
+    const unattended=spawnSync(process.execPath,[path.join(source,'install.mjs'),'--root',data],{
+      encoding:'utf8',timeout:20000,env:{...process.env,DESKTOP_BRIDGE_TEST_ONLY:'1'}
+    });
+    assert.notEqual(unattended.status,0,'Unselected reinstall unexpectedly succeeded');
+    assert.match((unattended.stdout??'')+(unattended.stderr??''),/--mode manual|--mode background/);
+    assert.deepEqual(fs.readFileSync(path.join(data,'agent-config.json')),untouchedConfig,'Rejected setup modified credentials');
+    assert.ok(!fs.existsSync(path.join(data,'maintenance.flag')),'Rejected setup stopped the Agent');
+    assert.ok(!fs.existsSync(path.join(data,'agent-call.json')),'Rejected setup attempted pairing');
+
+    run(process.execPath,[path.join(source,'install.mjs'),'--mode',mode,'--root',data],{
       ...process.env,DESKTOP_BRIDGE_TEST_ONLY:'1'
     });
     const after=JSON.parse(fs.readFileSync(path.join(data,'agent-config.json'),'utf8'));
