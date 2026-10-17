@@ -104,6 +104,10 @@ class StandaloneTests(unittest.TestCase):
                                    env=self.env, input='', capture_output=True, text=True, timeout=30)
                 self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
                 self.assertEqual(self.result.read_text(), mode)
+                self.assertIn('Common commands (Windows CMD):', p.stdout)
+                self.assertIn('Start.cmd', p.stdout)
+                self.assertIn('Stop.cmd', p.stdout)
+                self.assertIn('control.ps1', p.stdout)
                 self.assertEqual(list(self.root.glob('desktop-bridge-setup-*')), [])
 
     def test_windows_payload_is_complete_and_checked(self):
@@ -119,6 +123,9 @@ class StandaloneTests(unittest.TestCase):
         self.assertIn('Read-Host', text)
         self.assertIn('DESKTOP_BRIDGE_INSTALL_MODE', text)
         self.assertIn('-Mode $mode', text)
+        self.assertIn('if not defined DESKTOP_BRIDGE_INSTALL_MODE pause', text)
+        self.assertIn('START-HERE.txt', text)
+        self.assertIn('Common commands (Windows CMD):', text)
         self.assertIn('Remove-Item -LiteralPath $temp -Recurse', text)
 
 
