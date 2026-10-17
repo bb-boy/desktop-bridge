@@ -36,6 +36,20 @@ Mac 和 Windows 的独立入口不需要用户解压 ZIP、安装 Node.js 或输
 
 安装器会自动识别处理器、下载并校验官方 Node.js，安装固定版本的 Desktop Commander 和依赖，再打开配对网页。已有私有运行环境会复用；依赖损坏时按原安装器流程修复。
 
+### 已有 Node.js 24：使用 npm 安装或管理
+
+```sh
+npm install -g @justlovepl/desktop-bridge
+desktop-bridge setup
+desktop-bridge status
+```
+
+npm 客户端 0.2.7 的 `setup` 默认选择自动后台模式。首次连接仍需本人在网页确认配对；同一系统用户之前用原生安装器装好的客户端可继续使用原安装目录与设备配对。Windows 后台运行由当前用户的计划任务管理，退出终端或断开 SSH 后继续运行，登录 Windows 后自动启动。普通后台模式需要该用户已登录，不代表未登录时运行的管理员系统服务。
+
+日常使用 `desktop-bridge start`、`stop`、`restart`、`status`；升级使用 `desktop-bridge update`。仅运行 `npm update -g` 会更新命令行工具，升级正在使用的 Agent 应运行 `desktop-bridge update`。更新保留原配对、任务记录与已选模式。
+
+需要手动运行时使用 `desktop-bridge mode manual`，再执行 `desktop-bridge start` 并保持窗口；恢复自动后台使用 `desktop-bridge mode background`。npm 只安装命令行入口，首次启用客户端需要显式执行 `setup`。
+
 ## 3. 登录并确认绑定
 
 在配对网页登录与 MCP 授权时**同一个 Desktop Bridge 账号**，在 10 分钟内核对电脑名称并确认绑定。保持安装窗口打开，直到显示安装和配对完成。然后回到 ChatGPT，在新对话中选择刚创建的连接，说「列出我的电脑，检查它是否可用」。只有 `toolsAvailable` 为真才表示设备可执行任务。
