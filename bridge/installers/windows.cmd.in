@@ -8,92 +8,99 @@ if "%DESKTOP_BRIDGE_SETUP_RESULT%"=="0" if not defined DESKTOP_BRIDGE_INSTALL_MO
 exit /b %DESKTOP_BRIDGE_SETUP_RESULT%
 :__DESKTOP_BRIDGE_POWERSHELL__
 $ErrorActionPreference = 'Stop'
-$temp = Join-Path ([IO.Path]::GetTempPath()) ('desktop-bridge-setup-' + [guid]::NewGuid().ToString('N'))
+$temp = [IO.Path]::Combine([IO.Path]::GetTempPath(), 'desktop-bridge-setup-' + [Guid]::NewGuid().ToString('N'))
 $payload = @'
 @@PAYLOAD@@
 '@
 try {
-    [IO.Directory]::CreateDirectory($temp) | Out-Null
-    # Create with an ACL owned by this user before placing executable content.
+    # Create a private staging directory atomically, before writing any content.
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent().User
     $acl = New-Object Security.AccessControl.DirectorySecurity
+    $acl.SetOwner($identity)
     $acl.SetAccessRuleProtection($true, $false)
     $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($identity, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
     $system = New-Object Security.Principal.SecurityIdentifier('S-1-5-18')
     $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($system, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
-    Set-Acl -LiteralPath $temp -AclObject $acl
-    $archive = Join-Path $temp 'payload.zip'
+    [void][IO.Directory]::CreateDirectory($temp, $acl)
+    $archive = [IO.Path]::Combine($temp, 'payload.zip')
     [IO.File]::WriteAllBytes($archive, [Convert]::FromBase64String($payload))
-    if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant() -cne '@@SHA256@@') { throw 'Installer integrity check failed. No installation was run.' }
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    $zip = [IO.Compression.ZipFile]::OpenRead($archive)
+    $sha256 = [Security.Cryptography.SHA256]::Create()
     try {
-        foreach ($entry in $zip.Entries) {
-            $target = [IO.Path]::GetFullPath((Join-Path $temp $entry.FullName))
-            if (!$target.StartsWith($temp + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe archive path' }
+        $actual = ([BitConverter]::ToString($sha256.ComputeHash([IO.File]::ReadAllBytes($archive)))).Replace('-', '').ToLowerInvariant()
+    } finally {
+        $sha256.Dispose()
+    }
+    if ($actual -cne '@@SHA256@@') { throw 'Installer integrity check failed. No installation was run.' }
+    # Windows 10/11 include bsdtar. It reads ZIP files without relying on optional
+    # PowerShell archive modules or .NET compression assemblies.
+    $tar = [IO.Path]::Combine($env:WINDIR, 'System32', 'tar.exe')
+    if (![IO.File]::Exists($tar)) { throw 'Windows built-in tar.exe is required to unpack the verified installer.' }
+    $extract = [IO.Path]::Combine($temp, 'payload')
+    [void][IO.Directory]::CreateDirectory($extract)
+    $entries = @(& $tar -tf $archive)
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot read the verified installer ZIP.' }
+    foreach ($entry in $entries) {
+        if (!$entry) { continue }
+        $target = [IO.Path]::GetFullPath([IO.Path]::Combine($extract, $entry))
+        if (!$target.StartsWith($extract + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe archive path' }
+    }
+    & $tar -xf $archive -C $extract
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot extract the verified installer ZIP.' }
+    $roots = [IO.Directory]::GetDirectories($extract)
+    if ($roots.Length -ne 1) { throw 'Invalid installer layout' }
+    $root = $roots[0]
+    [Console]::WriteLine('Desktop Bridge - Install and connect')
+    # All interactive installations require a new explicit mode selection.
+    $mode = $env:DESKTOP_BRIDGE_INSTALL_MODE
+    if ($mode) {
+        if ($mode -notin @('manual', 'background')) { throw 'DESKTOP_BRIDGE_INSTALL_MODE must be manual or background.' }
+    } else {
+        if ([Console]::IsInputRedirected) {
+            throw 'Unattended setup requires DESKTOP_BRIDGE_INSTALL_MODE=manual or background.'
         }
-    } finally { $zip.Dispose() }
-    Expand-Archive -LiteralPath $archive -DestinationPath (Join-Path $temp 'payload')
-    $root = Get-ChildItem -LiteralPath (Join-Path $temp 'payload') -Directory
-    if (@($root).Count -ne 1) { throw 'Invalid installer layout' }
-    Write-Host 'Desktop Bridge - Install and connect'
-    # Always show the choice for interactive installs. Preserve the previously
-    # selected mode as the default when the installer is run again.
-    $defaultMode = 'manual'
-    if ($env:LOCALAPPDATA) {
-        $settingsFile = Join-Path (Join-Path $env:LOCALAPPDATA 'DesktopBridgeClient') 'client-settings.json'
-        if (Test-Path -LiteralPath $settingsFile) {
-            try {
-                $previousMode = (Get-Content -LiteralPath $settingsFile -Raw | ConvertFrom-Json).mode
-                if ($previousMode -in @('manual', 'background')) { $defaultMode = $previousMode }
-            } catch {
-                Write-Host 'Could not read saved mode; defaulting to manual.'
+        [Console]::WriteLine('')
+        [Console]::WriteLine('Choose Desktop Bridge startup mode (selection required):')
+        [Console]::WriteLine('  1) Manual: start with Start.cmd, stop with Stop.cmd; no login autostart.')
+        [Console]::WriteLine('  2) Background: start now and automatically after Windows sign-in.')
+        while (!$mode) {
+            [Console]::Write('Choose 1 or 2 (no default): ')
+            $answer = [Console]::ReadLine()
+            if ($null -eq $answer) { throw 'Selection is required: input ended before a mode was chosen.' }
+            switch ($answer.Trim()) {
+                { $_ -in @('1', 'manual') } { $mode = 'manual'; break }
+                { $_ -in @('2', 'background') } { $mode = 'background'; break }
+                default { [Console]::WriteLine('You must choose 1 (Manual) or 2 (Background).') }
             }
         }
     }
-    # Explicit noninteractive override for managed deployments and installer tests.
-    $mode = $env:DESKTOP_BRIDGE_INSTALL_MODE
-    if ($mode -and $mode -notin @('manual', 'background')) {
-        throw 'DESKTOP_BRIDGE_INSTALL_MODE must be manual or background.'
-    }
-    if (!$mode) {
-        Write-Host ''
-        Write-Host 'Choose Desktop Bridge startup mode:'
-        Write-Host '  1) Manual: start with Start.cmd, stop with Stop.cmd; no login autostart.'
-        Write-Host '  2) Background: start now and automatically after Windows sign-in.'
-        $defaultChoice = if ($defaultMode -eq 'background') { '2' } else { '1' }
-        $choice = (Read-Host ("Choose 1 or 2 [default $defaultChoice]")).Trim()
-        if (!$choice) { $mode = $defaultMode }
-        elseif ($choice -in @('1', 'manual')) { $mode = 'manual' }
-        elseif ($choice -in @('2', 'background')) { $mode = 'background' }
-        else { throw 'Invalid startup mode selection. Please rerun the installer.' }
-    }
-    Write-Host ('Selected startup mode: ' + $mode)
-    $installer = Join-Path $root.FullName 'assets\client\install.ps1'
+    [Console]::WriteLine('Selected startup mode: ' + $mode)
+    $installer = [IO.Path]::Combine($root, 'assets', 'client', 'install.ps1')
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer -Mode $mode
     if ($LASTEXITCODE -ne 0) { throw ('Installation did not finish (exit ' + $LASTEXITCODE + ').') }
-    Write-Host ''
-    Write-Host '======================================================'
-    Write-Host 'Desktop Bridge setup completed successfully'
-    Write-Host ('Startup mode: ' + $mode)
-    Write-Host ''
-    $clientDir = Join-Path $env:LOCALAPPDATA 'DesktopBridgeClient'
+    [Console]::WriteLine('')
+    [Console]::WriteLine('======================================================')
+    [Console]::WriteLine('Desktop Bridge setup completed successfully')
+    [Console]::WriteLine('Startup mode: ' + $mode)
+    [Console]::WriteLine('')
+    $clientDir = [IO.Path]::Combine($env:LOCALAPPDATA, 'DesktopBridgeClient')
     if ($mode -eq 'manual') {
-        Write-Host 'Manual mode: no background autostart. Run Start.cmd when you need access.'
-        Write-Host 'Keep the Start.cmd window open; closing it stops the agent.'
+        [Console]::WriteLine('Manual mode: no background autostart. Run Start.cmd when you need access.')
+        [Console]::WriteLine('Keep the Start.cmd window open; closing it stops the agent.')
     } else {
-        Write-Host 'Background mode: running now; starts automatically after Windows sign-in.'
+        [Console]::WriteLine('Background mode: running now; starts automatically after Windows sign-in.')
     }
-    Write-Host ''
-    Write-Host 'Common commands (Windows CMD):'
-    Write-Host ('  Start:  "' + (Join-Path $clientDir 'Start.cmd') + '"')
-    Write-Host ('  Stop:   "' + (Join-Path $clientDir 'Stop.cmd') + '"')
-    Write-Host ('  Status: powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' + (Join-Path $clientDir 'control.ps1') + '" -Action status')
-    Write-Host ('  Guide:  "' + (Join-Path $clientDir 'START-HERE.txt') + '"')
-    Write-Host ''
-    Write-Host 'To change startup modes later, see START-HERE.txt.'
-    Write-Host 'Return to GPT to verify that your computer is connected.'
-    Write-Host '======================================================'
+    [Console]::WriteLine('')
+    [Console]::WriteLine('Common commands (Windows CMD):')
+    [Console]::WriteLine('  Start:  "' + [IO.Path]::Combine($clientDir, 'Start.cmd') + '"')
+    [Console]::WriteLine('  Stop:   "' + [IO.Path]::Combine($clientDir, 'Stop.cmd') + '"')
+    [Console]::WriteLine('  Status: powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' + [IO.Path]::Combine($clientDir, 'control.ps1') + '" -Action status')
+    [Console]::WriteLine('  Guide:  "' + [IO.Path]::Combine($clientDir, 'START-HERE.txt') + '"')
+    [Console]::WriteLine('')
+    [Console]::WriteLine('To change startup modes later, see START-HERE.txt.')
+    [Console]::WriteLine('Return to GPT to verify that your computer is connected.')
+    [Console]::WriteLine('======================================================')
 } finally {
-    Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue
+    if ([IO.Directory]::Exists($temp)) {
+        try { [IO.Directory]::Delete($temp, $true) } catch { }
+    }
 }

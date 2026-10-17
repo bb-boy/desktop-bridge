@@ -31,14 +31,13 @@ export function savedMode(root) {
 export async function chooseMode(options,{previous,interactive=!!(process.stdin.isTTY&&process.stdout.isTTY),ask}={}) {
  if(options.stop||options.uninstall)return;
  if(options.mode)return options.mode;
- if(!interactive){if(previous)return previous;throw new Error('请选择运行模式：使用 --mode manual（每次手动启动），或 --mode background（现在后台运行，登录系统后自动启动）。--no-start 等同手动模式。');}
- const defaultMode=previous??'manual';
+ if(!interactive)throw new Error('请选择运行模式：非交互式安装必须提供 --mode manual 或 --mode background。--no-start 等同手动模式。');
  let readline;
  if(!ask){readline=createInterface({input:process.stdin,output:process.stdout});ask=question=>readline.question(question);}
  try{
   for(;;){
-   const answer=(await ask('请选择 Desktop Bridge 的运行方式：\n  1) 手动模式 manual：使用时运行启动命令，保持窗口，Ctrl+C 结束。\n  2) 后台模式 background：现在后台运行，登录系统后自动启动。\n输入 1 或 2（回车保留默认） ['+(defaultMode==='manual'?'1':'2')+']: ')).trim().toLowerCase();
-   if(!answer)return defaultMode;if(['1','manual'].includes(answer))return 'manual';if(['2','background'].includes(answer))return 'background';
+   const answer=(await ask('请选择 Desktop Bridge 的运行方式：\n  1) 手动模式 manual：使用时运行启动命令，保持窗口，Ctrl+C 结束。\n  2) 后台模式 background：现在后台运行，登录系统后自动启动。\n输入 1 或 2（必须选择，回车不使用默认值）: ')).trim().toLowerCase();
+   if(['1','manual'].includes(answer))return 'manual';if(['2','background'].includes(answer))return 'background';
   }
  }finally{readline?.close();}
 }
