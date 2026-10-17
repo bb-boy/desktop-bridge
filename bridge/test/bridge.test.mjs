@@ -195,12 +195,16 @@ test('unlinked online device loses its server hash and local Agent credentials',
   const f=await fixture(t),account=await browser(f);
   const project=fileURLToPath(new URL('..',import.meta.url)),configPath=path.join(f.directory,'agent-config.json');
   fs.writeFileSync(configPath,JSON.stringify({serverUrl:f.origin,deviceId:'p111',deviceToken:f.token,runtimeDir:project,mcpEntry:fileURLToPath(new URL('fixture-mcp.mjs',import.meta.url)),workingDirectory:f.directory}));
-  const child=spawn(process.execPath,[path.join(project,'agent/agent.mjs'),configPath],{stdio:'ignore'});
+  const child=spawn(process.execPath,[path.join(project,'agent/agent.mjs'),configPath],{stdio:'ignore',env:{...process.env,DESKTOP_BRIDGE_SUPPRESS_NOTIFICATIONS:'1'}});
   t.after(()=>{if(child.exitCode===null)child.kill('SIGTERM');});
   await waitFor(()=>f.server.broker.devices()[0].toolsAvailable);
   assert.equal((await account.request('/api/manage/devices/p111/unlink',{})).status,200);
   const record=f.server.store.db.prepare('SELECT revoked,tokenHash,pendingHash FROM registry WHERE id=?').get('p111');
   assert.equal(record.revoked,1);assert.equal(record.tokenHash,null);assert.equal(record.pendingHash,null);
+  const revokedList=await(await account.request('/api/manage/revoked-devices')).json();
+  assert.equal(revokedList.devices.length,1);
+  assert.equal(revokedList.devices[0].name,'Test computer');
+  assert.ok(revokedList.devices[0].revokedAt>0);
   await waitFor(()=>{
     const local=JSON.parse(fs.readFileSync(configPath,'utf8'));
     return !('deviceToken' in local)&&!('deviceId' in local)&&fs.existsSync(path.join(f.directory,'maintenance.flag'));
@@ -209,6 +213,9 @@ test('unlinked online device loses its server hash and local Agent credentials',
   const socket=new WebSocket(f.origin.replace('http:','ws:')+'/agent',{headers:{authorization:'Bearer '+f.token}});
   const forbidden=await new Promise(resolve=>{socket.on('unexpected-response',(_req,res)=>{res.resume();socket.terminate();resolve(res.statusCode);});socket.on('error',()=>{});});
   assert.equal(forbidden,403);
+  const status=JSON.parse(fs.readFileSync(path.join(f.directory,'auth-status.json'),'utf8'));
+  assert.equal(status.authStatus,'re_pair_required');
+  assert.equal(status.notificationShown,false,'noninteractive test does not show Windows popups');
 });
 
 test('offline revoked device clears saved credentials on next Agent launch',async t=>{
@@ -216,13 +223,15 @@ test('offline revoked device clears saved credentials on next Agent launch',asyn
   const project=fileURLToPath(new URL('..',import.meta.url)),configPath=path.join(f.directory,'agent-config.json');
   fs.writeFileSync(configPath,JSON.stringify({serverUrl:f.origin,deviceId:'p111',deviceToken:f.token,runtimeDir:project,mcpEntry:fileURLToPath(new URL('fixture-mcp.mjs',import.meta.url)),workingDirectory:f.directory}));
   assert.equal((await account.request('/api/manage/devices/p111/unlink',{})).status,200);
-  const child=spawn(process.execPath,[path.join(project,'agent/agent.mjs'),configPath],{stdio:'ignore'});
+  const child=spawn(process.execPath,[path.join(project,'agent/agent.mjs'),configPath],{stdio:'ignore',env:{...process.env,DESKTOP_BRIDGE_SUPPRESS_NOTIFICATIONS:'1'}});
   t.after(()=>{if(child.exitCode===null)child.kill('SIGTERM');});
   const [exitCode]=await once(child,'exit');
   assert.equal(exitCode,78);
   const local=JSON.parse(fs.readFileSync(configPath,'utf8'));
   assert.equal(local.deviceToken,undefined);assert.equal(local.deviceId,undefined);
   assert.equal(fs.existsSync(path.join(f.directory,'maintenance.flag')),true);
+  const status=JSON.parse(fs.readFileSync(path.join(f.directory,'auth-status.json'),'utf8'));
+  assert.equal(status.authStatus,'re_pair_required');
 });
 
 test('a paused device is not treated as revoked, preserving its local Token',async t=>{
@@ -232,6 +241,7 @@ test('a paused device is not treated as revoked, preserving its local Token',asy
   assert.equal(response.status,200);assert.deepEqual(await response.json(),{revoked:false});
   const invalid=await fetch(f.origin+'/api/agent/revocation-status',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({deviceId:{not:'valid'}})});
   assert.equal(invalid.status,400);
+  assert.deepEqual((await(await account.request('/api/manage/revoked-devices')).json()).devices,[]);
 });
 
 async function browser(f,username='owner',password=f.password) {
