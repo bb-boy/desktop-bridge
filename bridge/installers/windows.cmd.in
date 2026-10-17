@@ -36,8 +36,40 @@ try {
     $root = Get-ChildItem -LiteralPath (Join-Path $temp 'payload') -Directory
     if (@($root).Count -ne 1) { throw 'Invalid installer layout' }
     Write-Host 'Desktop Bridge - Install and connect'
+    # Always show the choice for interactive installs. Preserve the previously
+    # selected mode as the default when the installer is run again.
+    $defaultMode = 'manual'
+    if ($env:LOCALAPPDATA) {
+        $settingsFile = Join-Path (Join-Path $env:LOCALAPPDATA 'DesktopBridgeClient') 'client-settings.json'
+        if (Test-Path -LiteralPath $settingsFile) {
+            try {
+                $previousMode = (Get-Content -LiteralPath $settingsFile -Raw | ConvertFrom-Json).mode
+                if ($previousMode -in @('manual', 'background')) { $defaultMode = $previousMode }
+            } catch {
+                Write-Host 'Could not read saved mode; defaulting to manual.'
+            }
+        }
+    }
+    # Explicit noninteractive override for managed deployments and installer tests.
+    $mode = $env:DESKTOP_BRIDGE_INSTALL_MODE
+    if ($mode -and $mode -notin @('manual', 'background')) {
+        throw 'DESKTOP_BRIDGE_INSTALL_MODE must be manual or background.'
+    }
+    if (!$mode) {
+        Write-Host ''
+        Write-Host 'Choose Desktop Bridge startup mode:'
+        Write-Host '  1) Manual: start with Start.cmd, stop with Stop.cmd; no login autostart.'
+        Write-Host '  2) Background: start now and automatically after Windows sign-in.'
+        $defaultChoice = if ($defaultMode -eq 'background') { '2' } else { '1' }
+        $choice = (Read-Host ("Choose 1 or 2 [default $defaultChoice]")).Trim()
+        if (!$choice) { $mode = $defaultMode }
+        elseif ($choice -in @('1', 'manual')) { $mode = 'manual' }
+        elseif ($choice -in @('2', 'background')) { $mode = 'background' }
+        else { throw 'Invalid startup mode selection. Please rerun the installer.' }
+    }
+    Write-Host ('Selected startup mode: ' + $mode)
     $installer = Join-Path $root.FullName 'assets\client\install.ps1'
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer -Mode background
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer -Mode $mode
     if ($LASTEXITCODE -ne 0) { throw ('Installation did not finish (exit ' + $LASTEXITCODE + ').') }
     Write-Host 'Setup complete. Return to GPT and ask it to check your computers.'
 } finally {
