@@ -37,36 +37,27 @@ try {
     $root = Get-ChildItem -LiteralPath (Join-Path $temp 'payload') -Directory
     if (@($root).Count -ne 1) { throw 'Invalid installer layout' }
     Write-Host 'Desktop Bridge - Install and connect'
-    # Always show the choice for interactive installs. Preserve the previously
-    # selected mode as the default when the installer is run again.
-    $defaultMode = 'manual'
-    if ($env:LOCALAPPDATA) {
-        $settingsFile = Join-Path (Join-Path $env:LOCALAPPDATA 'DesktopBridgeClient') 'client-settings.json'
-        if (Test-Path -LiteralPath $settingsFile) {
-            try {
-                $previousMode = (Get-Content -LiteralPath $settingsFile -Raw | ConvertFrom-Json).mode
-                if ($previousMode -in @('manual', 'background')) { $defaultMode = $previousMode }
-            } catch {
-                Write-Host 'Could not read saved mode; defaulting to manual.'
-            }
-        }
-    }
-    # Explicit noninteractive override for managed deployments and installer tests.
+    # Installation requires a fresh choice. No automatic mode or Enter default.
+    # Unattended deployments must explicitly provide DESKTOP_BRIDGE_INSTALL_MODE.
     $mode = $env:DESKTOP_BRIDGE_INSTALL_MODE
-    if ($mode -and $mode -notin @('manual', 'background')) {
-        throw 'DESKTOP_BRIDGE_INSTALL_MODE must be manual or background.'
-    }
-    if (!$mode) {
+    if ($mode) {
+        if ($mode -notin @('manual', 'background')) {
+            throw 'DESKTOP_BRIDGE_INSTALL_MODE must be manual or background.'
+        }
+    } else {
+        if ([Console]::IsInputRedirected) {
+            throw 'Unattended setup requires DESKTOP_BRIDGE_INSTALL_MODE=manual or background.'
+        }
         Write-Host ''
-        Write-Host 'Choose Desktop Bridge startup mode:'
+        Write-Host 'Choose Desktop Bridge startup mode (selection required):'
         Write-Host '  1) Manual: start with Start.cmd, stop with Stop.cmd; no login autostart.'
         Write-Host '  2) Background: start now and automatically after Windows sign-in.'
-        $defaultChoice = if ($defaultMode -eq 'background') { '2' } else { '1' }
-        $choice = (Read-Host ("Choose 1 or 2 [default $defaultChoice]")).Trim()
-        if (!$choice) { $mode = $defaultMode }
-        elseif ($choice -in @('1', 'manual')) { $mode = 'manual' }
-        elseif ($choice -in @('2', 'background')) { $mode = 'background' }
-        else { throw 'Invalid startup mode selection. Please rerun the installer.' }
+        while (!$mode) {
+            $choice = (Read-Host 'Choose 1 or 2 (Enter alone does not select a mode)').Trim()
+            if ($choice -in @('1', 'manual')) { $mode = 'manual' }
+            elseif ($choice -in @('2', 'background')) { $mode = 'background' }
+            else { Write-Host 'You must choose 1 (Manual) or 2 (Background).' }
+        }
     }
     Write-Host ('Selected startup mode: ' + $mode)
     $installer = Join-Path $root.FullName 'assets\client\install.ps1'
