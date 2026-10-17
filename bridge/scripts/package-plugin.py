@@ -20,7 +20,9 @@ def manifest(root):
     assert m['$schema'] == 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json'
     assert m['name'] == NAME
     assert re.fullmatch(r'\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?', m['version'])
+    assert isinstance(m.get('author'), dict) and isinstance(m['author'].get('name'), str) and m['author']['name'].strip(), 'ChatGPT import requires author.name'
     interface = m['extensions']['com.openai']['interface']
+    assert isinstance(interface.get('developerName'), str) and interface['developerName'].strip(), 'ChatGPT import requires interface.developerName'
     assert len(interface['shortDescription']) <= 30
     assert isinstance(interface['capabilities'], list)
     for field in ['logo','composerIcon']:
