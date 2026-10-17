@@ -15,8 +15,8 @@ const commands=new Set(['setup','start','stop','restart','status','pair','mode',
 
 export function clientDataRoot(platform=process.platform,env=process.env,home=os.homedir()){
   return platform==='win32'?path.win32.join(env.LOCALAPPDATA??path.win32.join(home,'AppData','Local'),'DesktopBridgeClient')
-    :platform==='darwin'?path.join(home,'Library','Application Support','DesktopBridge')
-      :path.join(env.XDG_DATA_HOME??path.join(home,'.local','share'),'desktop-bridge');
+    :platform==='darwin'?path.posix.join(home,'Library','Application Support','DesktopBridge')
+      :path.posix.join(env.XDG_DATA_HOME??path.posix.join(home,'.local','share'),'desktop-bridge');
 }
 
 export function parse(argv){
@@ -103,7 +103,7 @@ export async function main(argv=process.argv.slice(2)){
   }
   return childRun(controller,[parsed.command,...parsed.args,...rootArgs]);
 }
-if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
+if(process.argv[1]&&fs.realpathSync(path.resolve(process.argv[1]))===fs.realpathSync(fileURLToPath(import.meta.url))){
   main().then(code=>{process.exitCode=code;},error=>{
     console.error('Desktop Bridge:',error.message);
     process.exitCode=1;
