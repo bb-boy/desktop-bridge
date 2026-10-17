@@ -16,6 +16,15 @@ test('dashboard retains all DOM element IDs referenced by the controller',()=>{
   assert.deepEqual(missing,[]);
   assert.equal(htmlIds.size,[...html.matchAll(/\bid="([^"]+)"/g)].length,'Duplicate DOM IDs are not allowed');
 });
+test('dashboard separates online capable devices from count of callable tools',()=>{
+  assert.match(html,/可用设备<\/span><strong id="stat-ready"/);
+  assert.match(html,/可调用工具<\/span><strong id="stat-tools"/);
+  assert.match(js,/\$\('#stat-ready'\)\.textContent=d\.readyDevices/);
+  assert.match(js,/\$\('#stat-tools'\)\.textContent=d\.toolCount/);
+  assert.match(css,/grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
+  assert.match(css,/grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+});
+
 test('accessible tab panels and result dialog remain wired correctly',()=>{
   for(const tab of ['devices','calls','authorizations']){
     assert.match(html,new RegExp('id="tab-'+tab+'"[^>]*role="tab"[^>]*aria-controls="'+tab+'-tab"'));
