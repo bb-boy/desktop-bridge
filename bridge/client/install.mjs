@@ -38,7 +38,7 @@ if(options.stop){console.log('Client stopped. Use your installed Start shortcut 
 if(options.uninstall){
   await removeStartup(root);
   // Keep credentials and result journal by default so a reinstall can recover them.
-  for(const name of ['releases','runtime','runner.mjs','lifecycle.mjs','control.mjs','startup.mjs','install-options.mjs','admin-runtime.mjs','admin-service.mjs','admin-elevate.mjs','launch.json','run-client.cmd','heartbeat.json','START-HERE.txt','Start.cmd','Stop.cmd','Start.command','Stop.command','start.sh','stop.sh','launch.sh','control.ps1'])fs.rmSync(path.join(root,name),{recursive:true,force:true});
+  for(const name of ['releases','runtime','runner.mjs','lifecycle.mjs','control.mjs','startup.mjs','install-options.mjs','admin-runtime.mjs','admin-service.mjs','admin-elevate.mjs','launch.json','run-client.cmd','heartbeat.json','START-HERE.txt','Start.cmd','Stop.cmd','RePair.cmd','Start.command','Stop.command','start.sh','stop.sh','launch.sh','control.ps1'])fs.rmSync(path.join(root,name),{recursive:true,force:true});
   if(options.purge){releaseLock(installLock);fs.rmSync(root,{recursive:true,force:true});}
   console.log('Client uninstalled. Revoke the device in device management to unlink it.');process.exit(0);
 }
@@ -50,7 +50,7 @@ fs.mkdirSync(release,{recursive:true,mode:0o700});
 for(const file of ['package.json','package-lock.json'])fs.copyFileSync(path.join(source,file),path.join(release,file));
 const agentSource=fs.existsSync(path.join(source,'agent'))?path.join(source,'agent'):path.join(source,'..','agent');
 fs.cpSync(agentSource,path.join(release,'agent'),{recursive:true,force:true});
-for(const file of ['runner.mjs','lifecycle.mjs','control.mjs','startup.mjs','install-options.mjs','admin-runtime.mjs','admin-service.mjs','admin-elevate.mjs','Start.cmd','Stop.cmd','Start.command','Stop.command','start.sh','stop.sh','launch.sh','control.ps1'])fs.copyFileSync(path.join(source,file),path.join(root,file));
+for(const file of ['runner.mjs','lifecycle.mjs','control.mjs','startup.mjs','install-options.mjs','admin-runtime.mjs','admin-service.mjs','admin-elevate.mjs','Start.cmd','Stop.cmd','RePair.cmd','Start.command','Stop.command','start.sh','stop.sh','launch.sh','control.ps1'])fs.copyFileSync(path.join(source,file),path.join(root,file));
 await prepareDependencies({node,npm,release,force:!!options.repair});
 try{await verifyLocalTools({node,release,workingDirectory:root});}
 catch{
