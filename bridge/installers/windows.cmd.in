@@ -13,15 +13,16 @@ $payload = @'
 @@PAYLOAD@@
 '@
 try {
-    [IO.Directory]::CreateDirectory($temp) | Out-Null
     # Create with an ACL owned by this user before placing executable content.
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent().User
     $acl = New-Object Security.AccessControl.DirectorySecurity
+    $acl.SetOwner($identity)
     $acl.SetAccessRuleProtection($true, $false)
     $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($identity, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
     $system = New-Object Security.Principal.SecurityIdentifier('S-1-5-18')
     $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($system, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
-    Set-Acl -LiteralPath $temp -AclObject $acl
+    # Create with the protected ACL atomically; avoid module autoload and a writable window.
+    [IO.Directory]::CreateDirectory($temp, $acl) | Out-Null
     $archive = Join-Path $temp 'payload.zip'
     [IO.File]::WriteAllBytes($archive, [Convert]::FromBase64String($payload))
     if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant() -cne '@@SHA256@@') { throw 'Installer integrity check failed. No installation was run.' }
