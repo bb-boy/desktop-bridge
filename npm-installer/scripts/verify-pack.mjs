@@ -12,7 +12,7 @@ const paths=new Set(pkg.files.map(file=>file.path));
 for(const required of [
   'package.json','README.md','LICENSE','THIRD_PARTY_NOTICES.md',
   'bin/desktop-bridge.mjs','dist/client/install.mjs',
-  'dist/client/control.mjs','dist/client/startup.mjs',
+  'dist/client/control.mjs','dist/client/startup.mjs','dist/client/windows-background.mjs',
   'dist/client/package.json','dist/client/package-lock.json',
   'dist/client/node-runtime.json','dist/client/environment.mjs',
   'dist/client/agent/agent.mjs','dist/client/agent/pair.mjs',

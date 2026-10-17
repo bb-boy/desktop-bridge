@@ -56,9 +56,13 @@ export async function performUpdate({
   const previousPrivilege=settings.privilege??'standard';
   const journalFile=path.join(root,'journal.json');
   const oldJournal=fs.existsSync(journalFile)?readJson(journalFile):null;
+  const installedPackage=readJson(path.join(packageRoot,'package.json'));
+  if(!/^\d+\.\d+\.\d+$/.test(installedPackage.version))throw new Error('Unsupported CLI version; refusing an unsafe update.');
   const npmCli=npmScript??findNpmCli();
   print('Updating npm CLI (device credentials and configuration are kept outside npm)...');
-  const npmStatus=await execute(process.execPath,[npmCli,'install','--global','--no-audit','--no-fund',packageName+'@latest']);
+  // A locally tested newer build must not silently downgrade to an older
+  // published client. npm resolves the newest matching stable release.
+  const npmStatus=await execute(process.execPath,[npmCli,'install','--global','--no-audit','--no-fund',packageName+'@>='+installedPackage.version]);
   if(npmStatus!==0)throw new Error('npm package update failed; local client was not reinstalled.');
   const packageFile=path.join(packageRoot,'package.json');
   const current=readJson(packageFile);

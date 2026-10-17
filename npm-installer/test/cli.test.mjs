@@ -12,6 +12,9 @@ test('parses explicit service management commands',()=>{
   assert.equal(parse(['mode','background','--root','test-data']).args[0],'background');
   assert.equal(parse(['pair','--root','test-data']).command,'pair');
   assert.equal(parse(['setup','--mode','manual']).command,'setup');
+  assert.deepEqual(parse(['setup']).args,['--mode','background']);
+  assert.deepEqual(parse(['setup','--mode','manual']).args,['--mode','manual']);
+  assert.deepEqual(parse(['setup','--no-start']).args,['--no-start']);
 });
 
 test('rejects unrecognized, extra or duplicate arguments',()=>{
@@ -43,5 +46,5 @@ test('help and version do not install or start an agent',()=>{
   assert.match(help.stdout,/setup \[/);
   const version=spawnSync(process.execPath,[bin,'--version'],{encoding:'utf8'});
   assert.equal(version.status,0);
-  assert.match(version.stdout,/^0\.2\.6/);
+  assert.match(version.stdout,/^0\.2\.7/);
 });

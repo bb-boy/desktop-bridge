@@ -38,8 +38,8 @@ try{
   fs.writeFileSync(path.join(data,'.desktop-bridge-client'),'desktop-bridge-client\n');
   const frozen=['agent-config.json','client-settings.json','journal.json','.desktop-bridge-client'].map(n=>[n,fs.readFileSync(path.join(data,n))]);
 
-  // Simulate the previous 0.2.5 npm release from this package's staged files.
-  // The second installation uses the ACTUAL new 0.2.6 tarball.
+  // Simulate the previous 0.2.6 npm release from this package's staged files.
+  // The second installation uses the ACTUAL new 0.2.7 tarball.
   const currentTarball=path.join(source,first[0]);
   const unpack=path.join(tmp,'previous');
   fs.mkdirSync(unpack);
@@ -47,8 +47,8 @@ try{
   const previousPackage=path.join(unpack,'package');
   const previousManifest=path.join(previousPackage,'package.json');
   const metadata=JSON.parse(fs.readFileSync(previousManifest,'utf8'));
-  assert.equal(metadata.version,'0.2.6','Expected the real 0.2.6 npm release under test');
-  metadata.version='0.2.5';
+  assert.equal(metadata.version,'0.2.7','Expected the real 0.2.7 npm release under test');
+  metadata.version='0.2.6';
   jwrite(previousManifest,metadata);
   const previousTarballs=path.join(tmp,'previous-tarball');
   fs.mkdirSync(previousTarballs);
@@ -58,17 +58,17 @@ try{
 
   npm(['install','--prefix',prefix,'--ignore-scripts','--no-audit','--no-fund','--no-save',path.join(previousTarballs,oldArchive[0])]);
   const installed=path.join(prefix,'node_modules','@justlovepl','desktop-bridge');
-  assert.equal(JSON.parse(fs.readFileSync(path.join(installed,'package.json'))).version,'0.2.5');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(installed,'package.json'))).version,'0.2.6');
   const cli=path.join(installed,'bin','desktop-bridge.mjs');
-  assert.equal(run(process.execPath,[cli,'--version']),'0.2.5');
+  assert.equal(run(process.execPath,[cli,'--version']),'0.2.6');
   for(const [n,bytes] of frozen)assert.deepEqual(fs.readFileSync(path.join(data,n)),bytes,'npm install modified '+n);
 
   npm(['install','--prefix',prefix,'--ignore-scripts','--no-audit','--no-fund','--no-save',currentTarball]);
-  assert.equal(JSON.parse(fs.readFileSync(path.join(installed,'package.json'))).version,'0.2.6');
-  assert.equal(run(process.execPath,[cli,'--version']),'0.2.6');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(installed,'package.json'))).version,'0.2.7');
+  assert.equal(run(process.execPath,[cli,'--version']),'0.2.7');
   for(const [n,bytes] of frozen)assert.deepEqual(fs.readFileSync(path.join(data,n)),bytes,'npm replacement modified '+n);
   assert.ok(!fs.existsSync(path.join(data,'maintenance.flag')),'npm update unexpectedly stopped agent');
-  console.log('Offline npm v0.2.5 -> actual v0.2.6 package replacement passed; token, device ID, mode and journal unchanged.');
+  console.log('Offline npm v0.2.6 -> actual v0.2.7 package replacement passed; token, device ID, mode and journal unchanged.');
 }finally{
   fs.rmSync(tmp,{recursive:true,force:true,maxRetries:3,retryDelay:100});
 }

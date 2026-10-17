@@ -61,7 +61,7 @@ function flag(state) {
  fs.writeFileSync(path.join(root,'maintenance.flag'),state,{mode:0o600});
 }
 function settings(mode) {
- writePrivateJson(path.join(root,'client-settings.json'),{mode,privilege:'administrator',version:'0.2.6'});
+ writePrivateJson(path.join(root,'client-settings.json'),{mode,privilege:'administrator',version:'0.2.7'});
 }
 function relocate(source,mode) {
  const {base}=validateSource(source);
@@ -80,7 +80,7 @@ function relocate(source,mode) {
  const stage=path.join(parent,'.desktop-bridge-admin-stage-'+process.pid);
  const backup=path.join(parent,'.desktop-bridge-admin-backup-'+process.pid);
  fs.mkdirSync(stage,{mode:0o700});
- const selected=['.desktop-bridge-client','agent-config.json','launch.json','runner.mjs','lifecycle.mjs','control.mjs','startup.mjs','install-options.mjs','admin-runtime.mjs','admin-service.mjs','admin-elevate.mjs','runtime','releases'];
+ const selected=['.desktop-bridge-client','agent-config.json','launch.json','runner.mjs','lifecycle.mjs','control.mjs','startup.mjs','windows-background.mjs','install-options.mjs','admin-runtime.mjs','admin-service.mjs','admin-elevate.mjs','runtime','releases'];
  try{
    for(const entry of selected){const file=path.join(base,entry);if(fs.existsSync(file))copyTreeSafe(file,path.join(stage,entry));}
    const oldConfig=fs.existsSync(path.join(root,'agent-config.json'))?JSON.parse(fs.readFileSync(path.join(root,'agent-config.json'),'utf8')):null;
@@ -93,7 +93,7 @@ function relocate(source,mode) {
      const previous=path.join(root,name);if(fs.existsSync(previous))copyTreeSafe(previous,path.join(stage,name));
      else if(fs.existsSync(path.join(base,name)))copyTreeSafe(path.join(base,name),path.join(stage,name));
    }
-   writePrivateJson(path.join(stage,'client-settings.json'),{mode,privilege:'administrator',version:'0.2.6'});
+   writePrivateJson(path.join(stage,'client-settings.json'),{mode,privilege:'administrator',version:'0.2.7'});
    fs.writeFileSync(path.join(stage,'maintenance.flag'),'installing',{mode:0o600});
    secureTree(stage);
    if(fs.existsSync(root))fs.renameSync(root,backup);
@@ -146,7 +146,7 @@ if(action==='install'){
  if(value&&value!=='--purge')throw new Error('Only --purge is accepted for uninstall');
  if(purge)fs.rmSync(root,{recursive:true,force:true});
  else{
-   for(const entry of ['runtime','releases','runner.mjs','lifecycle.mjs','control.mjs','startup.mjs','install-options.mjs','admin-runtime.mjs','admin-service.mjs','admin-elevate.mjs','launch.json'])fs.rmSync(path.join(root,entry),{recursive:true,force:true});
+   for(const entry of ['runtime','releases','runner.mjs','lifecycle.mjs','control.mjs','startup.mjs','windows-background.mjs','install-options.mjs','admin-runtime.mjs','admin-service.mjs','admin-elevate.mjs','launch.json'])fs.rmSync(path.join(root,entry),{recursive:true,force:true});
  }
  console.log('Administrator service uninstalled. Device revocation is separate.');
 }

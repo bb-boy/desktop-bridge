@@ -1,6 +1,6 @@
 {
   "name": "@justlovepl/desktop-bridge",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Cross-platform Desktop Bridge agent installer and lifecycle CLI",
   "type": "module",
   "license": "MIT",
@@ -13,7 +13,12 @@
   "bin": {
     "desktop-bridge": "./bin/desktop-bridge.mjs"
   },
-  "files": ["bin/", "dist/", "README.md", "THIRD_PARTY_NOTICES.md"],
+  "files": [
+    "bin/",
+    "dist/",
+    "README.md",
+    "THIRD_PARTY_NOTICES.md"
+  ],
   "engines": {
     "node": ">=24 <25"
   },
@@ -24,5 +29,11 @@
   "publishConfig": {
     "access": "public"
   },
-  "keywords": ["desktop-bridge", "mcp", "remote-desktop", "agent", "command-line"]
+  "keywords": [
+    "desktop-bridge",
+    "mcp",
+    "remote-desktop",
+    "agent",
+    "command-line"
+  ]
 }

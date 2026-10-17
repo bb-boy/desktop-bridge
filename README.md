@@ -37,6 +37,20 @@
 
 Google 身份服务需先配置自己的 Google OAuth 网页客户端，见 [配置 Google 登录](docs/google-oauth.md)。插件 ZIP 不包含 Google 客户端密钥、用户密码、设备令牌、数据库或安装后的依赖。
 
+## npm 安装与后台管理 · 客户端 0.2.7
+
+0.2.7 当前为已在 p111 试装验证的候选版本，尚未正式发布到公共 npm；以下说明为新版本行为。
+
+已有 Node.js 24 时，可通过 npm 安装并管理客户端：
+
+```sh
+npm install -g @justlovepl/desktop-bridge
+desktop-bridge setup
+desktop-bridge status
+```
+
+`setup` 默认自动后台；使用 `desktop-bridge mode manual` 切换手动模式，`mode background` 恢复后台。`start`、`stop`、`restart` 管理进程，`update` 同时升级 npm 命令行与本地 Agent，并保留配对、任务记录和已选模式。Windows 后台模式通过当前用户的计划任务运行，关闭终端或断开 SSH 后继续运行，登录后自启。首次配对仍需本人网页登录确认。完整命令及原生安装迁移说明见 [npm 客户端说明](npm-installer/README.md)。
+
 ## 0.2.1 · 启动模式与管理员授权
 
 安装器提供 **手动** 和 **后台** 两种模式；默认不获取系统管理员权限。需要管理受保护的系统位置时，可显式选择管理员模式（一次性启动授权 / 安装时授权的受保护系统服务）。

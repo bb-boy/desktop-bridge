@@ -18,7 +18,7 @@ async function success(p){const [code]=await once(p,'exit');assert.equal(code,0,
 function pidAlive(pid){try{process.kill(pid,0);return true;}catch{return false;}}
 async function fixture(t){
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'bridge-mode-')),root=path.join(dir,'client');fs.mkdirSync(root);
- for(const name of ['control.mjs','install-options.mjs','startup.mjs','runner.mjs','lifecycle.mjs','admin-elevate.mjs','admin-runtime.mjs'])fs.copyFileSync(path.join(client,name),path.join(root,name));
+ for(const name of ['control.mjs','install-options.mjs','startup.mjs','windows-background.mjs','runner.mjs','lifecycle.mjs','admin-elevate.mjs','admin-runtime.mjs'])fs.copyFileSync(path.join(client,name),path.join(root,name));
  fs.writeFileSync(path.join(root,'.desktop-bridge-client'),'client');fs.writeFileSync(path.join(root,'client-settings.json'),JSON.stringify({mode:'manual',version:'0.2.1'}));
  fs.writeFileSync(path.join(root,'agent-config.json'),'{}');fs.writeFileSync(path.join(root,'journal.json'),'saved-results');
  fs.writeFileSync(path.join(root,'dependencies-sentinel'),'unchanged');
