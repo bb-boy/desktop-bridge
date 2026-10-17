@@ -3,6 +3,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
+import { spawn } from 'node:child_process';
 import { pairDevice,saveConfig } from './pair.mjs';
 
 const configPath=process.env.BRIDGE_AGENT_CONFIG??process.argv[2];
@@ -36,12 +37,42 @@ function log(event,fields={}) {
 function unlock(){try{if(fs.readFileSync(lockPath,'utf8')===String(process.pid))fs.unlinkSync(lockPath);}catch{}}
 process.on('exit',unlock);
 
+const authStatusPath=path.join(directory,'auth-status.json');
+function saveAuthStatus(status) {
+  const temporary=authStatusPath+'.tmp';
+  fs.writeFileSync(temporary,JSON.stringify(status,null,2),{mode:0o600});
+  fs.renameSync(temporary,authStatusPath);
+}
+function notifyRevokedWindows() {
+  if(process.platform!=='win32'||process.env.DESKTOP_BRIDGE_SUPPRESS_NOTIFICATIONS==='1'||process.env.USERNAME?.toUpperCase()==='SYSTEM')return;
+  let state;try{state=JSON.parse(fs.readFileSync(authStatusPath,'utf8'));}catch{return;}
+  if(state.authStatus!=='re_pair_required'||state.notificationShown)return;
+  // The warning is informative only. Re-pairing still requires an explicit local
+  // click followed by a browser login and device approval.
+  const rePair=path.join(directory,'RePair.cmd');
+  const quote=value=>"'"+String(value).replace(/'/g,"''")+"'";
+  const message='Desktop Bridge 的设备授权已撤销，旧凭据已失效。\\n\\n是否现在重新配对？（需要网页登录确认）';
+  const script="Add-Type -AssemblyName System.Windows.Forms;"+
+    "$answer=[System.Windows.Forms.MessageBox]::Show("+quote(message)+",'Desktop Bridge',[System.Windows.Forms.MessageBoxButtons]::YesNo,[System.Windows.Forms.MessageBoxIcon]::Warning);"+
+    "if($answer -eq [System.Windows.Forms.DialogResult]::Yes){Start-Process -FilePath 'cmd.exe' -ArgumentList @('/k',"+quote('"' + rePair + '"')+")}";
+  try {
+    const child=spawn('powershell.exe',['-NoProfile','-Sta','-WindowStyle','Hidden','-Command',script],
+      {detached:true,stdio:'ignore',windowsHide:true});
+    child.on('error',()=>{});child.unref();
+    saveAuthStatus({...state,notificationShown:true});
+  } catch { /* The next local status/start command still shows persistent notice. */ }
+}
 function clearRevokedCredentials(reason,{stop=true}={}) {
   delete config.deviceToken;delete config.deviceId;
   saveConfig(configPath,config);
+  let previous={};try{previous=JSON.parse(fs.readFileSync(authStatusPath,'utf8'));}catch{}
+  saveAuthStatus({authStatus:'re_pair_required',reason:'device_revoked',
+    detectedAt:previous.authStatus==='re_pair_required'?previous.detectedAt??new Date().toISOString():new Date().toISOString(),
+    notificationShown:previous.authStatus==='re_pair_required'&&previous.notificationShown===true});
   if(stop)fs.writeFileSync(path.join(directory,'maintenance.flag'),'device authorization revoked',{mode:0o600});
   log('device_authorization_revoked',{reason});
-  console.error('设备授权已撤销，本地设备凭据已清除。请通过安装器重新配对。');
+  console.error('设备授权已撤销，旧凭据已清除。请运行 RePair.cmd 重新配对。');
+  if(stop)notifyRevokedWindows();
 }
 async function remoteRevoked() {
   if(!config.deviceId||!config.deviceToken)return false;
@@ -60,7 +91,10 @@ else if(await remoteRevoked()) {
   clearRevokedCredentials('startup_preflight',{stop:!installing});
   if(!installing){revokedAtStartup=true;process.exitCode=78;}
 }
-if(!revokedAtStartup&&(!config.deviceToken||!config.deviceId))await pairDevice(config,configPath,{openBrowser:!process.argv.includes('--no-browser')});
+if(!revokedAtStartup&&(!config.deviceToken||!config.deviceId)) {
+  await pairDevice(config,configPath,{openBrowser:!process.argv.includes('--no-browser')});
+  fs.rmSync(authStatusPath,{force:true}); // New server-approved credentials clear the notice.
+}
 if(revokedAtStartup){
   // An offline device's credentials were revoked. Let fetch handles close
   // normally on Windows; do not start tools or silently auto-pair.
