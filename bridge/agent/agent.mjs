@@ -60,7 +60,11 @@ else if(await remoteRevoked()) {
   if(!installing)process.exit(78); // Do not silently re-authorize an unlinked device.
 }
 if(!config.deviceToken||!config.deviceId)await pairDevice(config,configPath,{openBrowser:!process.argv.includes('--no-browser')});
-if(process.argv.includes('--setup-only'))process.exit(0);
+if(process.argv.includes('--setup-only')) {
+  // Let active fetch/undici handles close naturally on Windows. A hard process.exit
+  // immediately after pairing can abort native async-handle cleanup.
+  process.exitCode=0;
+} else {
 const requireRuntime=createRequire(path.join(config.runtimeDir,'package.json'));
 const {Client}=await import(pathToFileURL(requireRuntime.resolve('@modelcontextprotocol/sdk/client/index.js')));
 const {StdioClientTransport}=await import(pathToFileURL(requireRuntime.resolve('@modelcontextprotocol/sdk/client/stdio.js')));
@@ -220,3 +224,4 @@ function connect() {
   });
 }
 connect();
+}
