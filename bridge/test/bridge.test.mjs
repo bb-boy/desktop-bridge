@@ -281,6 +281,20 @@ async function connectDevice(f,credentials,handlers={}) {
   return ws;
 }
 
+test('dashboard distinguishes ready devices from executable MCP tool count',async t=>{
+  const f=await fixture(t),account=await browser(f);
+  const initial=await(await account.request('/api/manage/devices')).json();
+  assert.equal(initial.devices.length,1);
+  assert.equal(initial.readyDevices,0);
+  assert.equal(initial.toolCount,0,'offline device must not count tools as executable');
+  const ws=await connectDevice(f,{deviceId:'p111',deviceToken:f.token});
+  t.after(()=>ws.terminate());
+  const connected=await(await account.request('/api/manage/devices')).json();
+  assert.equal(connected.readyDevices,1,'one ready device is not one tool');
+  assert.equal(connected.toolCount,6+bundledCatalog.tools.length);
+  assert.equal(connected.toolCount,31,'all standard MCP tools are exposed');
+});
+
 test('browser sessions enforce CSRF, one-time invitations, pairing ownership and account isolation',async t=>{
   const f=await fixture(t),a=await browser(f);
   const denied=await fetch(f.origin+'/api/invitations',{method:'POST',headers:{...a.headers,'x-csrf-token':'wrong'},body:'{}'});assert.equal(denied.status,403);
