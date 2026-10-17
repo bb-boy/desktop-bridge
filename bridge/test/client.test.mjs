@@ -10,6 +10,7 @@ import {createRequire} from 'node:module';
 import {randomUUID,createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {dataRoot,acquireLock,releaseLock,stopClient,livePid,sleep} from '../client/lifecycle.mjs';
+import {startBackground} from '../client/startup.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const runtime=path.join(root,'client');
 const require=createRequire(path.join(runtime,'package.json'));
@@ -86,12 +87,14 @@ test('re-pair required state blocks start, persists in status, and clears after 
  const control=(action)=>child(process.execPath,[path.join(runtime,'control.mjs'),action,'--root',dir]);
  const initial=control('status');await exited(initial);assert.match(initial.output(),/re_pair_required/);assert.match(initial.output(),/RePair.cmd|control.mjs pair/);
  const blocked=control('start');const [blockedExit]=await once(blocked,'exit');assert.equal(blockedExit,2,blocked.output());assert.equal(fs.existsSync(path.join(dir,'runner-lock')),false);
+ await assert.rejects(startBackground(dir,process.execPath),/重新配对/,'background mode must not bypass a revoked credential');
  const paired=control('pair');await exited(paired);
  assert.equal(JSON.parse(fs.readFileSync(configPath,'utf8')).deviceToken,'new-paired-token');
  assert.equal(fs.existsSync(path.join(dir,'auth-status.json')),false);
  assert.equal(fs.existsSync(path.join(dir,'maintenance.flag')),false);
  const status=control('status');await exited(status);assert.match(status.output(),/"authStatus": "ok"/);
  assert.ok(fs.existsSync(path.join(runtime,'RePair.cmd')),'installed Windows helper exists in package source');
+ assert.match(fs.readFileSync(path.join(runtime,'RePair.cmd'),'utf8'),/-Action pair/);
 });
 
 test('uninstall preserves saved results unless purge is explicitly requested',async t=>{
