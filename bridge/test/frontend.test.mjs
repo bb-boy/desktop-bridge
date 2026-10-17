@@ -42,3 +42,38 @@ test('plain text render operations keep device names and task details out of HTM
   assert.match(js,/result-content'\)\.textContent/);
   assert.doesNotMatch(js,/innerHTML\s*=/);
 });
+
+
+test('NES.css 2.3.0 assets are bundled locally, with actual pixel components',()=>{
+  const vendor=path.join(publicDir,'vendor/nes.css');
+  const nes=fs.readFileSync(path.join(vendor,'nes.min.css'),'utf8');
+  const license=fs.readFileSync(path.join(vendor,'LICENSE'),'utf8');
+  assert.match(html,/href="\/vendor\/nes\.css\/nes\.min\.css"/);
+  assert.match(html,/class="[^"]*nes-container/);
+  assert.match(html,/class="[^"]*nes-btn/);
+  assert.match(html,/class="nes-input"/);
+  assert.match(nes,/nes-btn/);
+  assert.match(license,/MIT License/);
+  assert.doesNotMatch(html,/https?:\/\/(?:unpkg|cdn)\./i);
+});
+
+test('Google login stays discoverable but unavailable if OAuth is not configured',()=>{
+  assert.match(html,/<button id="google-login"[^>]*hidden>/);
+  assert.match(js,/googleButton\.hidden=false/);
+  assert.match(js,/googleButton\.disabled=!googleEnabled/);
+  assert.match(js,/querySelector\('\.google-text'\)\.textContent='使用 Google 登录'/);
+  assert.match(html,/id="google-availability"[^>]*role="status"/);
+  assert.match(html,/class="google-login-card"/);
+  assert.match(css,/#google-login\.google-button:disabled\s*\{[^{]*opacity:1/);
+  assert.match(html,/class="password-login-heading"/);
+  assert.match(js,/auth\/google\/start/);
+});
+
+test('installers are shown only inside authenticated device management',()=>{
+  const login=html.split('<section id="login-panel"')[1].split('<section id="app-panel"')[0];
+  const app=html.split('<section id="app-panel"')[1];
+  assert.doesNotMatch(login,/install-section|Mac 安装器|Windows 安装器|Linux 安装器/);
+  assert.match(app,/id="device-install"/);
+  for(const name of ['Mac 安装器','Windows 安装器','Linux 安装器'])assert.match(app,new RegExp(name));
+  assert.match(app,/下载通用插件 ZIP/);
+});

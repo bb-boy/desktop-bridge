@@ -51,7 +51,7 @@ Windows 使用同名 `Install.cmd` 参数。macOS 通过 launchd、Linux 通过 
 
 ## 管理页面
 
-管理页采用简洁浅色设计，包括登录、设备连接状态、任务结果、账号授权与配对流程。0.2.1 更新了统一卡片、排版、响应式布局与键盘标签切换，保留现有 API 和业务流程。相关代码在 `bridge/public/`；前端样式更新只有部署匹配版本的服务后才会对外可见。
+管理页面采用 [NES.css](https://github.com/nostalgic-css/NES.css) 2.3.0 复古 8-bit 像素风格，使用其输入框、按钮和容器组件。CSS 已本地打包在 `bridge/public/vendor/nes.css/`，不依赖第三方 CDN，遵循 MIT 许可并随仓库保留原许可。保留 Google OAuth、设备管理、配对及任务等现有 API 和业务逻辑，兼容桌面与手机宽度。**未配置 Google OAuth 的测试环境会显示禁用按钮，配置正确的正式环境仍能使用 Google 登录**。Git 推送并不自动部署新版管理页。
 
 ## 开发与打包
 
