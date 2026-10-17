@@ -212,6 +212,16 @@ button.tab.active:hover{background:var(--yellow)}
 .empty{grid-column:1/-1;background:#fffef8;border:4px dashed #7c857b;padding:39px 20px;font-weight:650;text-align:center}
 .account-section{align-items:start;margin-top:21px}
 .account-section .actions{align-items:start}
+.account-settings.nes-container{background:#fffef8;padding:28px 31px;margin:0 0 22px}
+.account-settings .section-title{margin:0 0 13px}
+.account-settings #google-status{margin:10px 0 0}
+.account-actions{display:flex;flex-wrap:wrap;align-items:center;gap:14px}
+.account-actions button{padding:8px 15px;min-height:42px}
+#google-unlink-hint{margin:14px 0 0;color:#79501e}
+.account-settings form{max-width:580px;margin-top:15px}
+.account-settings form button{margin-top:12px}
+.pair-platform{display:flex;align-items:center;gap:9px}
+.pair-platform .os-icon{width:28px;height:28px}
 .list-heading{margin:28px 0 20px}
 #invite-link{overflow-wrap:anywhere}
 dialog.nes-dialog{border:4px solid #22252a;background:#fffef8;color:var(--ink);width:min(92vw,900px);max-height:87vh;padding:27px;box-shadow:8px 8px 0 #20272b}
@@ -260,6 +270,8 @@ dialog pre{background:#f5f2e2;border:3px solid #262a2d;padding:17px;overflow:aut
   .actions{gap:7px}
   .actions button{font-size:.7rem}
   .pair-box.nes-container{grid-template-columns:1fr;padding:22px 18px;gap:15px}
+  .account-settings.nes-container{padding:21px 17px}
+  .account-actions button{width:100%}
   .row.nes-container{flex-wrap:wrap;align-items:start;padding:19px 18px}
 }
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
@@ -414,6 +426,13 @@ button#tab-devices.active,button#tab-devices.active:hover {background:#cae9d9;bo
   font-weight:800;cursor:pointer;
 }
 .account button.account-signout:hover,.account button.account-signout:focus-visible {background:#eaf1ea}
+.account button.account-manage {
+  display:block;width:100%;min-height:44px;margin:0;padding:12px 17px;
+  border:0;border-bottom:2px solid #d7d9d4;
+  background:transparent;color:#24282b;text-align:left;font-size:.88rem;
+  font-weight:800;cursor:pointer;
+}
+.account button.account-manage:hover,.account button.account-manage:focus-visible {background:#eaf1ea}
 @media(max-width:650px) {
   .account #account-trigger.account-avatar {width:42px;height:42px;min-width:42px;min-height:42px;font-size:.91rem}
   .account-popover {top:calc(100% + 13px)}
