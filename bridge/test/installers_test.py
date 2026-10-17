@@ -28,9 +28,16 @@ class StandaloneTests(unittest.TestCase):
         self.root = pathlib.Path(self.temp.name)
         self.source = self.root / 'source'
         self.source.mkdir()
+        helper = pathlib.Path(__file__).resolve().parents[1] / 'client' / 'choose-install-mode.sh'
+        (self.source / 'assets/client').mkdir(parents=True)
+        shutil.copyfile(helper, self.source / 'assets/client/choose-install-mode.sh')
+        (self.root / 'home').mkdir()
+        self.env_home = str(self.root / 'home')
         (self.source / 'Install.sh').write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$FIXTURE_RESULT"\nexit "${FIXTURE_EXIT:-0}"\n')
         self.result = self.root / 'result'
-        self.env = dict(os.environ, FIXTURE_RESULT=str(self.result))
+        self.env = dict(os.environ, FIXTURE_RESULT=str(self.result),
+                        HOME=self.env_home, XDG_DATA_HOME=str(self.root / 'user-data'))
+        self.env.pop('DESKTOP_BRIDGE_INSTALL_MODE', None)
 
     def linux_fixture(self):
         binary = self.root / 'bin'
@@ -44,12 +51,55 @@ class StandaloneTests(unittest.TestCase):
         return installer
 
     @unittest.skipIf(os.name == 'nt', 'POSIX shell required')
-    def test_self_extracts_runs_background_and_cleans_up(self):
+    def test_self_extracts_defaults_to_manual_and_cleans_up(self):
         installer = self.linux_fixture()
         p = subprocess.run(['/bin/sh', str(installer)], env=self.env, capture_output=True, text=True)
         self.assertEqual(p.returncode, 0, p.stderr)
-        self.assertEqual(self.result.read_text().splitlines(), ['--mode', 'background'])
+        self.assertEqual(self.result.read_text().splitlines(), ['--mode', 'manual'])
         self.assertEqual(list(self.root.glob('desktop-bridge-setup.*')), [])
+
+    @unittest.skipIf(os.name == 'nt', 'POSIX shell required')
+    def test_linux_respects_explicit_background_mode_and_prior_choice(self):
+        installer = self.linux_fixture()
+        self.env['DESKTOP_BRIDGE_INSTALL_MODE'] = 'background'
+        p = subprocess.run(['/bin/sh', str(installer)], env=self.env, capture_output=True, text=True)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(self.result.read_text().splitlines(), ['--mode', 'background'])
+        self.env.pop('DESKTOP_BRIDGE_INSTALL_MODE')
+        settings = pathlib.Path(self.env['XDG_DATA_HOME']) / 'desktop-bridge/client-settings.json'
+        settings.parent.mkdir(parents=True)
+        settings.write_text('{"mode":"background"}')
+        p = subprocess.run(['/bin/sh', str(installer)], env=self.env, capture_output=True, text=True)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(self.result.read_text().splitlines(), ['--mode', 'background'])
+
+    @unittest.skipIf(os.name == 'nt', 'POSIX shell required')
+    def test_posix_mode_selector_supports_both_platforms_and_rejects_bad_override(self):
+        selector = self.source / 'assets/client/choose-install-mode.sh'
+        for platform in ('darwin', 'linux'):
+            p = subprocess.run(['/bin/sh', str(selector), platform], env=self.env,
+                               input='', capture_output=True, text=True)
+            self.assertEqual(p.returncode, 0, p.stderr)
+            self.assertEqual(p.stdout.strip(), 'manual')
+            settings = (pathlib.Path(self.env['HOME']) / 'Library/Application Support/DesktopBridge/client-settings.json'
+                        if platform == 'darwin'
+                        else pathlib.Path(self.env['XDG_DATA_HOME']) / 'desktop-bridge/client-settings.json')
+            settings.parent.mkdir(parents=True, exist_ok=True)
+            settings.write_text('{"mode":"background","version":"0.2.6"}')
+            p = subprocess.run(['/bin/sh', str(selector), platform], env=self.env,
+                               input='', capture_output=True, text=True)
+            self.assertEqual(p.returncode, 0, p.stderr)
+            self.assertEqual(p.stdout.strip(), 'background')
+            env = dict(self.env, DESKTOP_BRIDGE_INSTALL_MODE='manual')
+            p = subprocess.run(['/bin/sh', str(selector), platform], env=env,
+                               input='', capture_output=True, text=True)
+            self.assertEqual(p.returncode, 0, p.stderr)
+            self.assertEqual(p.stdout.strip(), 'manual')
+            env['DESKTOP_BRIDGE_INSTALL_MODE'] = 'administrator'
+            p = subprocess.run(['/bin/sh', str(selector), platform], env=env,
+                               input='', capture_output=True, text=True)
+            self.assertNotEqual(p.returncode, 0)
+            self.assertIn('manual or background', p.stderr)
 
     @unittest.skipIf(os.name == 'nt', 'POSIX shell required')
     def test_corrupted_payload_never_executes(self):
@@ -83,10 +133,15 @@ class StandaloneTests(unittest.TestCase):
         self.assertTrue(os.access(scripts / 'postinstall', os.X_OK))
         p = subprocess.run(['/bin/sh', str(app / 'Resources/Install.command')], env=self.env, capture_output=True, text=True)
         self.assertEqual(p.returncode, 0, p.stderr)
-        self.assertEqual(self.result.read_text().splitlines(), ['--mode', 'background'])
+        self.assertEqual(self.result.read_text().splitlines(), ['--mode', 'manual'])
         text = (scripts / 'postinstall').read_text()
         self.assertIn('/usr/bin/sudo -H -u "$USER_NAME"', text)
         self.assertNotIn('Install.sh', text, 'root postinstall must not execute the actual installer')
+        self.env['DESKTOP_BRIDGE_INSTALL_MODE'] = 'background'
+        p = subprocess.run(['/bin/sh', str(app / 'Resources/Install.command')], env=self.env,
+                           capture_output=True, text=True)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(self.result.read_text().splitlines(), ['--mode', 'background'])
 
     @unittest.skipUnless(os.name == 'nt', 'Windows native execution test')
     def test_windows_executes_fixture_and_cleans_up(self):
