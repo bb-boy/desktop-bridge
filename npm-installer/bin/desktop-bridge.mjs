@@ -5,13 +5,14 @@ import os from 'node:os';
 import path from 'node:path';
 import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
+import {performUpdate} from './update.mjs';
 
 const packageRoot=fileURLToPath(new URL('../',import.meta.url));
 const clientRoot=path.join(packageRoot,'dist','client');
 const installer=path.join(clientRoot,'install.mjs');
 const controller=path.join(clientRoot,'control.mjs');
 const manifest=JSON.parse(fs.readFileSync(path.join(packageRoot,'package.json'),'utf8'));
-const commands=new Set(['setup','start','stop','restart','status','pair','mode','repair','uninstall']);
+const commands=new Set(['setup','start','stop','restart','status','pair','mode','repair','uninstall','update']);
 
 export function clientDataRoot(platform=process.platform,env=process.env,home=os.homedir()){
   return platform==='win32'?path.win32.join(env.LOCALAPPDATA??path.win32.join(home,'AppData','Local'),'DesktopBridgeClient')
@@ -40,8 +41,8 @@ export function parse(argv){
     }else if(remainder.length)throw new Error(command+' does not accept extra arguments');
   }else if(command==='uninstall'){
     if(remainder.some(x=>x!=='--purge')||remainder.filter(x=>x==='--purge').length>1)throw new Error('Usage: desktop-bridge uninstall [--purge]');
-  }else if(command==='repair'){
-    if(remainder.length)throw new Error('Usage: desktop-bridge repair [--root directory]');
+  }else if(command==='repair'||command==='update'){
+    if(remainder.length)throw new Error('Usage: desktop-bridge '+command+' [--root directory]');
   }else{
     for(let i=0;i<remainder.length;i++){
       const a=remainder[i];
@@ -62,11 +63,12 @@ function usage(){
     '  pair                                             Re-pair in your browser\n'+
     '  mode manual|background                           Change startup mode\n'+
     '  repair                                           Repair (re-pairs in browser)\n'+
+    '  update                                           Update npm CLI and installed Agent\n'+
     '  uninstall [--purge]                              Remove local agent\n'+
     '  version | help                                   Show CLI info\n\n'+
     'All commands except help/version accept --root <directory>.\n'+
     'No service is installed automatically by npm install.\n'+
-    'npm update -g '+manifest.name+' updates the CLI; run setup to apply the client release.\n'+
+    'update upgrades the npm CLI and applies its client release while preserving pairing.\n'+
     'Device unlink/revocation: https://mcp.ilovestudy.de/start.html\n';
 }
 
@@ -88,6 +90,7 @@ export async function main(argv=process.argv.slice(2)){
   const rootArgs=parsed.root?['--root',root]:[];
   if(parsed.command==='setup')return childRun(installer,[...parsed.args,...rootArgs]);
   if(!fs.existsSync(path.join(root,'launch.json')))throw new Error('Client is not installed at '+root+'. Run desktop-bridge setup first.');
+  if(parsed.command==='update')return performUpdate({root,packageRoot,packageName:manifest.name});
   if(parsed.command==='repair'){
     console.log('Repair also requires browser re-pairing approval.');
     return childRun(installer,['--repair',...rootArgs]);
