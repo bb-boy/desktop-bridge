@@ -18,7 +18,7 @@ fi
 if [ "${DESKTOP_BRIDGE_INSTALL_MODE+x}" = x ]; then
   MODE="$DESKTOP_BRIDGE_INSTALL_MODE"
   case "$MODE" in manual|background) ;; *) printf 'DESKTOP_BRIDGE_INSTALL_MODE must be manual or background.\n' >&2; exit 2 ;; esac
-elif [ -t 0 ] && [ -t 1 ]; then
+elif [ -t 0 ] && [ -t 2 ]; then
   printf '\n请选择 Desktop Bridge 启动方式（不改变运行权限）：\n' >&2
   printf '  1) 手动启动：需要时启动，关闭窗口或按 Ctrl+C 停止；不设置开机自启。\n' >&2
   printf '  2) 后台运行：安装后启动，用户登录系统后自动连接。\n' >&2
