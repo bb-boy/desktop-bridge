@@ -87,3 +87,18 @@ test('installers are shown only inside authenticated device management',()=>{
   assert.match(app,/href="\/start\.html">配置 ChatGPT 连接/);
   assert.doesNotMatch(html,/href="\/downloads\/desktop-bridge-plugin\.zip"/);
 });
+
+test('revoked device history is hidden in the dashboard without changing authorization enforcement',()=>{
+  assert.doesNotMatch(html,/revoked-section|revoked-devices|已撤销授权的设备/);
+  assert.doesNotMatch(js,/renderRevoked|\/api\/manage\/revoked-devices/);
+});
+test('pairing decisions use green confirmation and gray rejection',()=>{
+  assert.match(js,/if\(cls==='success'\)b\.classList\.add\('is-success'\)/);
+  assert.match(js,/await refresh\(\);},'success'\),button\('拒绝'/);
+  assert.match(js,/decision:'deny'[\s\S]*?'secondary'\)\)/);
+  assert.match(css,/#pair-preview button\.nes-btn\.secondary\{background:#d7dadd/);
+});
+test('recent task results are capped at 100 in the dashboard',()=>{
+  assert.match(html,/最近 100 条任务与结果/);
+  assert.match(js,/sort\(\(a,b\)=>b\.started-a\.started\)\.slice\(0,100\)/);
+});

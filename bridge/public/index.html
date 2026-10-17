@@ -74,17 +74,13 @@
       <section id="devices-tab" role="tabpanel" aria-labelledby="tab-devices">
         <div class="section-title"><div><h2>设备状态</h2></div><button id="refresh" class="secondary nes-btn" type="button">刷新状态</button></div>
         <div id="devices" class="device-grid"></div>
-        <section id="revoked-section" hidden>
-          <div class="section-title"><div><h2>已撤销授权的设备</h2></div></div>
-          <div id="revoked-devices" class="device-grid" aria-live="polite"></div>
-        </section>
         <section class="pair-box nes-container" id="device-install">
           <div><h2>安装并连接</h2><div class="installer-links"><a class="button secondary nes-btn" href="/downloads/DesktopBridge-macOS.pkg" download>Mac 安装器</a><a class="button secondary nes-btn" href="/downloads/DesktopBridge-Windows.cmd" download>Windows 安装器</a><a class="button secondary nes-btn" href="/downloads/DesktopBridge-Linux.sh" download>Linux 安装器</a></div></div>
           <div class="pair-controls"><form id="pair-form"><label>设备配对码<input class="nes-input" name="code" id="pair-code" placeholder="ABCD-2345" maxlength="16" autocomplete="off" spellcheck="false" required></label><button class="wide nes-btn is-primary" type="submit">查看待绑定设备</button></form><div id="pair-preview" hidden></div></div>
         </section>
       </section>
       <section id="calls-tab" role="tabpanel" aria-labelledby="tab-calls" hidden>
-        <div class="section-title"><div><h2>最近任务</h2></div></div><div id="calls"></div>
+        <div class="section-title"><div><h2>最近 100 条任务与结果</h2></div></div><div id="calls"></div>
       </section>
       <section id="authorizations-tab" role="tabpanel" aria-labelledby="tab-authorizations" hidden>
         <div class="section-title"><div><h2>授权与账号</h2></div></div>

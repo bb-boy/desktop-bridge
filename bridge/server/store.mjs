@@ -28,8 +28,16 @@ export function openStore(directory) {
   // Legacy catalogs without an account binding stay hidden until a fresh authenticated hello.
   // A relay restart does not establish whether an in-flight side effect completed.
   db.exec("UPDATE calls SET status='unknown',finished=unixepoch()*1000 WHERE status='executing'");
+  // One-time migration for existing databases: retain only the newest 100 rows per account.
+  db.exec(`DELETE FROM calls WHERE rowid IN (
+    SELECT rowid FROM (
+      SELECT rowid, ROW_NUMBER() OVER (PARTITION BY owner ORDER BY started DESC, rowid DESC) AS position
+      FROM calls
+    ) WHERE position > 100
+  )`);
   const parse=r=>r&&JSON.parse(r.value);
   const device=id=>db.prepare('SELECT * FROM registry WHERE id=? AND revoked=0').get(id);
+  const trimCalls=owner=>db.prepare('DELETE FROM calls WHERE owner=? AND rowid NOT IN (SELECT rowid FROM calls WHERE owner=? ORDER BY started DESC, rowid DESC LIMIT 100)').run(owner,owner);
   return {
     db,
     migrate(config) {
@@ -59,13 +67,17 @@ export function openStore(directory) {
     transaction(fn) {db.exec('BEGIN IMMEDIATE');try{const r=fn();db.exec('COMMIT');return r;}catch(e){db.exec('ROLLBACK');throw e;}},
     tools(id,owner='owner') {const r=db.prepare('SELECT tools FROM devices WHERE id=? AND owner=?').get(id,owner);return r?JSON.parse(r.tools):[];},
     saveTools(id,tools,owner='owner') {db.prepare('INSERT INTO devices(id,tools,updated,owner) VALUES (?,?,?,?) ON CONFLICT(id) DO UPDATE SET tools=excluded.tools,updated=excluded.updated,owner=excluded.owner').run(id,JSON.stringify(tools),Date.now(),owner);},
-    beginCall(id,device,tool,owner='owner') {db.prepare('INSERT INTO calls(id,device,tool,status,started,owner) VALUES (?,?,?,?,?,?)').run(id,device,tool,'executing',Date.now(),owner);},
+    beginCall(id,device,tool,owner='owner') {
+      // Bound stored results as well as the dashboard view, without touching other accounts.
+      db.prepare('INSERT INTO calls(id,device,tool,status,started,owner) VALUES (?,?,?,?,?,?)').run(id,device,tool,'executing',Date.now(),owner);
+      trimCalls(owner);
+    },
     finishCall(id,status,result=null,error=null) {
       // A deadline, disconnect or repeated delivery must never replace a saved outcome.
       return db.prepare("UPDATE calls SET status=?,finished=?,result=?,error=? WHERE id=? AND status NOT IN ('completed','failed')").run(status,Date.now(),result===null?null:JSON.stringify(result),error,id).changes>0;
     },
     call(id,owner) {const r=db.prepare('SELECT * FROM calls WHERE id=? AND owner=?').get(id,owner);return r&&{...r,result:r.result?JSON.parse(r.result):null};},
-    recentCalls(owner) {return db.prepare('SELECT id,device,tool,status,started,finished,error FROM calls WHERE owner=? ORDER BY started DESC LIMIT 100').all(owner);},
+    recentCalls(owner) {return db.prepare('SELECT id,device,tool,status,started,finished,error FROM calls WHERE owner=? ORDER BY started DESC, rowid DESC LIMIT 100').all(owner);},
     cleanup() {
       const now=Date.now();
       db.prepare('DELETE FROM grants WHERE expires<?').run(now);
