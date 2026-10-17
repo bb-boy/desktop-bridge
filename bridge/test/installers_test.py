@@ -227,8 +227,8 @@ class StandaloneTests(unittest.TestCase):
         content = text.split("$payload = @'\n", 1)[1].split("\n'@", 1)[0]
         self.assertEqual(base64.b64decode(content), payload)
         self.assertIn(hashlib.sha256(payload).hexdigest(), text)
-        self.assertLess(text.index('Get-FileHash'), text.index('Expand-Archive'))
-        self.assertIn('Read-Host', text)
+        self.assertLess(text.index('SHA256]::Create'), text.index('ZipFile]::ExtractToDirectory'))
+        self.assertIn('[Console]::ReadLine()', text)
         self.assertIn('selection required', text)
         self.assertNotIn('defaultChoice', text)
         self.assertNotIn('if (!$choice) { $mode = $defaultMode }', text)
@@ -237,7 +237,7 @@ class StandaloneTests(unittest.TestCase):
         self.assertIn('if not defined DESKTOP_BRIDGE_INSTALL_MODE pause', text)
         self.assertIn('START-HERE.txt', text)
         self.assertIn('Common commands (Windows CMD):', text)
-        self.assertIn('Remove-Item -LiteralPath $temp -Recurse', text)
+        self.assertIn('[IO.Directory]::Delete($temp, $true)', text)
 
 
 if __name__ == '__main__':
