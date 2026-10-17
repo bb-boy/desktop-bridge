@@ -51,7 +51,7 @@ function notifyRevokedWindows() {
   // click followed by a browser login and device approval.
   const rePair=path.join(directory,'RePair.cmd');
   const quote=value=>"'"+String(value).replace(/'/g,"''")+"'";
-  const message='Desktop Bridge 的设备授权已撤销，旧凭据已失效。\\n\\n是否现在重新配对？（需要网页登录确认）';
+  const message='Desktop Bridge 的设备授权已撤销，旧凭据已失效。\n\n是否现在重新配对？（需要网页登录确认）';
   const script="Add-Type -AssemblyName System.Windows.Forms;"+
     "$answer=[System.Windows.Forms.MessageBox]::Show("+quote(message)+",'Desktop Bridge',[System.Windows.Forms.MessageBoxButtons]::YesNo,[System.Windows.Forms.MessageBoxIcon]::Warning);"+
     "if($answer -eq [System.Windows.Forms.DialogResult]::Yes){Start-Process -FilePath 'cmd.exe' -ArgumentList @('/k',"+quote('"' + rePair + '"')+")}";
