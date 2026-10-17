@@ -53,16 +53,19 @@ async function remoteRevoked() {
     return response.ok&&(await response.json()).revoked===true;
   } catch {return false;} // Never erase credentials on a timeout or ordinary network failure.
 }
+let revokedAtStartup=false;
 if(process.argv.includes('--pair')){delete config.deviceToken;delete config.deviceId;saveConfig(configPath,config);}
 else if(await remoteRevoked()) {
   const installing=process.argv.includes('--setup-only');
   clearRevokedCredentials('startup_preflight',{stop:!installing});
-  if(!installing)process.exit(78); // Do not silently re-authorize an unlinked device.
+  if(!installing){revokedAtStartup=true;process.exitCode=78;}
 }
-if(!config.deviceToken||!config.deviceId)await pairDevice(config,configPath,{openBrowser:!process.argv.includes('--no-browser')});
-if(process.argv.includes('--setup-only')) {
-  // Let active fetch/undici handles close naturally on Windows. A hard process.exit
-  // immediately after pairing can abort native async-handle cleanup.
+if(!revokedAtStartup&&(!config.deviceToken||!config.deviceId))await pairDevice(config,configPath,{openBrowser:!process.argv.includes('--no-browser')});
+if(revokedAtStartup){
+  // An offline device's credentials were revoked. Let fetch handles close
+  // normally on Windows; do not start tools or silently auto-pair.
+} else if(process.argv.includes('--setup-only')) {
+  // Let active fetch/undici handles close naturally on Windows.
   process.exitCode=0;
 } else {
 const requireRuntime=createRequire(path.join(config.runtimeDir,'package.json'));
@@ -146,7 +149,9 @@ async function shutdown(code=0) {
   ws?.close();
   const timeout=setTimeout(()=>process.exit(code),8000);timeout.unref();
   try{await client.close();}catch{}
-  process.exit(code);
+  // Windows Node/undici can fail native handle assertions during immediate exit.
+  // The existing unref'd timeout remains an 8-second last-resort fallback.
+  process.exitCode=code;
 }
 process.on('message',message=>{if(message?.type==='stop')void shutdown();});
 const maintenanceWatch=setInterval(()=>{if(fs.existsSync(path.join(directory,'maintenance.flag')))void shutdown();},1000);maintenanceWatch.unref();
