@@ -43,9 +43,9 @@ const requireRuntime=createRequire(path.join(config.runtimeDir,'package.json'));
 const {Client}=await import(pathToFileURL(requireRuntime.resolve('@modelcontextprotocol/sdk/client/index.js')));
 const {StdioClientTransport}=await import(pathToFileURL(requireRuntime.resolve('@modelcontextprotocol/sdk/client/stdio.js')));
 const WebSocket=requireRuntime('ws');
-const client=new Client({name:'personal-desktop-bridge-agent',version:'0.2.1'},{capabilities:{}});
+const client=new Client({name:'personal-desktop-bridge-agent',version:'0.2.2'},{capabilities:{}});
 const transport=new StdioClientTransport({command:process.execPath,args:[config.mcpEntry],cwd:config.workingDirectory??directory,env:{...process.env},stderr:'pipe'});
-let ws,retryTimer,stopping=false,attempt=0,localHealthy=false,checkingHealth=false,healthFailures=0;
+let ws,retryTimer,stopping=false,attempt=0,localHealthy=false,checkingHealth=false,healthFailures=0,remoteStopping=false;
 const heartbeatPath=path.join(directory,'heartbeat.json');
 function writeHeartbeat(){try{fs.writeFileSync(heartbeatPath,JSON.stringify({pid:process.pid,time:Date.now(),connected:ws?.readyState===1,localToolsAvailable:localHealthy}),{mode:0o600});}catch{}}
 writeHeartbeat();
@@ -74,12 +74,27 @@ async function execute(message,socket) {
     if(cached.status==='executing') return; // Original execution will answer; never run a duplicate.
     return send(socket,{type:'result',id:message.id,status:'unknown',error:'An earlier execution has an unknown outcome. Inspect the computer before retrying.'});
   }
+  if(remoteStopping||(message.name==='shutdown'&&running.size>0))return send(socket,{type:'result',id:message.id,error:'Agent is stopping or has an executing call; no shutdown was performed.'});
   if(running.size>=4) return send(socket,{type:'result',id:message.id,error:'Agent is busy; no command was executed.'});
   journal[message.id]={status:'executing',time:Date.now()};
   persist();
   running.set(message.id,true);
   log('call_started',{id:message.id,tool:message.name});
   try {
+    if(message.name==='shutdown') {
+      if(Object.keys(message.arguments).length)throw new Error('shutdown accepts no local arguments');
+      remoteStopping=true;
+      // Persist the stop intent so a runner/service restart cannot immediately reconnect.
+      fs.writeFileSync(path.join(directory,'maintenance.flag'),'remote shutdown',{mode:0o600});
+      const result={content:[{type:'text',text:JSON.stringify({status:'stopping',computerShutdown:false,restart:'Start Desktop Bridge locally to reconnect.'})}]};
+      journal[message.id]={status:'completed',time:Date.now(),result};persist();
+      await new Promise(resolve=>{
+        const timer=setTimeout(resolve,1000);
+        if(socket.readyState!==WebSocket.OPEN){clearTimeout(timer);return resolve();}
+        socket.send(JSON.stringify({type:'result',id:message.id,result}),()=>{clearTimeout(timer);resolve();});
+      });
+      await shutdown();return;
+    }
     const args={...message.arguments};
     if(process.platform==='win32' && message.name==='start_process') {
       args.shell??=config.defaultShell;
@@ -143,7 +158,7 @@ function connect() {
   let lastSeen=Date.now(),welcomed=false;
   const heartbeat=setInterval(()=>{if(Date.now()-lastSeen>65000)socket.terminate();},15000);
   socket.on('ping',()=>lastSeen=Date.now());
-  socket.on('open',()=>{send(socket,{type:'hello',protocol:2,deviceId:config.deviceId,tools,version:'0.2.1',platform:process.platform});});
+  socket.on('open',()=>{send(socket,{type:'hello',protocol:2,deviceId:config.deviceId,tools,capabilities:{shutdown:true},version:'0.2.2',platform:process.platform});});
   socket.on('message',data=>{
     lastSeen=Date.now();
     try {

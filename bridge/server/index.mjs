@@ -10,6 +10,7 @@ import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprot
 import { requireBearerAuth } from '@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js';
 import { openStore } from './store.mjs';
 import { installOAuth } from './oauth.mjs';
+import {remoteTools,accountInfo,validateDeviceArgs} from './remote-tools.mjs';
 import { Broker } from './broker.mjs';
 import { createSessions, installManagement } from './management.mjs';
 import { installGoogle } from './google.mjs';
@@ -50,11 +51,15 @@ export async function startServer(config,dependencies={}) {
     const server=new Server({name:'personal-desktop-bridge',version:'0.2.0'},{capabilities:{tools:{}},instructions:'Use list_devices to identify available computers. The standard tool catalog is available before pairing; visibility does not mean a device is ready. Tools execute on the chosen computer. Check toolsAvailable separately from networkConnected. Use list_calls and get_call_result to recover results after interruptions. Never retry a side effect until its outcome is known.'});
     server.setRequestHandler(ListToolsRequestSchema,async()=>({tools:[{
       name:'list_devices',description:'List your configured computers and their current connection status. Use before operating on a computer.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}
-    },{name:'list_calls',description:'List your last 100 task IDs and states. Use after a timeout or disconnect.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true}},{name:'get_call_result',description:'Retrieve a task status and saved result by call_id. Never repeats the operation.',inputSchema:{type:'object',properties:{call_id:{type:'string'}},required:['call_id'],additionalProperties:false},annotations:{readOnlyHint:true}},...broker.tools(owner)]}));
+    },{name:'list_calls',description:'List your last 100 task IDs and states. Use after a timeout or disconnect.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true}},{name:'get_call_result',description:'Retrieve a task status and saved result by call_id. Never repeats the operation.',inputSchema:{type:'object',properties:{call_id:{type:'string'}},required:['call_id'],additionalProperties:false},annotations:{readOnlyHint:true}},...remoteTools,...broker.tools(owner)]}));
     server.setRequestHandler(CallToolRequestSchema,async(request)=>{
       await provider.verifyAccessToken(req.auth.token);
+      store.recordToolCall(owner);
       if(request.params.name==='list_devices') return {content:[{type:'text',text:JSON.stringify(broker.devices(owner))}]};
       try {
+        if(request.params.name==='who_am_i')return {content:[{type:'text',text:JSON.stringify(accountInfo(store,broker,owner))}]};
+        if(request.params.name==='ping')return {content:[{type:'text',text:JSON.stringify(await broker.ping(validateDeviceArgs(request.params.arguments),owner))}]};
+        if(request.params.name==='shutdown')validateDeviceArgs(request.params.arguments);
         if(request.params.name==='list_calls')return {content:[{type:'text',text:JSON.stringify(store.recentCalls(owner))}]};
         if(request.params.name==='get_call_result'){const call=broker.recover(String(request.params.arguments?.call_id??''),owner);if(!call)throw new Error('Task not found');return {content:[{type:'text',text:JSON.stringify(call)}]};}
         return await broker.call(request.params.name,request.params.arguments,owner);

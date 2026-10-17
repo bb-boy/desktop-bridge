@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { WebSocketServer,WebSocket } from 'ws';
 import { hash,opaque } from './security.mjs';
 import bundledCatalog from './desktop-commander-tools.json' with { type: 'json' };
-export const bridgeToolNames=new Set(['list_devices','list_calls','get_call_result']);
+export const bridgeToolNames=new Set(['list_devices','list_calls','get_call_result','who_am_i','ping','shutdown']);
 export class Broker {
   constructor(httpServer,config,store) {
     this.config=config;this.store=store;this.connections=new Map();this.pending=new Map();this.closing=false;
@@ -45,7 +45,7 @@ export class Broker {
           });
           // A successful handshake with the pending key proves the client saved it.
           if(registered.pendingHash===credentialHash)this.store.db.prepare('UPDATE registry SET tokenHash=pendingHash,pendingHash=NULL WHERE id=? AND pendingHash=?').run(device.id,credentialHash);
-          this.store.saveTools(device.id,tools,device.owner);conn.protocol=m.protocol===2?2:1;conn.ready=true;clearTimeout(helloTimeout);
+          this.store.saveTools(device.id,tools,device.owner);conn.protocol=m.protocol===2?2:1;conn.canShutdown=conn.protocol>=2&&m.capabilities?.shutdown===true;conn.ready=true;clearTimeout(helloTimeout);
           this.store.db.prepare('UPDATE registry SET version=?,platform=? WHERE id=?').run(String(m.version??'legacy').slice(0,40),String(m.platform??'unknown').slice(0,60),device.id);
           const recover=this.store.db.prepare("SELECT id FROM calls WHERE device=? AND owner=? AND status IN ('executing','awaiting_result','unknown') ORDER BY started DESC LIMIT 256").all(device.id,device.owner).map(r=>r.id);
           this.send(conn,{type:'welcome',heartbeatSeconds:20,...(conn.protocol>=2?{recover}:{} )});
@@ -67,6 +67,7 @@ export class Broker {
           if(m.error){error=String(m.error).slice(0,1000);status=m.status==='unknown'?'unknown':'failed';}
           else if(m.result&&Array.isArray(m.result.content)){result=m.result;status=result.isError?'failed':'completed';}
           else throw new Error('Invalid device result');
+          if(row.tool==='shutdown'&&status==='failed')conn.stopRequested=false;
           this.store.finishCall(m.id,status,result,error);
           this.settle(m.id,result,error);
         } else throw new Error('Unsupported message');
@@ -104,8 +105,8 @@ export class Broker {
       const candidate=this.connections.get(d.id),c=candidate?.device.owner===d.owner?candidate:undefined;
       const networkConnected=!!c?.ready&&c.ws.readyState===WebSocket.OPEN;
       const fresh=!!c?.healthAt&&Date.now()-c.healthAt<(this.config.healthStaleMs??50000);
-      const toolsAvailable=networkConnected&&fresh&&c.healthOk&&!d.paused;
-      return {id:d.id,name:d.name,online:networkConnected,networkConnected,toolsAvailable,health:d.paused?'paused':!networkConnected?'offline':!fresh?'unverified':c.healthOk?'ready':'local_unavailable',clientVersion:d.version,lastSeen:d.lastSeen,platform:d.platform,paused:!!d.paused,rotationPending:!!d.pendingHash,connectedAt:c?.connectedAt??null};
+      const toolsAvailable=networkConnected&&fresh&&c.healthOk&&!d.paused&&!c.stopRequested;
+      return {id:d.id,name:d.name,online:networkConnected,networkConnected,toolsAvailable,health:d.paused?'paused':!networkConnected?'offline':!fresh?'unverified':c.healthOk?'ready':'local_unavailable',clientVersion:d.version,lastSeen:d.lastSeen,platform:d.platform,paused:!!d.paused,rotationPending:!!d.pendingHash,remoteShutdownAvailable:!!c?.canShutdown,connectedAt:c?.connectedAt??null};
     });
   }
   tools(owner='owner') {
@@ -130,20 +131,51 @@ export class Broker {
   envelope(id,result,error) {
     return {...(result??{isError:true,content:[{type:'text',text:error??'结果未知，请查询任务状态。'}]}),_meta:{...(result?._meta??{}),desktopBridge:{callId:id}},content:[...(result?.content??[{type:'text',text:error??'结果未知，请查询任务状态。'}]),{type:'text',text:'任务编号: '+id+'；可用 get_call_result 查询。'}]};
   }
-  async call(name,args={},owner='owner') {
+  connection(args={},owner='owner') {
     if(this.closing)throw new Error('Relay is stopping; no command was sent.');
-    if(!args||typeof args!=='object'||Array.isArray(args))throw new Error('Tool arguments must be an object');
     const devices=this.store.devices(owner),deviceId=args.device_id??(devices.length===1?devices[0].id:undefined);
     const device=devices.find(d=>d.id===deviceId);
     if(!device)throw new Error('Unknown device. Call list_devices first.');
     const conn=this.connections.get(device.id);
     if(device.paused)throw new Error('设备已暂停，没有发送命令。');
     if(!conn?.ready||!this.authorized(conn)||conn.ws.readyState!==WebSocket.OPEN)throw new Error('Device is offline; no command was sent.');
-    if(!this.devices(owner).find(d=>d.id===deviceId).toolsAvailable)throw new Error('网络已连接，但本地工具尚未通过健康检查；没有发送命令。请更新或检查客户端。');
-    if(!this.store.tools(device.id,owner).some(t=>t.name===name))throw new Error('Unknown device tool');
+    if(conn.stopRequested)throw new Error('Device is stopping; no command was sent.');
+    return {device,conn};
+  }
+  async ping(args={},owner='owner') {
+    const {device,conn}=this.connection(args,owner);
+    conn.probes??=new Set();
+    if(conn.probes.size>=4)throw new Error('Too many probes; wait for earlier pings.');
+    const nonce=randomUUID(),start=performance.now();
+    return new Promise((resolve,reject)=>{
+      let finished=false;
+      const finish=(error)=>{
+        if(finished)return;finished=true;
+        clearTimeout(timer);conn.ws.off('pong',pong);conn.ws.off('close',closed);conn.probes.delete(finish);
+        if(error)return reject(error);
+        if(!this.authorized(conn))return reject(new Error('Device authorization changed during ping'));
+        resolve({device_id:device.id,pong:true,latency_ms:Math.round((performance.now()-start)*100)/100,timestamp:new Date().toISOString(),toolsAvailable:this.devices(owner).find(d=>d.id===device.id)?.toolsAvailable??false});
+      };
+      const pong=data=>{if(data.toString()===nonce)finish();};
+      const closed=()=>finish(new Error('Device disconnected during ping'));
+      const timer=setTimeout(()=>finish(new Error('Device ping timed out')),this.config.pingTimeoutMs??5000);
+      conn.probes.add(finish);conn.ws.on('pong',pong);conn.ws.once('close',closed);
+      try{conn.ws.ping(nonce,error=>{if(error)finish(error);});}catch(error){finish(error);}
+    });
+  }
+  async call(name,args={},owner='owner') {
+    if(this.closing)throw new Error('Relay is stopping; no command was sent.');
+    if(!args||typeof args!=='object'||Array.isArray(args))throw new Error('Tool arguments must be an object');
+    const {device,conn}=this.connection(args,owner),deviceId=device.id;
+    if(name!=='shutdown'&&!this.devices(owner).find(d=>d.id===deviceId).toolsAvailable)throw new Error('网络已连接，但本地工具尚未通过健康检查；没有发送命令。请更新或检查客户端。');
+    if(name==='shutdown') {
+      if(!conn.canShutdown)throw new Error('Update the desktop client to enable remote shutdown; no command was sent.');
+      if([...this.pending.values()].some(c=>c.deviceId===deviceId))throw new Error('Device has pending calls; wait for their results before shutdown.');
+    } else if(!this.store.tools(device.id,owner).some(t=>t.name===name))throw new Error('Unknown device tool');
     if([...this.pending.values()].filter(c=>c.deviceId===deviceId).length>=4)throw new Error('Device is busy; wait for existing calls.');
     const id=randomUUID(),toolArgs={...args};delete toolArgs.device_id;
     this.store.beginCall(id,deviceId,name,owner);
+    if(name==='shutdown')conn.stopRequested=true;
     return new Promise(resolve=>{
       const timer=setTimeout(()=>this.uncertain(id,'等待已结束，任务可能仍在执行。请用 get_call_result 查询，勿重复执行。'),this.config.callTimeoutMs??25000);
       this.pending.set(id,{deviceId,connection:conn,resolve,timer});

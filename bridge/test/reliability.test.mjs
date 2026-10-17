@@ -28,15 +28,15 @@ async function fixture(t,extra={}) {
   t.after(async()=>{await f.server.close();fs.rmSync(directory,{recursive:true,force:true});});
   return f;
 }
-async function device(f,{id='p111',token=f.token,tools=[{name:'test_tool',description:'Owner tool',inputSchema:{type:'object',properties:{}}}],message=()=>{}}={}) {
-  const ws=new WebSocket(f.origin.replace('http:','ws:')+'/agent',{headers:{authorization:'Bearer '+token}});
+async function device(f,{capabilities={},autoPong=true,id='p111',token=f.token,tools=[{name:'test_tool',description:'Owner tool',inputSchema:{type:'object',properties:{}}}],message=()=>{}}={}) {
+  const ws=new WebSocket(f.origin.replace('http:','ws:')+'/agent',{autoPong,headers:{authorization:'Bearer '+token}});
   ws.on('message',data=>{
     const m=JSON.parse(data);
     if(m.type==='health_check')ws.send(JSON.stringify({type:'health',ok:true}));
     message(m,ws);
   });
   await once(ws,'open');
-  ws.send(JSON.stringify({type:'hello',protocol:2,deviceId:id,version:'test',platform:process.platform,tools}));
+  ws.send(JSON.stringify({type:'hello',protocol:2,deviceId:id,version:'test',platform:process.platform,tools,capabilities}));
   await until(()=>f.server.broker.connections.get(id)?.healthOk);
   return ws;
 }
@@ -51,12 +51,12 @@ async function mcp(t,f,owner) {
   return client;
 }
 
-test('first authenticated discovery has 28 tools before pairing and remains stable through device lifecycle',async t=>{
+test('first authenticated discovery has 31 tools before pairing and remains stable through device lifecycle',async t=>{
   const f=await fixture(t,{devices:[]}),store=f.server.store;
   const client=await mcp(t,f,'owner');
   const initial=(await client.listTools()).tools;
-  assert.equal(initial.length,28);
-  assert.equal(new Set(initial.map(tool=>tool.name)).size,28);
+  assert.equal(initial.length,31);
+  assert.equal(new Set(initial.map(tool=>tool.name)).size,31);
   for(const name of ['write_file','start_process','read_file','edit_block']) {
     const tool=initial.find(tool=>tool.name===name);
     assert.ok(tool?.inputSchema.properties.device_id);
@@ -151,8 +151,8 @@ test('MCP catalogs, task queries and device result routing stay within the authe
   store.beginCall('owner-task','p111','test_tool','owner');
   store.beginCall('alice-task','alice-pc','private_tool','alice');
   const owner=await mcp(t,f,'owner'),alice=await mcp(t,f,'alice');
-  assert.deepEqual((await owner.listTools()).tools.map(x=>x.name),['list_devices','list_calls','get_call_result',...bundledCatalog.tools.map(t=>t.name),'test_tool']);
-  assert.deepEqual((await alice.listTools()).tools.map(x=>x.name),['list_devices','list_calls','get_call_result',...bundledCatalog.tools.map(t=>t.name),'private_tool']);
+  assert.deepEqual((await owner.listTools()).tools.map(x=>x.name),['list_devices','list_calls','get_call_result','who_am_i','ping','shutdown',...bundledCatalog.tools.map(t=>t.name),'test_tool']);
+  assert.deepEqual((await alice.listTools()).tools.map(x=>x.name),['list_devices','list_calls','get_call_result','who_am_i','ping','shutdown',...bundledCatalog.tools.map(t=>t.name),'private_tool']);
   const ownDevices=JSON.parse((await owner.callTool({name:'list_devices',arguments:{}})).content[0].text);
   assert.deepEqual(ownDevices.map(x=>x.id),['p111']);
   const otherDevices=JSON.parse((await alice.callTool({name:'list_devices',arguments:{}})).content[0].text);
@@ -281,4 +281,85 @@ test('a real side effect completed offline is recovered automatically after rela
   assert.equal(f.server.store.call(id,'owner').result.content[0].text,'1');
   assert.equal(fs.readFileSync(path.join(f.directory,'counter.txt'),'utf8'),'1');
   assert.equal(f.server.broker.pending.size,0);
+});
+
+test('account identity and monthly counts are isolated, UTC-scoped and durable',async t=>{
+ const f=await fixture(t),store=f.server.store;
+ store.db.prepare('INSERT INTO accounts VALUES (?,?,?,?,?)').run('alice','Alice','unused',0,Date.now());
+ const owner=await mcp(t,f,'owner'),alice=await mcp(t,f,'alice');
+ const who=async client=>JSON.parse((await client.callTool({name:'who_am_i',arguments:{}})).content[0].text);
+ const first=await who(owner);assert.equal(first.account.id,'owner');assert.equal(first.usage.toolCalls,1);
+ assert.equal(first.usage.limit,null);assert.equal(first.usage.percentage,null);assert.equal(first.usage.timezone,'UTC');
+ assert.equal(first.devices.paired,1);assert.ok(first.usage.countedSince);assert.equal(JSON.stringify(first).includes('password'),false);
+ await owner.callTool({name:'ping',arguments:{device_id:'not-owned'}});
+ assert.equal((await who(owner)).usage.toolCalls,3,'failed calls and identity queries count once');
+ const other=await who(alice);assert.equal(other.account.id,'alice');assert.equal(other.devices.paired,0);assert.equal(other.usage.toolCalls,1);
+ const end=Date.UTC(2020,0,31,23,59,59),start=Date.UTC(2020,1,1);
+ store.recordToolCall('owner',end);store.recordToolCall('owner',end);store.recordToolCall('owner',start);
+ assert.equal(store.monthlyUsage('owner',end).toolCalls,2);assert.equal(store.monthlyUsage('owner',start).toolCalls,1);assert.equal(store.monthlyUsage('alice',start).toolCalls,0);
+ await f.server.close();f.server=await startServer(f.config);assert.equal(f.server.store.monthlyUsage('owner').toolCalls,3);
+});
+
+test('ping matches fresh nonces, cleans up timeouts and rechecks ownership and pause',async t=>{
+ const f=await fixture(t,{pingTimeoutMs:80}),ws=await device(f,{autoPong:false});
+ await assert.rejects(f.server.broker.ping({},'alice'),/Unknown device/);
+ ws.on('ping',()=>ws.pong('wrong-nonce'));await assert.rejects(f.server.broker.ping(),/timed out/);
+ const conn=f.server.broker.connections.get('p111');assert.equal(conn.probes.size,0);assert.equal(conn.ws.listenerCount('pong'),1);
+ ws.removeAllListeners('ping');ws.on('ping',data=>ws.pong(data));
+ const good=await f.server.broker.ping();assert.equal(good.pong,true);assert.ok(good.latency_ms>=0);assert.ok(good.timestamp);
+ ws.removeAllListeners('ping');ws.on('ping',data=>{f.server.store.db.prepare('UPDATE registry SET paused=1 WHERE id=?').run('p111');ws.pong(data);});
+ await assert.rejects(f.server.broker.ping(),/authorization changed/);await assert.rejects(f.server.broker.ping(),/暂停/);
+ f.server.store.db.prepare('UPDATE registry SET paused=0 WHERE id=?').run('p111');
+ ws.removeAllListeners('ping');ws.on('ping',()=>ws.close());await assert.rejects(f.server.broker.ping(),/disconnected/);assert.equal(conn.probes.size,0);
+});
+
+test('remote controls require ownership, capability and no pending calls',async t=>{
+ const f=await fixture(t,{callTimeoutMs:80});let calls=0;
+ await device(f,{message:m=>{if(m.type==='call')calls++;}});
+ const client=await mcp(t,f,'owner');
+ const legacy=await client.callTool({name:'shutdown',arguments:{}});assert.equal(legacy.isError,true);assert.match(legacy.content[0].text,/Update/);assert.equal(calls,0);
+ assert.equal((await client.callTool({name:'ping',arguments:{device_id:'p111',extra:true}})).isError,true);
+ assert.equal((await client.callTool({name:'shutdown',arguments:{device_id:'other'}})).isError,true);
+ const conn=f.server.broker.connections.get('p111');conn.canShutdown=true;
+ const pending=f.server.broker.call('test_tool',{});await assert.rejects(f.server.broker.call('shutdown',{}),/pending calls/);await pending;assert.equal(calls,1);
+});
+
+test('shutdown stops a supervised agent, persists its result and requires local restart',async t=>{
+ const f=await fixture(t),project=fileURLToPath(new URL('..',import.meta.url));
+ const config=path.join(f.directory,'agent-config.json');
+ fs.writeFileSync(config,JSON.stringify({serverUrl:f.origin,deviceId:'p111',deviceToken:f.token,runtimeDir:project,mcpEntry:fileURLToPath(new URL('fixture-mcp.mjs',import.meta.url)),workingDirectory:f.directory}));
+ fs.writeFileSync(path.join(f.directory,'launch.json'),JSON.stringify({agent:path.join(project,'agent/agent.mjs'),config}));
+ const children=[];
+ const start=()=>{const p=spawn(process.execPath,[path.join(project,'client/runner.mjs'),f.directory],{stdio:'ignore'});children.push(p);return p;};
+ t.after(async()=>{for(const p of children)if(p.exitCode===null&&p.signalCode===null){const done=once(p,'exit');p.kill('SIGTERM');await done;}});
+ const runner=start();await until(()=>f.server.broker.devices()[0].toolsAvailable);assert.equal(f.server.broker.devices()[0].remoteShutdownAvailable,true);
+ const client=await mcp(t,f,'owner'),exited=once(runner,'exit');
+ const result=await client.callTool({name:'shutdown',arguments:{device_id:'p111'}});assert.notEqual(result.isError,true);
+ const id=result._meta.desktopBridge.callId;await exited;
+ assert.ok(fs.existsSync(path.join(f.directory,'maintenance.flag')));assert.equal(f.server.store.call(id,'owner').status,'completed');
+ assert.equal(fs.existsSync(path.join(f.directory,'counter.txt')),false,'shutdown never reaches the local tool engine');
+ assert.equal(fs.existsSync(path.join(f.directory,'agent.lock')),false);assert.equal(fs.existsSync(path.join(f.directory,'runner-lock')),false);
+ assert.equal(JSON.parse(fs.readFileSync(config)).deviceToken,f.token);
+ const blocked=start();assert.equal((await once(blocked,'exit'))[0],0);assert.equal(f.server.broker.devices()[0].networkConnected,false);
+ fs.rmSync(path.join(f.directory,'maintenance.flag'));start();await until(()=>f.server.broker.devices()[0].toolsAvailable);
+ const recovered=await client.callTool({name:'get_call_result',arguments:{call_id:id}});assert.equal(JSON.parse(recovered.content[0].text).status,'completed');
+ f.server.broker.send(f.server.broker.connections.get('p111'),{type:'call',id,name:'shutdown',arguments:{}});await sleep(60);
+ assert.equal(fs.existsSync(path.join(f.directory,'maintenance.flag')),false,'duplicate shutdown ID returns the saved result without stopping again');
+ assert.equal(f.server.broker.devices()[0].networkConnected,true,'querying a saved shutdown never repeats it');
+});
+
+
+test('an agent refuses shutdown while an earlier call has an uncertain in-flight result',async t=>{
+ const f=await fixture(t,{callTimeoutMs:50}),project=fileURLToPath(new URL('..',import.meta.url));
+ const config=path.join(f.directory,'agent-config.json');
+ fs.writeFileSync(config,JSON.stringify({serverUrl:f.origin,deviceId:'p111',deviceToken:f.token,runtimeDir:project,mcpEntry:fileURLToPath(new URL('fixture-delayed-mcp.mjs',import.meta.url)),workingDirectory:f.directory}));
+ const child=spawn(process.execPath,[path.join(project,'agent/agent.mjs'),config],{stdio:'ignore'});
+ t.after(async()=>{if(child.exitCode===null){const done=once(child,'exit');child.kill('SIGTERM');await done;}});
+ await until(()=>f.server.broker.devices()[0].toolsAvailable);
+ const timed=await f.server.broker.call('increment',{});assert.equal(timed.isError,true);
+ const rejected=await f.server.broker.call('shutdown',{});assert.equal(rejected.isError,true);assert.match(rejected.content[0].text,/executing call/);
+ assert.equal(fs.existsSync(path.join(f.directory,'maintenance.flag')),false);
+ assert.equal(f.server.broker.connections.get('p111').stopRequested,false);
+ await until(()=>f.server.store.call(timed._meta.desktopBridge.callId,'owner').status==='completed');
+ assert.equal(f.server.broker.devices()[0].networkConnected,true);
 });

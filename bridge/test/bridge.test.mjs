@@ -111,7 +111,7 @@ test('real MCP client discovers and invokes device tools; disconnects never repl
   await client.connect(transport);
   t.after(()=>client.close());
   const tools=await client.listTools();
-  assert.deepEqual(tools.tools.map(t=>t.name),['list_devices','list_calls','get_call_result',...bundledCatalog.tools.map(t=>t.name),'echo_tool']);
+  assert.deepEqual(tools.tools.map(t=>t.name),['list_devices','list_calls','get_call_result','who_am_i','ping','shutdown',...bundledCatalog.tools.map(t=>t.name),'echo_tool']);
   assert.ok(tools.tools.find(t=>t.name==='echo_tool').inputSchema.properties.device_id);
   const good=await client.callTool({name:'echo_tool',arguments:{device_id:'p111',message:'hello'}});
   assert.equal(good.content[0].text,'hello');

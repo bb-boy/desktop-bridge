@@ -17,6 +17,7 @@ export function openStore(directory) {
     CREATE INDEX IF NOT EXISTS registry_owner ON registry(owner);
     CREATE TABLE IF NOT EXISTS pairings(hash TEXT PRIMARY KEY,userHash TEXT UNIQUE NOT NULL,device TEXT NOT NULL,name TEXT NOT NULL,platform TEXT NOT NULL,version TEXT NOT NULL,owner TEXT,status TEXT NOT NULL,expires INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS sessions(hash TEXT PRIMARY KEY,owner TEXT NOT NULL,csrf TEXT NOT NULL,expires INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS monthly_usage(owner TEXT NOT NULL,month TEXT NOT NULL,calls INTEGER NOT NULL,started INTEGER NOT NULL,PRIMARY KEY(owner,month));
     CREATE TABLE IF NOT EXISTS invitations(hash TEXT PRIMARY KEY,expires INTEGER NOT NULL);
   `);
   const columns=db.prepare('PRAGMA table_info(calls)').all().map(r=>r.name);
@@ -37,6 +38,15 @@ export function openStore(directory) {
     },
     account(username) {return db.prepare('SELECT * FROM accounts WHERE username=?').get(username);},
     accountById(id) {return db.prepare('SELECT id,username,admin FROM accounts WHERE id=?').get(id);},
+    recordToolCall(owner,now=Date.now()) {
+      const month=new Date(now).toISOString().slice(0,7);
+      db.prepare('INSERT INTO monthly_usage(owner,month,calls,started) VALUES (?,?,1,?) ON CONFLICT(owner,month) DO UPDATE SET calls=calls+1').run(owner,month,now);
+    },
+    monthlyUsage(owner,now=Date.now()) {
+      const month=new Date(now).toISOString().slice(0,7);
+      const row=db.prepare('SELECT calls,started FROM monthly_usage WHERE owner=? AND month=?').get(owner,month);
+      return {month,toolCalls:row?.calls??0,countedSince:row?new Date(row.started).toISOString():null};
+    },
     device, devices(owner) {return owner===undefined?db.prepare('SELECT * FROM registry WHERE revoked=0').all():db.prepare('SELECT * FROM registry WHERE owner=? AND revoked=0').all(owner);},
     getClient(id) {return parse(db.prepare('SELECT value FROM clients WHERE id=?').get(id));},
     putClient(client) {db.prepare('INSERT INTO clients VALUES (?,?,?)').run(client.client_id,JSON.stringify(client),Date.now());},
