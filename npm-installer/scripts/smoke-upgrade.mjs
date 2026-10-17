@@ -68,7 +68,7 @@ try{
   assert.equal(run(process.execPath,[cli,'--version']),'0.2.6');
   for(const [n,bytes] of frozen)assert.deepEqual(fs.readFileSync(path.join(data,n)),bytes,'npm replacement modified '+n);
   assert.ok(!fs.existsSync(path.join(data,'maintenance.flag')),'npm update unexpectedly stopped agent');
-  console.log('Offline npm v0.2.5 -> simulated v0.2.6 replacement passed; token, device ID, mode and journal unchanged.');
+  console.log('Offline npm v0.2.5 -> actual v0.2.6 package replacement passed; token, device ID, mode and journal unchanged.');
 }finally{
   fs.rmSync(tmp,{recursive:true,force:true,maxRetries:3,retryDelay:100});
 }
