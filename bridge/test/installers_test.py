@@ -110,6 +110,28 @@ class StandaloneTests(unittest.TestCase):
             self.assertNotEqual(p.returncode, 0)
             self.assertIn('manual or background', p.stderr)
 
+    @unittest.skipIf(os.name == 'nt', 'POSIX PTY required')
+    def test_interactive_mode_requires_number_after_blank_answer(self):
+        import pty
+        selector = self.source / 'assets/client/choose-install-mode.sh'
+        for platform in ('darwin', 'linux'):
+            with self.subTest(platform=platform):
+                master, slave = pty.openpty()
+                try:
+                    p = subprocess.Popen(['/bin/sh', str(selector), platform], stdin=slave,
+                                         stdout=subprocess.PIPE, stderr=slave, env=self.env)
+                    os.close(slave)
+                    slave = -1
+                    os.write(master, b'\\n2\\n')
+                    selected, _ = p.communicate(timeout=10)
+                    self.assertEqual(p.returncode, 0)
+                    self.assertEqual(selected.decode().strip(), 'background',
+                                     'blank Enter must not silently select manual')
+                finally:
+                    if slave >= 0:
+                        os.close(slave)
+                    os.close(master)
+
     @unittest.skipIf(os.name == 'nt', 'POSIX shell required')
     def test_corrupted_payload_never_executes(self):
         installer = self.linux_fixture()
