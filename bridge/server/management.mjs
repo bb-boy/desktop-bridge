@@ -1,6 +1,7 @@
 import { randomUUID, randomInt } from 'node:crypto';
 import { rateLimit } from 'express-rate-limit';
 import { opaque,hash,passwordHash,checkPassword,cookieValue } from './security.mjs';
+import { bridgeToolNames } from './broker.mjs';
 
 const codeHash=value=>hash(String(value??'').toUpperCase().replace(/[^A-Z0-9]/g,''));
 export function createSessions(config,store) {
@@ -96,7 +97,15 @@ export function installManagement(app,config,store,broker,loginLimiter,sessions=
     const record=store.db.prepare('SELECT revoked FROM registry WHERE id=?').get(id);
     res.set('Cache-Control','no-store').json({revoked:record?.revoked===1});
   });
-  app.get('/api/manage/devices',requireSession,(req,res)=>res.json({devices:broker.devices(req.session.owner)}));
+  app.get('/api/manage/devices',requireSession,(req,res)=>{
+    const devices=broker.devices(req.session.owner);
+    // "toolsAvailable" is a per-device readiness boolean, not a tool count.
+    // Include actual MCP catalog size, counting executable tools only when
+    // at least one owned device is healthy enough to run remote calls.
+    const readyDevices=devices.filter(d=>d.toolsAvailable).length;
+    const toolCount=readyDevices>0?bridgeToolNames.size+broker.tools(req.session.owner).length:0;
+    res.json({devices,readyDevices,toolCount});
+  });
   app.get('/api/manage/revoked-devices',requireSession,(req,res)=>{
     const devices=store.db.prepare(
       'SELECT id,name,platform,revokedAt FROM registry WHERE owner=? AND revoked=1 ORDER BY revokedAt DESC LIMIT 50'

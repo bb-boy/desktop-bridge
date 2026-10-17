@@ -1,0 +1,92 @@
+name: Desktop Bridge CI
+
+on:
+  pull_request:
+    paths:
+      - 'bridge/**'
+      - 'plugin/**'
+      - 'docs/**'
+      - '.github/workflows/desktop-bridge-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'bridge/**'
+      - 'plugin/**'
+      - 'docs/**'
+      - '.github/workflows/desktop-bridge-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-bridge-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test ${{ matrix.os }} / Node 24
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: Check out PR source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: bridge/package-lock.json
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install locked server dependencies
+        run: npm ci --prefix bridge
+
+      - name: JavaScript tests (serial to avoid process interference)
+        run: npm test --prefix bridge
+        env:
+          DESKTOP_BRIDGE_SUPPRESS_NOTIFICATIONS: '1'
+
+      - name: Native installer tests
+        run: python bridge/test/installers_test.py
+
+      - name: Build full installer set on macOS
+        if: runner.os == 'macOS'
+        run: python bridge/scripts/package-downloads.py --output release-output/downloads
+
+      - name: Upload unsigned test build (not a release)
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-bridge-0.2.6-ci-unsigned
+          path: release-output/downloads/
+          if-no-files-found: error
+          retention-days: 7
+
+  installer-smoke:
+    name: Installer choice / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - name: Check out PR source
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test native installers and explicit mode selection
+        run: python bridge/test/installers_test.py

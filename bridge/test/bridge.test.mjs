@@ -281,6 +281,21 @@ async function connectDevice(f,credentials,handlers={}) {
   return ws;
 }
 
+test('dashboard distinguishes ready devices from executable MCP tool count',async t=>{
+  const f=await fixture(t),account=await browser(f);
+  const initial=await(await account.request('/api/manage/devices')).json();
+  assert.equal(initial.devices.length,1);
+  assert.equal(initial.readyDevices,0);
+  assert.equal(initial.toolCount,0,'offline device must not count tools as executable');
+  const ws=await connectDevice(f,{deviceId:'p111',deviceToken:f.token});
+  t.after(()=>ws.terminate());
+  const connected=await(await account.request('/api/manage/devices')).json();
+  assert.equal(connected.readyDevices,1,'one ready device is not one tool');
+  assert.equal(6+bundledCatalog.tools.length,31,'standard Desktop Bridge catalog has 31 tools');
+  assert.equal(connected.toolCount,32,'the connected test device registers one additional test_tool');
+  assert.equal(connected.toolCount,6+f.server.broker.tools(account.account.id).length);
+});
+
 test('browser sessions enforce CSRF, one-time invitations, pairing ownership and account isolation',async t=>{
   const f=await fixture(t),a=await browser(f);
   const denied=await fetch(f.origin+'/api/invitations',{method:'POST',headers:{...a.headers,'x-csrf-token':'wrong'},body:'{}'});assert.equal(denied.status,403);

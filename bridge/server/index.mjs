@@ -41,14 +41,14 @@ export async function startServer(config,dependencies={}) {
   installManagement(app,config,store,broker,loginLimiter,sessions);
   installGoogle(app,config,store,sessions,loginLimiter,{fetch:dependencies.googleFetch});
   const auth=requireBearerAuth({verifier:provider,requiredScopes:['desktop'],expectedResource:new URL('/mcp',base),resourceMetadataUrl:new URL('/.well-known/oauth-protected-resource/mcp',base).href});
-  app.get('/healthz',(_req,res)=>res.json({status:'ok',version:'0.2.0'}));
+  app.get('/healthz',(_req,res)=>res.json({status:'ok',version:'0.2.6'}));
   app.get('/api/devices',auth,(req,res)=>res.json({devices:broker.devices(req.auth.extra.ownerId)}));
   app.use('/mcp',rateLimit({windowMs:60000,limit:240,standardHeaders:'draft-8',legacyHeaders:false}));
   app.all('/mcp',auth,async(req,res)=>{
     if(req.method!=='POST') {res.set('Allow','POST'); return res.status(405).json({error:'Use Streamable HTTP POST'});}
     if(req.get('origin') && req.get('origin')!==base.origin && !['https://chatgpt.com','https://chat.openai.com'].includes(req.get('origin'))) return res.status(403).json({error:'Origin not allowed'});
     const owner=req.auth.extra.ownerId;
-    const server=new Server({name:'personal-desktop-bridge',version:'0.2.0'},{capabilities:{tools:{}},instructions:'Use list_devices to identify available computers. The standard tool catalog is available before pairing; visibility does not mean a device is ready. Tools execute on the chosen computer. Check toolsAvailable separately from networkConnected. Use list_calls and get_call_result to recover results after interruptions. Never retry a side effect until its outcome is known.'});
+    const server=new Server({name:'personal-desktop-bridge',version:'0.2.6'},{capabilities:{tools:{}},instructions:'Use list_devices to identify available computers. The standard tool catalog is available before pairing; visibility does not mean a device is ready. Tools execute on the chosen computer. Check toolsAvailable separately from networkConnected. Use list_calls and get_call_result to recover results after interruptions. Never retry a side effect until its outcome is known.'});
     server.setRequestHandler(ListToolsRequestSchema,async()=>({tools:[{
       name:'list_devices',description:'List your configured computers and their current connection status. Use before operating on a computer.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}
     },{name:'list_calls',description:'List your last 100 task IDs and states. Use after a timeout or disconnect.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true}},{name:'get_call_result',description:'Retrieve a task status and saved result by call_id. Never repeats the operation.',inputSchema:{type:'object',properties:{call_id:{type:'string'}},required:['call_id'],additionalProperties:false},annotations:{readOnlyHint:true}},...remoteTools,...broker.tools(owner)]}));

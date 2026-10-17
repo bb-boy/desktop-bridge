@@ -167,11 +167,12 @@ code{font-size:.9em;background:#f3ecd5;padding:4px}
 .title-dot{color:#2c9c73}
 .downloads{display:flex}
 .downloads .button{padding:12px 19px;font-size:.85rem}
-.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin:0 0 34px}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;margin:0 0 34px}
 .stats article.nes-container{background:#fffef8;min-height:124px;padding:22px 24px}
 .stats article:nth-child(1){background:#fef1bf}
 .stats article:nth-child(2){background:#e5f4e3}
 .stats article:nth-child(3){background:#e7f0fb}
+.stats article:nth-child(4){background:#f1eafc}
 .stats span{font-weight:750;font-size:.89rem}
 .stats strong{display:block;font-size:2.6rem;font-weight:900;line-height:1.3;margin-top:10px}
 .tabs{display:flex;gap:12px;align-items:stretch;border:0;margin:0 0 31px;overflow-x:auto;padding:6px 5px 10px;scrollbar-width:thin}
@@ -215,6 +216,7 @@ dialog.nes-dialog{border:4px solid #22252a;background:#fffef8;color:var(--ink);w
 dialog::backdrop{background:#2226259c}
 dialog pre{background:#f5f2e2;border:3px solid #262a2d;padding:17px;overflow:auto;max-height:58vh;white-space:pre-wrap;overflow-wrap:anywhere;font-size:.78rem}
 @media(max-width:900px){
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
   .workspace{padding:36px 21px}
   .header-inner{padding-inline:21px}
   .login-intro,.login-form-panel{padding:30px}
