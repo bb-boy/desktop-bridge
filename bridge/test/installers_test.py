@@ -75,7 +75,7 @@ class StandaloneTests(unittest.TestCase):
 
     @unittest.skipUnless(sys.platform == 'darwin', 'Mac app staging test')
     def test_macos_app_runs_fixture_without_chmod_or_node(self):
-        root, scripts = downloads.stage_macos(self.source, self.root / 'stage', '0.2.2')
+        root, scripts = downloads.stage_macos(self.source, self.root / 'stage', '0.2.6')
         app = root / 'Applications/Desktop Bridge Setup.app/Contents'
         info = plistlib.loads((app / 'Info.plist').read_bytes())
         self.assertEqual(info['CFBundleExecutable'], 'DesktopBridgeSetup')
