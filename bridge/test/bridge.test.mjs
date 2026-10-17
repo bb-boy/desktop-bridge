@@ -191,6 +191,48 @@ test('actual agent persists duplicate-call protection across restarts',async t=>
   await stop();
 });
 
+test('unlinked online device loses its server hash and local Agent credentials',async t=>{
+  const f=await fixture(t),account=await browser(f);
+  const project=fileURLToPath(new URL('..',import.meta.url)),configPath=path.join(f.directory,'agent-config.json');
+  fs.writeFileSync(configPath,JSON.stringify({serverUrl:f.origin,deviceId:'p111',deviceToken:f.token,runtimeDir:project,mcpEntry:fileURLToPath(new URL('fixture-mcp.mjs',import.meta.url)),workingDirectory:f.directory}));
+  const child=spawn(process.execPath,[path.join(project,'agent/agent.mjs'),configPath],{stdio:'ignore'});
+  t.after(()=>{if(child.exitCode===null)child.kill('SIGTERM');});
+  await waitFor(()=>f.server.broker.devices()[0].toolsAvailable);
+  assert.equal((await account.request('/api/manage/devices/p111/unlink',{})).status,200);
+  const record=f.server.store.db.prepare('SELECT revoked,tokenHash,pendingHash FROM registry WHERE id=?').get('p111');
+  assert.equal(record.revoked,1);assert.equal(record.tokenHash,null);assert.equal(record.pendingHash,null);
+  await waitFor(()=>{
+    const local=JSON.parse(fs.readFileSync(configPath,'utf8'));
+    return !('deviceToken' in local)&&!('deviceId' in local)&&fs.existsSync(path.join(f.directory,'maintenance.flag'));
+  });
+  assert.equal((await(await fetch(f.origin+'/api/agent/revocation-status',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({deviceId:'p111'})})).json()).revoked,true);
+  const socket=new WebSocket(f.origin.replace('http:','ws:')+'/agent',{headers:{authorization:'Bearer '+f.token}});
+  const forbidden=await new Promise(resolve=>{socket.on('unexpected-response',(_req,res)=>{res.resume();socket.terminate();resolve(res.statusCode);});socket.on('error',()=>{});});
+  assert.equal(forbidden,403);
+});
+
+test('offline revoked device clears saved credentials on next Agent launch',async t=>{
+  const f=await fixture(t),account=await browser(f);
+  const project=fileURLToPath(new URL('..',import.meta.url)),configPath=path.join(f.directory,'agent-config.json');
+  fs.writeFileSync(configPath,JSON.stringify({serverUrl:f.origin,deviceId:'p111',deviceToken:f.token,runtimeDir:project,mcpEntry:fileURLToPath(new URL('fixture-mcp.mjs',import.meta.url)),workingDirectory:f.directory}));
+  assert.equal((await account.request('/api/manage/devices/p111/unlink',{})).status,200);
+  const child=spawn(process.execPath,[path.join(project,'agent/agent.mjs'),configPath],{stdio:'ignore'});
+  t.after(()=>{if(child.exitCode===null)child.kill('SIGTERM');});
+  const [exitCode]=await once(child,'exit');
+  assert.equal(exitCode,78);
+  const local=JSON.parse(fs.readFileSync(configPath,'utf8'));
+  assert.equal(local.deviceToken,undefined);assert.equal(local.deviceId,undefined);
+  assert.equal(fs.existsSync(path.join(f.directory,'maintenance.flag')),true);
+});
+
+test('a paused device is not treated as revoked, preserving its local Token',async t=>{
+  const f=await fixture(t),account=await browser(f);
+  assert.equal((await account.request('/api/manage/devices/p111/pause',{})).status,200);
+  const response=await fetch(f.origin+'/api/agent/revocation-status',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({deviceId:'p111'})});
+  assert.equal(response.status,200);assert.deepEqual(await response.json(),{revoked:false});
+  assert.equal((await fetch(f.origin+'/api/agent/revocation-status',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({deviceId:{not:'valid'}}})).status,400);
+});
+
 async function browser(f,username='owner',password=f.password) {
   const session=await fetch(f.origin+'/api/session'),initial=await session.json();
   const cookie=session.headers.getSetCookie()[0].split(';')[0];
