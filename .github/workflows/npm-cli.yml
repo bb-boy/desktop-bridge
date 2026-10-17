@@ -46,3 +46,6 @@ jobs:
       - name: Build real npm package without publishing
         run: npm pack --pack-destination .
         working-directory: npm-installer
+      - name: Smoke test packed CLI
+        run: node scripts/smoke-tarball.mjs
+        working-directory: npm-installer
