@@ -20,7 +20,16 @@
       </a>
       <span class="version">v0.2.6</span>
       <a class="header-link header-action header-guide" href="/start.html">新手指引</a>
-      <div class="account"><span id="account-name" aria-label="当前登录账号"></span><button id="logout" class="secondary nes-btn" type="button" hidden>退出登录</button></div>
+      <div class="account" id="account-menu" hidden>
+        <button id="account-trigger" class="account-avatar" type="button" aria-label="查看当前账号" aria-haspopup="true" aria-controls="account-popover" aria-expanded="false"><span id="account-initials" aria-hidden="true"></span></button>
+        <section id="account-popover" class="account-popover" aria-label="账号信息" hidden>
+          <div class="account-summary">
+            <span id="account-email" class="account-email"></span>
+            <span id="account-provider" class="account-provider"></span>
+          </div>
+          <button id="logout" class="account-signout" type="button">Sign out</button>
+        </section>
+      </div>
     </div>
   </header>
     <svg class="os-icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">

@@ -111,10 +111,20 @@ test('onboarding and device management links use strong, contrasting pixel butto
   assert.match(css,/\.header-action \{[^}]*border:4px solid var\(--ink\);[^}]*box-shadow:6px 6px 0/);
   assert.match(css,/button#tab-devices.active/);
 });
-test('long account names are highlighted and ellipsized, preserving full tooltip text',()=>{
-  assert.match(css,/\.account #account-name \{[^}]*text-overflow:ellipsis/);
-  assert.match(css,/\.account #account-name \{[^}]*border:2px solid var\(--ink\)/);
-  assert.match(js,/\$\('#account-name'\).title=account\?\.username\?\?''/);
+test('account appears as a circular email-initial avatar with details hidden until opened',()=>{
+  assert.doesNotMatch(html,/id="account-name"/);
+  assert.match(html,/id="account-trigger"[^>]*aria-controls="account-popover"[^>]*aria-expanded="false"/);
+  assert.match(html,/id="account-popover"[^>]*hidden/);
+  assert.match(html,/id="account-email"/);
+  assert.match(html,/id="account-provider"/);
+  assert.match(html,/id="logout"[^>]*>Sign out<\/button>/);
+  assert.match(css,/account-trigger\.account-avatar \{[\s\S]*?border-radius:50%/);
+  assert.match(js,/Array\.from\(shown\.split\('@'\)\[0\]\)\.slice\(0,2\)/);
+  assert.match(js,/setAccountProfile\(g\)/);
+  assert.match(js,/Signed in with Google/);
+  assert.match(js,/addEventListener\('pointerdown'/);
+  assert.match(js,/event\.key==='Escape'/);
+  assert.match(js,/await api\('\/api\/logout',\{\}\)/);
 });
 test('new-user guide keeps both native and npm installation methods',()=>{
   const guide=fs.readFileSync(path.join(publicDir,'start.html'),'utf8');
@@ -144,4 +154,13 @@ test('device refresh uses an accessible icon instead of visible button text',()=
   assert.match(html,/<button id="refresh"[^>]*aria-label="刷新状态"[^>]*title="刷新状态"/);
   assert.match(html,/class="refresh-icon"[^>]*aria-hidden="true"/);
   assert.doesNotMatch(html,/<button id="refresh"[^>]*>刷新状态<\/button>/);
+});
+
+test('compact cards show pulsing green when connected and still red when disconnected',()=>{
+  assert.match(js,/d\.networkConnected\?'online':'offline'/);
+  assert.match(js,/device-status-dot/);
+  assert.match(js,/dot\.setAttribute\('aria-hidden','true'\)/);
+  assert.match(css,/\.device-status-dot\.online \{background:#278b4f;animation:device-online-pulse/);
+  assert.match(css,/\.device-status-dot\.offline \{background:#c94445;animation:none/);
+  assert.match(css,/@media\(prefers-reduced-motion:reduce\) \{[\s\S]*?\.device-status-dot\.online \{animation:none\}/);
 });

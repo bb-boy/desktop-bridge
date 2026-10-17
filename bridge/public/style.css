@@ -364,7 +364,7 @@ button#tab-devices.active,button#tab-devices.active:hover {background:#cae9d9;bo
 .device-open:hover {background:#e8f3ed}
 .device-open:focus-visible {outline:3px dashed #d98a27;outline-offset:-9px}
 .device-name {display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.95rem;font-weight:850}
-.os-icon {width:39px;height:39px;flex-shrink:0;color:#282c2f}
+.os-icon {width:54px;height:54px;flex-shrink:0;color:#282c2f}
 .os-icon.windows {color:#267eb4}
 .os-icon.macos {color:#60676e}
 .os-icon.linux {color:#2b3035}
@@ -384,7 +384,53 @@ button#tab-devices.active,button#tab-devices.active:hover {background:#cae9d9;bo
 @media(max-width:560px) {
   .device-grid {grid-template-columns:1fr;gap:12px}
   .device-open {min-height:96px;flex-direction:row;justify-content:flex-start;gap:20px;padding:12px 19px}
-  .device-open .os-icon {width:36px;height:36px}
+  .device-open .os-icon {width:45px;height:45px}
   .device-name {text-align:left}
   .device-detail-content dl {grid-template-columns:90px minmax(0,1fr);gap:11px 9px}
+}
+
+/* Profile dropdown: keep identifying details private until opened. */
+.header-inner>.account {position:relative;margin-left:0;flex:0 0 auto}
+.account #account-trigger.account-avatar {
+  display:grid;place-items:center;flex-shrink:0;width:49px;height:49px;min-width:49px;
+  min-height:49px;padding:0;border:3px solid var(--ink);border-radius:50%;
+  color:#cdeaff;background:#1b4268;box-shadow:3px 3px 0 #aeb2bf;
+  font-size:1.03rem;font-weight:900;letter-spacing:.02em;line-height:1;
+}
+.account #account-trigger.account-avatar:hover {background:#275981;transform:translate(1px,1px);box-shadow:2px 2px 0 #aeb2bf}
+.account #account-trigger.account-avatar[aria-expanded="true"] {background:#275981;box-shadow:1px 1px 0 #aeb2bf}
+.account #account-trigger.account-avatar:focus-visible {outline:3px dashed #d98a27;outline-offset:5px}
+.account-popover {
+  position:absolute;right:0;top:calc(100% + 15px);z-index:60;
+  width:min(340px,calc(100vw - 30px));padding:0;
+  background:#fffef8;border:4px solid var(--ink);box-shadow:7px 7px 0 #aeb2bf;
+}
+.account-summary {display:flex;flex-direction:column;gap:7px;padding:19px 17px 17px;border-bottom:3px solid #d7d9d4}
+.account-email {font-size:.97rem;font-weight:800;line-height:1.45;color:#24282b;overflow-wrap:anywhere;word-break:break-word}
+.account-provider {font-size:.78rem;color:#676e70;line-height:1.5}
+.account button.account-signout {
+  display:block;width:100%;min-height:44px;margin:0;padding:12px 17px;border:0;
+  background:transparent;color:#24282b;text-align:left;font-size:.88rem;
+  font-weight:800;cursor:pointer;
+}
+.account button.account-signout:hover,.account button.account-signout:focus-visible {background:#eaf1ea}
+@media(max-width:650px) {
+  .account #account-trigger.account-avatar {width:42px;height:42px;min-width:42px;min-height:42px;font-size:.91rem}
+  .account-popover {top:calc(100% + 13px)}
+}
+
+/* Connection indicator: online = gently animated green, offline = still red. */
+.device-open {position:relative}
+.device-status-dot {
+  position:absolute;right:13px;top:13px;width:12px;height:12px;
+  border:2px solid #fffef8;border-radius:50%;
+}
+.device-status-dot.online {background:#278b4f;animation:device-online-pulse 1.6s ease-in-out infinite}
+.device-status-dot.offline {background:#c94445;animation:none}
+@keyframes device-online-pulse {
+  0%,100% {transform:scale(1);box-shadow:0 0 0 0 #278b4f33}
+  50% {transform:scale(1.18);box-shadow:0 0 0 5px #278b4f00}
+}
+@media(prefers-reduced-motion:reduce) {
+  .device-status-dot.online {animation:none}
 }

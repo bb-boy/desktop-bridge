@@ -14,10 +14,42 @@ async function api(url,data) {
 async function action(fn){try{message('');await fn();}catch(e){message(e.message);}}
 function button(text,fn,cls='secondary'){const b=el('button',text,cls);b.type='button';b.classList.add('nes-btn');if(cls==='danger')b.classList.add('is-error');if(cls==='success')b.classList.add('is-success');b.onclick=()=>action(async()=>{b.disabled=true;try{await fn();}finally{b.disabled=false;}});return b;}
 function empty(parent,text){parent.replaceChildren(el('p',text,'empty'));}
-async function boot(){const [s,g]=await Promise.all([api('/api/session'),api('/api/auth/google').catch(()=>({enabled:false}))]);csrf=s.csrf;account=s.account;googleEnabled=g.enabled===true;const googleButton=$('#google-login');googleButton.hidden=false;googleButton.disabled=!googleEnabled;googleButton.querySelector('.google-text').textContent='使用 Google 登录';const googleAvailability=$('#google-availability');googleAvailability.hidden=googleEnabled;if(googleEnabled)googleButton.removeAttribute('aria-describedby');else googleButton.setAttribute('aria-describedby','google-availability');$('#login-panel').hidden=!!account;$('#app-panel').hidden=!account;$('#logout').hidden=!account;$('#account-name').textContent=account?.username??'';$('#account-name').title=account?.username??'';$('#invite-panel').hidden=!account?.admin;if(account){history.replaceState(null,'',query.has('pair')?'/?pair='+encodeURIComponent(query.get('pair')):'/');await refresh();if(query.has('pair')){$('#pair-code').value=query.get('pair');await previewPair();}}else if(invitation){$('#login-form').hidden=true;$('#signup-form').hidden=false;$('#toggle-login').hidden=false;}}
+async function boot(){const [s,g]=await Promise.all([api('/api/session'),api('/api/auth/google').catch(()=>({enabled:false}))]);csrf=s.csrf;account=s.account;googleEnabled=g.enabled===true;const googleButton=$('#google-login');googleButton.hidden=false;googleButton.disabled=!googleEnabled;googleButton.querySelector('.google-text').textContent='使用 Google 登录';const googleAvailability=$('#google-availability');googleAvailability.hidden=googleEnabled;if(googleEnabled)googleButton.removeAttribute('aria-describedby');else googleButton.setAttribute('aria-describedby','google-availability');$('#login-panel').hidden=!!account;$('#app-panel').hidden=!account;$('#account-menu').hidden=!account;setAccountProfile();closeAccountMenu();$('#invite-panel').hidden=!account?.admin;if(account){history.replaceState(null,'',query.has('pair')?'/?pair='+encodeURIComponent(query.get('pair')):'/');await refresh();if(query.has('pair')){$('#pair-code').value=query.get('pair');await previewPair();}}else if(invitation){$('#login-form').hidden=true;$('#signup-form').hidden=false;$('#toggle-login').hidden=false;}}
 $('#toggle-login').onclick=()=>{$('#login-form').hidden=!$('#login-form').hidden;$('#signup-form').hidden=!$('#signup-form').hidden;};
 $('#login-form').onsubmit=e=>{e.preventDefault();action(async()=>{const s=await api('/api/login',Object.fromEntries(new FormData(e.target)));csrf=s.csrf;account=s.account;e.target.reset();await boot();});};
 $('#signup-form').onsubmit=e=>{e.preventDefault();action(async()=>{const s=await api('/api/signup',{...Object.fromEntries(new FormData(e.target)),invitation});csrf=s.csrf;account=s.account;e.target.reset();await boot();});};
+function setAccountProfile(google=null){
+ const linked=google?.linked===true;
+ const email=linked&&typeof google.identity?.email==='string'&&google.identity.email.trim()
+  ?google.identity.email.trim():null;
+ const shown=email??account?.username??'';
+ const label=Array.from(shown.split('@')[0]).slice(0,2).join('').toUpperCase()||'--';
+ $('#account-initials').textContent=label;
+ $('#account-email').textContent=shown;
+ $('#account-provider').textContent=email?'Signed in with Google':'账号密码登录';
+ $('#account-trigger').setAttribute('aria-label','账号：'+shown+'，查看账号信息');
+}
+function closeAccountMenu(restoreFocus=false){
+ const trigger=$('#account-trigger');
+ $('#account-popover').hidden=true;
+ trigger.setAttribute('aria-expanded','false');
+ if(restoreFocus&&account&&!$('#account-menu').hidden)trigger.focus();
+}
+$('#account-trigger').onclick=()=>{
+ if(!account)return;
+ const opening=$('#account-popover').hidden;
+ if(opening){
+  $('#account-popover').hidden=false;
+  $('#account-trigger').setAttribute('aria-expanded','true');
+ }else closeAccountMenu();
+};
+document.addEventListener('pointerdown',event=>{
+ if(!$('#account-menu').contains(event.target))closeAccountMenu();
+});
+document.addEventListener('keydown',event=>{
+ if(event.key==='Escape'&&!$('#account-popover').hidden)closeAccountMenu(true);
+});
+
 $('#logout').onclick=()=>action(async()=>{await api('/api/logout',{});account=null;await boot();});
 $('#refresh').onclick=()=>action(refresh);
 const tabs=[...document.querySelectorAll('[data-tab]')];
@@ -62,8 +94,10 @@ function renderDevices(devices){
   const open=el('button',undefined,'device-open');
   open.type='button';
   open.title=d.name+' · '+(healthLabels[d.health]??d.health);
-  open.setAttribute('aria-label','查看 '+d.name+' 的设备详情');
-  open.append(osIcon(d.platform),el('span',d.name,'device-name'));
+  open.setAttribute('aria-label','查看 '+d.name+' 的设备详情，'+(d.networkConnected?'在线':'离线'));
+  const dot=el('span',undefined,'device-status-dot '+(d.networkConnected?'online':'offline'));
+  dot.setAttribute('aria-hidden','true');
+  open.append(osIcon(d.platform),el('span',d.name,'device-name'),dot);
   open.onclick=()=>showDeviceDetails(d);
   card.append(open);parent.append(card);
  }
@@ -111,4 +145,4 @@ async function googleStart(link=false){const r=await api(link?'/auth/google/link
 $('#google-login').onclick=()=>action(()=>googleStart());
 $('#google-link').onclick=()=>action(()=>googleStart(true));
 $('#google-unlink').onclick=()=>action(async()=>{if(confirm('解除 Google 绑定？之后可继续用已有密码登录。')){const r=await api('/api/manage/google/unlink',{});if(r.csrf)csrf=r.csrf;await renderGoogle();}});
-async function renderGoogle(){const g=await api('/api/manage/google');$('#google-panel').hidden=!g.enabled;$('#google-status').textContent=g.linked?'已绑定：'+(g.identity?.email??'Google 账号'):'未绑定';$('#google-link').hidden=!!g.linked;$('#google-unlink').hidden=!g.linked;$('#google-unlink').disabled=!g.canUnlink;}
+async function renderGoogle(){const g=await api('/api/manage/google');$('#google-panel').hidden=!g.enabled;$('#google-status').textContent=g.linked?'已绑定：'+(g.identity?.email??'Google 账号'):'未绑定';$('#google-link').hidden=!!g.linked;$('#google-unlink').hidden=!g.linked;$('#google-unlink').disabled=!g.canUnlink;setAccountProfile(g);}
