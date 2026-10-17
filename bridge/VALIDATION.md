@@ -60,3 +60,12 @@ Retention is bounded: cloud task/results expire after 30 days; local journal out
 - 用户在 ChatGPT 上传 0.2.2 ZIP 时收到「无法添加插件」。排查发现该包缺少导入要求的 `author.name` 和 `interface.developerName`；通用 portable schema 允许缺省，不等于 ChatGPT 导入要求已通过。
 - 从同一身份 `desktop-bridge-p111` 的现有私人插件读取原作者名称，补齐这两个字段；不加入作者邮箱、密钥或设备凭据。版本更新为 0.2.3，并在打包前检查这两个必填项。新增三项元数据回归检查。
 - 通过 Plugin Creator 的实际账户更新接口成功导入 0.2.3，更新原有私人插件，保留同一插件身份及 OAuth MCP 地址。导入成功不等于 Google 登录或本地设备安装成功。
+
+## NES.css 像素界面改造（2026-10-17）
+
+- 用户界面改用仓库内打包的 NES.css 2.3.0 (MIT)，不从 CDN 加载脚本或字体。登录、统计、设备、配对、任务结果与授权界面复用原功能与 API。
+- 删去多余英文装饰及简介小字，保留中文功能标签。
+- Google OAuth 后端保持不变；生产接口 `/api/auth/google` 已启用，独立本地测试环境未配置，因此登录页以禁用状态展示 Google 登录按钮，不应误导为可在本地完成 Google 认证。
+- Chrome Headless 使用模拟设备测试桌面 1366px 与手机 390px 布局、横向溢出及标签键盘导航；另单独验证本地真实服务器提供的登录页上 Google 禁用提示。真实 Google 交互、Safari/Edge 视觉回归仍需人工验收。
+
+- 基于包含 0.2.3 新安装器与插件元数据的最新 `main` 分支重放并回归：Node 测试 **91 项，90 通过、1 跳过、0 失败**。Chrome 模拟桌面/手机的设备页面和本地登录页也通过无横向溢出检查；仅跳过的仍是 Windows 原生专项测试。

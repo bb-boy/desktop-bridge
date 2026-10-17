@@ -42,3 +42,25 @@ test('plain text render operations keep device names and task details out of HTM
   assert.match(js,/result-content'\)\.textContent/);
   assert.doesNotMatch(js,/innerHTML\s*=/);
 });
+
+
+test('NES.css 2.3.0 assets are bundled locally, with actual pixel components',()=>{
+  const vendor=path.join(publicDir,'vendor/nes.css');
+  const nes=fs.readFileSync(path.join(vendor,'nes.min.css'),'utf8');
+  const license=fs.readFileSync(path.join(vendor,'LICENSE'),'utf8');
+  assert.match(html,/href="\/vendor\/nes\.css\/nes\.min\.css"/);
+  assert.match(html,/class="[^"]*nes-container/);
+  assert.match(html,/class="[^"]*nes-btn/);
+  assert.match(html,/class="nes-input"/);
+  assert.match(nes,/nes-btn/);
+  assert.match(license,/MIT License/);
+  assert.doesNotMatch(html,/https?:\/\/(?:unpkg|cdn)\./i);
+});
+
+test('Google login stays discoverable but unavailable if OAuth is not configured',()=>{
+  assert.match(html,/<button id="google-login"[^>]*hidden>/);
+  assert.match(js,/googleButton\.hidden=false/);
+  assert.match(js,/googleButton\.disabled=!googleEnabled/);
+  assert.match(js,/googleEnabled\?'使用 Google 登录'/);
+  assert.match(js,/auth\/google\/start/);
+});

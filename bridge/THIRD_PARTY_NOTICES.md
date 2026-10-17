@@ -27,3 +27,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 The bridge also depends on the official MCP TypeScript SDK, Express, express-rate-limit, and ws. Their licenses are included in their installed npm packages and remain applicable. `package-lock.json` pins the relay dependencies.
+
+## NES.css
+
+The administration page uses [NES.css](https://github.com/nostalgic-css/NES.css), version 2.3.0, for 8-bit UI components. NES.css is distributed under the MIT License. The unmodified stylesheet and complete license text are stored at `public/vendor/nes.css/nes.min.css` and `public/vendor/nes.css/LICENSE`; there is no third-party CSS or font request at runtime.
