@@ -19,7 +19,7 @@ try{
   assert.match(help.stdout,/Desktop Bridge/);
   const version=spawnSync(process.execPath,[entry,'--version'],{encoding:'utf8'});
   assert.equal(version.status,0,version.stderr);
-  assert.match(version.stdout,/^0\.2\.5/);
+  assert.match(version.stdout,/^0\.2\.6/);
   const invalid=spawnSync(process.execPath,[entry,'not-a-command'],{encoding:'utf8'});
   assert.equal(invalid.status,1,'Invalid command must fail before side effects');
 
