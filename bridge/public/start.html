@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f7f8f5">
   <meta name="description" content="在 ChatGPT 手动添加 Desktop Bridge MCP 服务器，通过 OAuth 授权并绑定自己的电脑。">
-  <title>Desktop Bridge · 开始使用</title>
+  <title>Desktop Bridge · 新手指引</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body class="dashboard getting-started">
@@ -13,10 +13,10 @@
   <header class="site-header"><div class="header-inner">
     <a class="brand" href="/start.html"><span class="brand-mark" aria-hidden="true">DB</span><span class="brand-name">Desktop <strong>Bridge</strong></span></a>
     <span class="version">v0.2.6</span>
-    <a class="header-link" href="/">设备管理</a>
+    <a class="header-link header-action header-device" href="/">设备管理</a>
   </div></header>
   <main class="workspace start-workspace" id="main">
-    <div class="intro"><h1>在 GPT 中使用你的电脑<span class="title-dot">.</span></h1></div>
+    <div class="intro"><h1>新手指引<span class="title-dot">.</span></h1></div>
     <ol class="setup-steps">
       <li class="setup-step">
         <span class="step-number" aria-hidden="true">1</span>
@@ -30,11 +30,36 @@
         <span class="step-number" aria-hidden="true">2</span>
         <div><h2>登录并授权</h2><p>创建连接后，按提示使用自己的 Google 账号登录并确认授权。首次登录会创建独立账号。授权完成后，继续安装电脑端客户端并确认设备绑定。</p></div>
       </li>
-      <li class="setup-step">
+      <li class="setup-step" id="installation-options">
         <span class="step-number" aria-hidden="true">3</span>
-        <div><h2>在要控制的电脑上安装</h2>
-          <p>下载对应系统的安装器并打开。它会自动准备 Node.js 和 Desktop Commander，再打开配对网页。用第 2 步的同一个账号登录，在 10 分钟内核对电脑名称并确认绑定。保持安装窗口打开，直到显示安装和配对完成。</p>
-          <div class="installer-links"><a class="button" href="/downloads/DesktopBridge-Windows.cmd" download>Windows 安装器</a><a class="button secondary" href="/downloads/DesktopBridge-macOS.pkg" download>Mac 安装器</a><a class="button secondary" href="/downloads/DesktopBridge-Linux.sh" download>Linux 安装器</a></div>
+        <div><h2>安装电脑端（两种方式任选一种）</h2>
+          <p>以下两种方式都能安装并配对 Desktop Bridge。安装时使用第 2 步的同一个账号，在配对网页核对电脑名称并确认绑定。</p>
+          <div class="install-methods" aria-label="选择电脑端安装方式">
+            <section class="install-method" aria-labelledby="native-title">
+              <h3 id="native-title">方式一：图形安装器</h3>
+              <p>不需要预先安装 Node.js。下载对应系统的安装器，按提示选择手动或后台运行，保持安装窗口打开直到完成。</p>
+              <div class="installer-links"><a class="button" href="/downloads/DesktopBridge-Windows.cmd" download>Windows 安装器</a><a class="button secondary" href="/downloads/DesktopBridge-macOS.pkg" download>Mac 安装器</a><a class="button secondary" href="/downloads/DesktopBridge-Linux.sh" download>Linux 安装器</a></div>
+            </section>
+            <section class="install-method" aria-labelledby="npm-title">
+              <h3 id="npm-title">方式二：npm 命令行</h3>
+              <p>适合已经安装 <strong>Node.js 24 和 npm</strong> 的用户；当前 npm 公开版本为 <strong>0.2.7</strong>。在电脑终端依次执行：</p>
+              <pre class="install-command"><code>npm install -g @justlovepl/desktop-bridge
+desktop-bridge setup
+desktop-bridge status</code></pre>
+              <p><code>npm install</code> 仅安装 CLI；<code>setup</code> 才会安装客户端并引导配对。默认后台模式。首次安装要使用手动模式，可将第二条替换为 <code>desktop-bridge setup --mode manual</code>。</p>
+              <details class="npm-commands"><summary>更多命令：启动、停止、切换模式与升级</summary>
+                <pre class="install-command"><code>desktop-bridge start
+desktop-bridge stop
+desktop-bridge restart
+desktop-bridge mode manual
+desktop-bridge mode background
+desktop-bridge update
+desktop-bridge pair</code></pre>
+                <p><code>update</code> 更新 CLI 与已安装的 Agent，保留配对和模式；<code>pair</code> 需要本人再次确认设备绑定。</p>
+              </details>
+            </section>
+          </div>
+          <p class="method-note">两种方式只选一种，无需重复安装。配对码有效期为 10 分钟，完成网页确认后再关闭安装窗口。</p>
         </div>
       </li>
       <li class="setup-step">
@@ -43,12 +68,13 @@
       </li>
     </ol>
     <details class="setup-help"><summary>安装说明与常见问题</summary>
-      <section><h2>为什么授权后还要安装电脑端客户端？</h2><p>MCP 连接负责让 ChatGPT 访问服务，电脑端客户端负责接收并执行任务。首次需要本人下载并打开对应电脑的安装器，再确认设备绑定。</p></section>
+      <section><h2>为什么授权后还要安装电脑端客户端？</h2><p>MCP 连接负责让 ChatGPT 访问服务，电脑端客户端负责接收并执行任务。首次可以使用图形安装器或 npm，随后由本人确认设备绑定。</p></section>
       <section><h2>每个人都要用自己的账号吗？</h2><p>是。每个人都在自己的 ChatGPT 中添加 MCP 服务器，并在 OAuth 授权和电脑配对时使用自己的同一个 Google 账号。</p></section>
       <section><h2>系统阻止安装怎么办？</h2><p>当前是测试分发版。Windows 安装器未签名，Mac 安装包未签名、公证，系统可能阻止打开。请保留完整提示并联系提供此页面的人；安装器不会自动关闭系统防护。</p></section>
+      <section><h2>npm 命令找不到怎么办？</h2><p>先确认 Node.js 主版本是 24，系统有 npm，并且已经重新打开终端。执行 <code>node -v</code> 和 <code>npm -v</code> 检查环境。</p></section>
       <section><h2>Linux 可以直接双击吗？</h2><p>Linux 文件管理器的行为不同。桌面支持时选择「在终端中运行」；否则需要通过 shell 运行下载的自解包脚本。</p></section>
       <section><h2>GPT 看不到我的电脑</h2><p>先确认安装窗口已显示完成，配对网页与 GPT 登录的是同一个账号，电脑保持联网，再让 GPT 检查设备。如果已绑定但离线，启动原有客户端，无需反复安装。</p></section>
-      <section><h2>配对码过期怎么办？</h2><p>配对码有效期为 10 分钟。尚未绑定时，重新运行安装器生成新码，再确认绑定。已完成绑定后，请在设备管理页检查设备状态，旧配对码不能用于检查连接是否正常。</p></section>
+      <section><h2>配对码过期怎么办？</h2><p>配对码有效期为 10 分钟。尚未绑定时，重新运行图形安装器的配对流程，或使用 <code>desktop-bridge pair</code> 重新配对。已完成绑定后，请在设备管理页检查设备状态，旧配对码不能用于检查连接是否正常。</p></section>
       <section><h2>找不到「添加自定义 MCP 服务器」怎么办？</h2><p>请先确认当前账号或工作空间允许创建自定义 MCP 连接。若由组织管理，请联系管理员检查相关权限。</p></section>
     </details>
   </main>

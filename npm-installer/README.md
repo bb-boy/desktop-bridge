@@ -2,9 +2,9 @@
 
 Independent npm distribution for the Desktop Bridge **local device client**. It does not publish the upstream Desktop Commander package or cloud relay.
 
-Version 0.2.7 adds Windows Task Scheduler background management. npm remains the installation, upgrade and control entry point. **0.2.7 is currently a release candidate; public npm publication is pending the publisher account's one-time-password verification.**
+Version 0.2.7 adds Windows Task Scheduler background management. npm remains the installation, upgrade and control entry point. **Version 0.2.7 is now publicly available on npm.**
 
-Requires Node.js 24 and npm. Native installers for computers without Node remain available at <https://mcp.ilovestudy.de/start.html>.
+Requires Node.js 24 and npm. Native installers for computers without Node remain available at <https://mcp.ilovestudy.de/start.html>. The public 新手指引 page keeps the native-installer and npm routes side by side; users only need one.
 
 ```sh
 npm install -g @justlovepl/desktop-bridge

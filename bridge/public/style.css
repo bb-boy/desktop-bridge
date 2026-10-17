@@ -305,3 +305,49 @@ body:not(.dashboard) .card{margin:24px auto}
  .setup-step .button{width:100%}
  .setup-help{padding:19px 14px}
 }
+
+
+/* Raised, accessible high-contrast navigation inspired by the installer buttons. */
+.header-action {
+  display:inline-flex;align-items:center;justify-content:center;min-height:46px;
+  padding:9px 17px;border:4px solid var(--ink);
+  box-shadow:6px 6px 0 #adb2c0;background:#ffe8a9;color:var(--ink);
+  text-decoration:none;font-weight:900;line-height:1.2;
+}
+.header-action:hover {background:#ffeebd;color:var(--ink);transform:translate(2px,2px);box-shadow:4px 4px 0 #adb2c0}
+.header-action.header-device {background:#cce9d7}
+.header-action.header-device:hover {background:#b8e0c9}
+.header-action:focus-visible {outline:3px dashed #cf791e;outline-offset:6px}
+.account #account-name {
+  display:block;min-width:0;max-width:158px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;
+  background:#dceee8;color:#1d3931;border:2px solid var(--ink);
+  box-shadow:3px 3px 0 #adb2c0;padding:5px 9px;
+  font-size:.82rem;font-weight:800;line-height:1.5;
+}
+.account #account-name:empty {display:none}
+button#tab-devices {background:#e4f2e8;border-width:4px;box-shadow:5px 5px 0 #adb2c0}
+button#tab-devices.active,button#tab-devices.active:hover {background:#cae9d9;box-shadow:2px 2px 0 var(--ink)}
+.install-methods {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;margin:20px 0 15px}
+.install-method {min-width:0;padding:19px 18px 22px;border:4px solid var(--ink);background:#f9fbf4;box-shadow:5px 5px 0 #adb2c0}
+.install-method:nth-child(2) {background:#eef5fb}
+.install-method h3 {font-size:1.07rem;margin:0 0 14px}
+.install-method p {font-size:.86rem;line-height:1.75}
+.install-method .installer-links {display:grid;grid-template-columns:1fr;gap:10px}
+.install-method .installer-links .button {justify-content:center}
+.install-command {max-width:100%;overflow-x:auto;white-space:pre;margin:15px 0;padding:14px 12px;border:3px solid var(--ink);background:#fffef8;font-size:.77rem;line-height:1.8}
+.install-command code {background:transparent;padding:0;font-size:inherit;overflow-wrap:normal;word-break:normal}
+.npm-commands {margin-top:15px}
+.npm-commands summary {cursor:pointer;font-weight:800;text-decoration:underline;text-underline-offset:3px}
+.setup-step .method-note {margin-top:24px;font-weight:700}
+@media(max-width:900px) {
+  .install-methods {grid-template-columns:1fr}
+}
+@media(max-width:650px) {
+  .header-inner {flex-wrap:wrap}
+  .header-action {min-height:38px;padding:8px 11px;border-width:3px;box-shadow:3px 3px 0 #adb2c0}
+  .header-inner>.account {margin-left:auto}
+  .account #account-name {max-width:94px;padding:4px 7px;font-size:.72rem}
+  .install-method {padding:17px 13px}
+  .install-command {font-size:.75rem}
+}

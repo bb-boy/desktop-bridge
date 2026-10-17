@@ -19,8 +19,8 @@
         <span class="brand-name">Desktop <strong>Bridge</strong></span>
       </a>
       <span class="version">v0.2.6</span>
-      <a class="header-link" href="/start.html">首次使用</a>
-      <div class="account"><span id="account-name"></span><button id="logout" class="secondary nes-btn" type="button" hidden>退出登录</button></div>
+      <a class="header-link header-action header-guide" href="/start.html">新手指引</a>
+      <div class="account"><span id="account-name" aria-label="当前登录账号"></span><button id="logout" class="secondary nes-btn" type="button" hidden>退出登录</button></div>
     </div>
   </header>
   <main class="workspace" id="main">
@@ -67,7 +67,7 @@
         <article class="nes-container"><span>等待结果</span><strong id="stat-waiting">—</strong></article>
       </div>
       <nav class="tabs pixel-tabs" aria-label="管理页面" role="tablist">
-        <button id="tab-devices" class="tab active" data-tab="devices" type="button" role="tab" aria-controls="devices-tab" aria-selected="true">设备</button>
+        <button id="tab-devices" class="tab active" data-tab="devices" type="button" role="tab" aria-controls="devices-tab" aria-selected="true">设备管理</button>
         <button id="tab-calls" class="tab" data-tab="calls" type="button" role="tab" aria-controls="calls-tab" aria-selected="false">任务与结果</button>
         <button id="tab-authorizations" class="tab" data-tab="authorizations" type="button" role="tab" aria-controls="authorizations-tab" aria-selected="false">授权与账号</button>
       </nav>
@@ -76,7 +76,7 @@
         <div id="devices" class="device-grid"></div>
         <section class="pair-box nes-container" id="device-install">
           <div><h2>安装并连接</h2><div class="installer-links"><a class="button secondary nes-btn" href="/downloads/DesktopBridge-macOS.pkg" download>Mac 安装器</a><a class="button secondary nes-btn" href="/downloads/DesktopBridge-Windows.cmd" download>Windows 安装器</a><a class="button secondary nes-btn" href="/downloads/DesktopBridge-Linux.sh" download>Linux 安装器</a></div></div>
-          <div class="pair-controls"><form id="pair-form"><label>设备配对码<input class="nes-input" name="code" id="pair-code" placeholder="ABCD-2345" maxlength="16" autocomplete="off" spellcheck="false" required></label><button class="wide nes-btn is-primary" type="submit">查看待绑定设备</button></form><div id="pair-preview" hidden></div></div>
+          <div class="pair-controls"><form id="pair-form"><label>设备配对码<input class="nes-input" name="code" id="pair-code" placeholder="ABCD-2345" maxlength="16" autocomplete="off" spellcheck="false" required></label><button class="wide nes-btn is-primary" type="submit">查看待绑定设备</button></form><div id="pair-preview" hidden></div><p><a href="/start.html#installation-options">也可以查看 npm 安装教程 ↗</a></p></div>
         </section>
       </section>
       <section id="calls-tab" role="tabpanel" aria-labelledby="tab-calls" hidden>

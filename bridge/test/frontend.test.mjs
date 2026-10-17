@@ -102,3 +102,26 @@ test('recent task results are capped at 100 in the dashboard',()=>{
   assert.match(html,/最近 100 条任务与结果/);
   assert.match(js,/sort\(\(a,b\)=>b\.started-a\.started\)\.slice\(0,100\)/);
 });
+
+test('onboarding and device management links use strong, contrasting pixel buttons',()=>{
+  const guide=fs.readFileSync(path.join(publicDir,'start.html'),'utf8');
+  assert.match(html,/class="header-link header-action header-guide" href="\/start.html">新手指引<\/a>/);
+  assert.match(guide,/class="header-link header-action header-device" href="\/">设备管理<\/a>/);
+  assert.match(html,/id="tab-devices"[^>]+>设备管理<\/button>/);
+  assert.match(css,/\.header-action \{[^}]*border:4px solid var\(--ink\);[^}]*box-shadow:6px 6px 0/);
+  assert.match(css,/button#tab-devices.active/);
+});
+test('long account names are highlighted and ellipsized, preserving full tooltip text',()=>{
+  assert.match(css,/\.account #account-name \{[^}]*text-overflow:ellipsis/);
+  assert.match(css,/\.account #account-name \{[^}]*border:2px solid var\(--ink\)/);
+  assert.match(js,/\$\('#account-name'\).title=account\?\.username\?\?''/);
+});
+test('new-user guide keeps both native and npm installation methods',()=>{
+  const guide=fs.readFileSync(path.join(publicDir,'start.html'),'utf8');
+  for(const name of ['方式一：图形安装器','方式二：npm 命令行','Windows 安装器','Mac 安装器','Linux 安装器','npm install -g @justlovepl/desktop-bridge','desktop-bridge setup','desktop-bridge status','desktop-bridge update','desktop-bridge pair','setup --mode manual']){
+    assert.ok(guide.includes(name),'Missing onboarding text: '+name);
+  }
+  assert.match(guide,/id="installation-options"/);
+  assert.match(html,/href="\/start.html#installation-options"/);
+  assert.match(css,/\.install-methods \{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+});

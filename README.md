@@ -15,13 +15,13 @@
 
 ## 分发给其他人
 
-把公开入口 https://mcp.ilovestudy.de/start.html 发给使用者即可。该页无需登录，提供手动 MCP 配置说明、各系统安装器及设备绑定步骤。每个人在自己的 ChatGPT 中添加服务器，使用自己的 Google 账号完成 OAuth 授权，再在自己的电脑上安装并确认绑定。当前为测试分发版，原生安装器尚未签名。
+把公开入口 https://mcp.ilovestudy.de/start.html 发给使用者即可。该页无需登录，提供手动 MCP 配置、图形安装器与 npm 两种安装教程，以及设备绑定步骤。每个人在自己的 ChatGPT 中添加服务器，使用自己的 Google 账号完成 OAuth 授权，再在自己的电脑上安装并确认绑定。当前为测试分发版，原生安装器尚未签名。
 
 ## 在 ChatGPT 配置连接
 
 在 ChatGPT「插件」页选择「添加 → 添加自定义 MCP 服务器」，名称填写 `Desktop Bridge`，服务器地址填写 `https://mcp.ilovestudy.de/mcp`，认证选择 **OAuth**。创建后使用 Google 登录并确认授权。在对话中选择这个连接并说「列出我的电脑」，即可检查账号下的设备。
 
-新电脑使用无需解压的独立安装器：[Mac PKG](https://mcp.ilovestudy.de/downloads/DesktopBridge-macOS.pkg)、[Windows CMD](https://mcp.ilovestudy.de/downloads/DesktopBridge-Windows.cmd)、[Linux 自解包脚本](https://mcp.ilovestudy.de/downloads/DesktopBridge-Linux.sh)。下载后打开，安装器自动准备环境、选择普通用户后台模式，并打开网页登录确认绑定。Mac / Windows 无需输入命令；Linux 的打开方式取决于桌面环境。详见 [首次连接指南](docs/quick-start.md)。
+新电脑使用无需解压的独立安装器：[Mac PKG](https://mcp.ilovestudy.de/downloads/DesktopBridge-macOS.pkg)、[Windows CMD](https://mcp.ilovestudy.de/downloads/DesktopBridge-Windows.cmd)、[Linux 自解包脚本](https://mcp.ilovestudy.de/downloads/DesktopBridge-Linux.sh)。下载后打开，安装器自动准备环境、提示选择手动或普通用户后台模式，并打开网页登录确认绑定。Mac / Windows 无需输入命令；Linux 的打开方式取决于桌面环境。详见 [首次连接指南](docs/quick-start.md)。
 
 当前独立安装器尚未签名，Mac PKG 尚未公证，系统可能阻止打开。
 
@@ -39,7 +39,7 @@ Google 身份服务需先配置自己的 Google OAuth 网页客户端，见 [配
 
 ## npm 安装与后台管理 · 客户端 0.2.7
 
-0.2.7 当前为已在 p111 试装验证的候选版本，尚未正式发布到公共 npm；以下说明为新版本行为。
+npm Registry 已公开发布 `@justlovepl/desktop-bridge@0.2.7`。与图形安装器是并列的客户端安装方式，无需重复安装。
 
 已有 Node.js 24 时，可通过 npm 安装并管理客户端：
 
