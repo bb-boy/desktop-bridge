@@ -35,4 +35,4 @@ for(const filename of clientFiles)fs.copyFileSync(needs(client,filename),path.jo
 for(const filename of agentFiles)fs.copyFileSync(needs(agent,filename),path.join(destination,'agent',filename));
 fs.copyFileSync(notice,path.join(pkgDir,'THIRD_PARTY_NOTICES.md'));
 fs.copyFileSync(license,path.join(pkgDir,'LICENSE'));
-console.log('Staged '+(clientFiles.length+agentFiles.length)+' client files for npm packaging.');
+console.error('Staged '+(clientFiles.length+agentFiles.length)+' client files for npm packaging.');
