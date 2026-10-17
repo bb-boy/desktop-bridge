@@ -234,6 +234,20 @@ test('offline revoked device clears saved credentials on next Agent launch',asyn
   assert.equal(status.authStatus,'re_pair_required');
 });
 
+test('revoked-device history is visible only to its account owner',async t=>{
+  const f=await fixture(t),owner=await browser(f);
+  const pass='Other account password that is long enough';
+  f.server.store.db.prepare('INSERT INTO accounts VALUES (?,?,?,?,?)').run('another','another',await passwordHash(pass),0,Date.now());
+  const other=await browser(f,'another',pass);
+  assert.deepEqual((await(await other.request('/api/manage/revoked-devices')).json()).devices,[]);
+  assert.equal((await owner.request('/api/manage/devices/p111/unlink',{})).status,200);
+  const history=(await(await owner.request('/api/manage/revoked-devices')).json()).devices;
+  assert.equal(history.length,1);
+  assert.equal(history[0].id,'p111');
+  assert.ok(history[0].revokedAt>0);
+  assert.deepEqual((await(await other.request('/api/manage/revoked-devices')).json()).devices,[]);
+});
+
 test('a paused device is not treated as revoked, preserving its local Token',async t=>{
   const f=await fixture(t),account=await browser(f);
   assert.equal((await account.request('/api/manage/devices/p111/pause',{})).status,200);
