@@ -32,7 +32,15 @@
       </div>
       <div class="login-form-panel">
         <h2>登录工作空间</h2>
-        <button id="google-login" class="google-button wide nes-btn" type="button" hidden>使用 Google 登录</button>
+        <section class="google-login-card" aria-label="Google 登录">
+          <button id="google-login" class="google-button nes-btn" type="button" hidden>
+            <span class="google-emblem" aria-hidden="true">G</span>
+            <span class="google-text">使用 Google 登录</span>
+            <span class="google-go" aria-hidden="true">→</span>
+          </button>
+          <p id="google-availability" class="google-availability" role="status" hidden>当前环境未启用 Google 登录</p>
+        </section>
+        <div class="password-login-heading"><span>账号密码登录</span></div>
         <form id="login-form">
           <label>账号<input class="nes-input" name="username" autocomplete="username" maxlength="48" required value="owner"></label>
           <label>密码<input class="nes-input" name="password" type="password" autocomplete="current-password" maxlength="256" required></label>

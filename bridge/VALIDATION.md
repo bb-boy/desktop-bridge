@@ -69,3 +69,10 @@ Retention is bounded: cloud task/results expire after 30 days; local journal out
 - Chrome Headless 使用模拟设备测试桌面 1366px 与手机 390px 布局、横向溢出及标签键盘导航；另单独验证本地真实服务器提供的登录页上 Google 禁用提示。真实 Google 交互、Safari/Edge 视觉回归仍需人工验收。
 
 - 基于包含 0.2.3 新安装器与插件元数据的最新 `main` 分支重放并回归：Node 测试 **91 项，90 通过、1 跳过、0 失败**。Chrome 模拟桌面/手机的设备页面和本地登录页也通过无横向溢出检查；仅跳过的仍是 Windows 原生专项测试。
+
+## 桌面端 Google 登录入口可见性（2026-10-17）
+
+- Google 登录由普通按钮改为 NES.css 风格的独立高对比度登录卡片；账号密码表单通过功能性分隔标题区分，没有增加英文装饰文案。
+- 本地预览未配置 OAuth 时显示明确的禁用原因，按钮不再因禁用态整体半透明而难以辨认；正式环境启用时可正常点击。没有改动 Google OIDC 后端或手机端布局规则。
+- Chrome Headless 已分别验证本地禁用态与模拟启用态；模拟启用态点击后正确 POST 到原有 `/auth/google/start`，包含 `returnTo`。这不代表真实 Google 外部授权回调已完成。
+- 完整 Node 回归：**92 项，91 通过、1 跳过、0 失败**。

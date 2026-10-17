@@ -61,7 +61,11 @@ test('Google login stays discoverable but unavailable if OAuth is not configured
   assert.match(html,/<button id="google-login"[^>]*hidden>/);
   assert.match(js,/googleButton\.hidden=false/);
   assert.match(js,/googleButton\.disabled=!googleEnabled/);
-  assert.match(js,/googleEnabled\?'使用 Google 登录'/);
+  assert.match(js,/querySelector\('\.google-text'\)\.textContent='使用 Google 登录'/);
+  assert.match(html,/id="google-availability"[^>]*role="status"/);
+  assert.match(html,/class="google-login-card"/);
+  assert.match(css,/#google-login\.google-button:disabled\s*\{[^{]*opacity:1/);
+  assert.match(html,/class="password-login-heading"/);
   assert.match(js,/auth\/google\/start/);
 });
 

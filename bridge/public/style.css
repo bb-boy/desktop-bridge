@@ -86,8 +86,82 @@ code{font-size:.9em;background:#f3ecd5;padding:4px}
 .login-form-panel h2{font-size:1.62rem;margin:0 0 18px}
 .login-form-panel form{margin-top:14px}
 .login-form-panel .wide{margin-top:22px}
-.google-button{margin:6px 0 17px!important;background:#fff!important;border-color:var(--ink)!important;color:var(--ink)!important}
-.google-button:not(:disabled):hover{background:#e6f6f4!important}
+/* Prominent, self-contained Google sign-in card; no extra decorative copy. */
+.google-login-card{
+  padding:12px;
+  margin:17px 5px 24px 0;
+  border:4px solid var(--ink);
+  background:#d4eee6;
+  box-shadow:6px 6px 0 #292c2a;
+}
+#google-login.google-button{
+  width:100%;
+  margin:0!important;
+  padding:13px 14px;
+  min-height:77px;
+  display:flex;
+  align-items:center;
+  justify-content:flex-start;
+  gap:15px;
+  border:3px solid var(--ink)!important;
+  background:#fffef6!important;
+  color:var(--ink)!important;
+  text-align:left;
+  font-weight:850;
+  box-shadow:3px 3px 0 #24282b;
+  opacity:1;
+}
+#google-login.google-button:not(:disabled):hover{
+  background:#fef0be!important;
+  transform:translate(-2px,-2px);
+  box-shadow:5px 5px 0 #24282b;
+}
+#google-login.google-button:disabled{
+  cursor:not-allowed;
+  opacity:1;
+  background:#f5f4e9!important;
+  color:#3d4740!important;
+}
+.google-emblem{
+  width:47px;
+  height:47px;
+  border:3px solid var(--ink);
+  background:#ffe495;
+  color:#276f5f;
+  display:grid;
+  place-items:center;
+  font-size:1.68rem;
+  line-height:1;
+  font-weight:900;
+  flex:none;
+}
+.google-text{flex:1;font-size:1.04rem;line-height:1.4;font-weight:900}
+.google-go{font-size:1.5rem;line-height:1;color:#2b715b}
+.google-availability{
+  border-left:4px solid #926b2b;
+  background:#fff0bd;
+  color:#61481d;
+  margin:12px 0 0;
+  padding:8px 11px;
+  font-size:.87rem;
+  line-height:1.5;
+  font-weight:800;
+}
+.password-login-heading{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  font-size:.86rem;
+  font-weight:800;
+  margin:29px 0 15px;
+  color:#373d39;
+}
+.password-login-heading::before,.password-login-heading::after{
+  content:"";
+  flex:1;
+  height:3px;
+  background:#cecec0;
+}
 .intro{display:flex;align-items:center;justify-content:space-between;gap:24px;margin:0 0 29px}
 .intro h1{color:var(--ink);font-size:clamp(2.05rem,4vw,3.3rem);text-shadow:3px 3px 0 #d6dbcf}
 .title-dot{color:#2c9c73}
