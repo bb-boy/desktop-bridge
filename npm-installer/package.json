@@ -1,6 +1,6 @@
 {
   "name": "@justlovepl/desktop-bridge",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Cross-platform Desktop Bridge agent installer and lifecycle CLI",
   "type": "module",
   "license": "MIT",
