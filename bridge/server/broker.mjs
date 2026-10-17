@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { WebSocketServer,WebSocket } from 'ws';
 import { hash,opaque } from './security.mjs';
+import bundledCatalog from './desktop-commander-tools.json' with { type: 'json' };
 export const bridgeToolNames=new Set(['list_devices','list_calls','get_call_result']);
 export class Broker {
   constructor(httpServer,config,store) {
@@ -108,11 +109,15 @@ export class Broker {
     });
   }
   tools(owner='owner') {
-    const catalog=new Map();
-    for(const device of this.store.devices(owner))for(const tool of this.store.tools(device.id,owner))if(!catalog.has(tool.name)&&!bridgeToolNames.has(tool.name))catalog.set(tool.name,{
+    // First discovery often happens before pairing. Keep the pinned public catalog
+    // available then, offline and after unlinking. Device-specific additions remain
+    // owner-scoped; they cannot replace the stable definitions of bundled tools.
+    const catalog=new Map(bundledCatalog.tools.map(tool=>[tool.name,tool]));
+    for(const device of this.store.devices(owner))for(const tool of this.store.tools(device.id,owner))if(!catalog.has(tool.name)&&!bridgeToolNames.has(tool.name))catalog.set(tool.name,tool);
+    return [...catalog.values()].map(tool=>({
       ...tool,description:tool.description+'\nRuns on your paired computer. Check list_devices.toolsAvailable. Every sent call has a task ID; use get_call_result after interruption before retrying.',
       inputSchema:{...tool.inputSchema,properties:{...tool.inputSchema.properties,device_id:{type:'string',description:'Device ID from list_devices. Optional with one device.'}}}
-    });return [...catalog.values()];
+    }));
   }
   recover(id,owner) {
     const call=this.store.call(id,owner);

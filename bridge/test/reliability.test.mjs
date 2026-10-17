@@ -10,6 +10,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { WebSocket } from 'ws';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import bundledCatalog from '../server/desktop-commander-tools.json' with {type:'json'};
 import { startServer } from '../server/index.mjs';
 import { openStore } from '../server/store.mjs';
 import { opaque, hash, passwordHash } from '../server/security.mjs';
@@ -49,6 +50,57 @@ async function mcp(t,f,owner) {
   t.after(()=>client.close());
   return client;
 }
+
+test('first authenticated discovery has 28 tools before pairing and remains stable through device lifecycle',async t=>{
+  const f=await fixture(t,{devices:[]}),store=f.server.store;
+  const client=await mcp(t,f,'owner');
+  const initial=(await client.listTools()).tools;
+  assert.equal(initial.length,28);
+  assert.equal(new Set(initial.map(tool=>tool.name)).size,28);
+  for(const name of ['write_file','start_process','read_file','edit_block']) {
+    const tool=initial.find(tool=>tool.name===name);
+    assert.ok(tool?.inputSchema.properties.device_id);
+    assert.ok(tool.inputSchema.required.length,'keep the real required arguments');
+  }
+  const write={name:'write_file',arguments:{path:'/fixture-only.txt',content:'fixture'}};
+  const unpaired=await client.callTool(write);
+  assert.equal(unpaired.isError,true);
+  assert.equal(store.recentCalls('owner').length,0,'discovery never enables unpaired execution');
+
+  store.db.prepare('INSERT INTO registry(id,owner,name,tokenHash) VALUES (?,?,?,?)').run('p111','owner','Test computer',hash(f.token));
+  let sent=[];
+  const ws=await device(f,{tools:bundledCatalog.tools,message:(m,socket)=>{
+    if(m.type==='call'){sent.push(m);result(socket,m.id,'fixture completed');}
+  }});
+  assert.deepEqual((await client.listTools()).tools,initial,'pairing does not require rediscovery');
+  const completed=await client.callTool({...write,arguments:{...write.arguments,device_id:'p111'}});
+  assert.notEqual(completed.isError,true);
+  assert.equal(sent.length,1);
+  assert.deepEqual(sent[0].arguments,write.arguments,'routing field is not forwarded to the local tool');
+
+  store.db.prepare('INSERT INTO accounts VALUES (?,?,?,?,?)').run('alice','alice','unused',0,Date.now());
+  const alice=await mcp(t,f,'alice');
+  assert.deepEqual((await alice.listTools()).tools,initial);
+  assert.equal((await alice.callTool({...write,arguments:{...write.arguments,device_id:'p111'}})).isError,true);
+  store.db.prepare('UPDATE registry SET paused=1 WHERE id=?').run('p111');
+  assert.equal((await client.callTool(write)).isError,true);
+  store.db.prepare('UPDATE registry SET paused=0 WHERE id=?').run('p111');
+  store.saveTools('p111',bundledCatalog.tools.filter(tool=>tool.name!=='write_file'),'owner');
+  assert.equal((await client.callTool(write)).isError,true,'bundled visibility cannot enable an unsupported device tool');
+  // Device definitions cannot override the public pinned schema or description.
+  store.saveTools('p111',[{name:'write_file',description:'private device text',inputSchema:{type:'object',properties:{}}}],'owner');
+  assert.deepEqual((await client.listTools()).tools,initial);
+  assert.equal(sent.length,1,'rejected calls never reach the agent');
+  ws.close();await until(()=>!f.server.broker.connections.has('p111'));
+  assert.equal((await client.callTool(write)).isError,true);
+  assert.deepEqual((await client.listTools()).tools,initial);
+  store.db.prepare('UPDATE registry SET revoked=1 WHERE id=?').run('p111');
+  assert.deepEqual((await client.listTools()).tools,initial);
+  assert.equal((await client.callTool(write)).isError,true);
+  await f.server.close();f.server=await startServer(f.config);
+  f.origin='http://127.0.0.1:'+f.server.httpServer.address().port;
+  assert.deepEqual((await (await mcp(t,f,'owner')).listTools()).tools,initial,'relay restart preserves discovery');
+});
 
 test('legacy storage migrates uncertain tasks without trusting unbound tool catalogs',t=>{
   const directory=fs.mkdtempSync(path.join(os.tmpdir(),'bridge-migration-'));
@@ -99,8 +151,8 @@ test('MCP catalogs, task queries and device result routing stay within the authe
   store.beginCall('owner-task','p111','test_tool','owner');
   store.beginCall('alice-task','alice-pc','private_tool','alice');
   const owner=await mcp(t,f,'owner'),alice=await mcp(t,f,'alice');
-  assert.deepEqual((await owner.listTools()).tools.map(x=>x.name),['list_devices','list_calls','get_call_result','test_tool']);
-  assert.deepEqual((await alice.listTools()).tools.map(x=>x.name),['list_devices','list_calls','get_call_result','private_tool']);
+  assert.deepEqual((await owner.listTools()).tools.map(x=>x.name),['list_devices','list_calls','get_call_result',...bundledCatalog.tools.map(t=>t.name),'test_tool']);
+  assert.deepEqual((await alice.listTools()).tools.map(x=>x.name),['list_devices','list_calls','get_call_result',...bundledCatalog.tools.map(t=>t.name),'private_tool']);
   const ownDevices=JSON.parse((await owner.callTool({name:'list_devices',arguments:{}})).content[0].text);
   assert.deepEqual(ownDevices.map(x=>x.id),['p111']);
   const otherDevices=JSON.parse((await alice.callTool({name:'list_devices',arguments:{}})).content[0].text);
@@ -136,7 +188,7 @@ test('pause, unlink and changed ownership gate recovery even before socket closu
   f.server.broker.recover('recover-task','owner');
   assert.equal(f.server.broker.devices('alice')[0].networkConnected,false);
   assert.equal(f.server.broker.devices('alice')[0].connectedAt,null);
-  assert.deepEqual(f.server.broker.tools('alice'),[],'a saved catalog cannot follow an ownership change');
+  assert.deepEqual(f.server.broker.tools('alice'),f.server.broker.tools('unpaired'),'a saved private catalog cannot follow an ownership change');
   await assert.rejects(f.server.broker.call('test_tool',{},'alice'),/offline/);
   f.server.store.db.prepare('UPDATE registry SET revoked=1,owner=? WHERE id=?').run('owner','p111');
   f.server.broker.recover('recover-task','owner');
