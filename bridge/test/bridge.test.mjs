@@ -291,8 +291,9 @@ test('dashboard distinguishes ready devices from executable MCP tool count',asyn
   t.after(()=>ws.terminate());
   const connected=await(await account.request('/api/manage/devices')).json();
   assert.equal(connected.readyDevices,1,'one ready device is not one tool');
-  assert.equal(connected.toolCount,6+bundledCatalog.tools.length);
-  assert.equal(connected.toolCount,31,'all standard MCP tools are exposed');
+  assert.equal(6+bundledCatalog.tools.length,31,'standard Desktop Bridge catalog has 31 tools');
+  assert.equal(connected.toolCount,32,'the connected test device registers one additional test_tool');
+  assert.equal(connected.toolCount,6+f.server.broker.tools(account.account.id).length);
 });
 
 test('browser sessions enforce CSRF, one-time invitations, pairing ownership and account isolation',async t=>{
