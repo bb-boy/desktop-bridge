@@ -33,7 +33,7 @@ try{
     "fs.appendFileSync(process.env.DESKTOP_BRIDGE_TEST_CAPTURE, JSON.stringify({",
     "  script:path.basename(process.argv[1]), args:process.argv.slice(2)",
     "})+'\\n');"
-  ].join('\\n');
+  ].join('\n');
   for(const script of ['install.mjs','control.mjs'])fs.writeFileSync(path.join(client,script),stub);
   const data=path.join(temporary,'data with spaces');
   fs.mkdirSync(data);
@@ -44,7 +44,7 @@ try{
       encoding:'utf8',env:{...process.env,DESKTOP_BRIDGE_TEST_CAPTURE:capture}
     });
     assert.equal(result.status,0,(result.stdout||'')+'\\n'+(result.stderr||''));
-    const actual=fs.readFileSync(capture,'utf8').trim().split('\\n').map(line=>JSON.parse(line));
+    const actual=fs.readFileSync(capture,'utf8').trim().split('\n').map(line=>JSON.parse(line));
     assert.deepEqual(actual,expected);
   }
   const at=(script,args)=>({script,args:[...args,'--root',data]});
