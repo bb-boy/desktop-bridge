@@ -20,8 +20,6 @@ export async function registerStartup(node,root) {
  if(process.platform==='win32'){
   const {windowsBackground}=await import('./windows-background.mjs');
   await windowsBackground('register',root,node);
-  // Remove the previous login shortcut only once its replacement exists.
-  fs.rmSync(file,{force:true});
  }else{
   fs.writeFileSync(file,startupContent(node,root));
   if(process.platform==='darwin'){

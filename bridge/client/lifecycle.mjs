@@ -39,6 +39,7 @@ export async function removeStartup(root) {
   if(process.platform==='win32'){
     const {windowsBackground}=await import('./windows-background.mjs');
     await windowsBackground('remove',root);
+    return; // The Windows helper removes only a shortcut owned by this root.
   }
   const file=startupFile(root);
   if(process.platform==='darwin'&&fs.existsSync(file))try{await run('launchctl',['bootout','gui/'+process.getuid(),file],{stdio:'ignore'});}catch{}

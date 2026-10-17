@@ -13,21 +13,24 @@ export function backgroundTaskName(root){
 export function backgroundTaskScript(action,root,node){
   if(!['register','start','remove'].includes(action))throw new Error('Invalid background task action');
   const name=ps(backgroundTaskName(root));
+  const args=[path.win32.join(root,'runner.mjs'),root].map(quote).join(' ');
+  const migrateShortcut="$legacy=Join-Path $env:APPDATA 'Microsoft\\Windows\\Start Menu\\Programs\\Startup\\Desktop Bridge.lnk';"+
+    "if(Test-Path -LiteralPath $legacy){$link=(New-Object -ComObject WScript.Shell).CreateShortcut($legacy);"+
+    `if($link.Arguments -eq ${ps(args)} -and $link.WorkingDirectory -eq ${ps(root)}){Remove-Item -LiteralPath $legacy}};`;
   const preamble="$ErrorActionPreference='Stop';$ProgressPreference='SilentlyContinue';"+
     "$identity=[System.Security.Principal.WindowsIdentity]::GetCurrent();$sid=$identity.User.Value;"+
     `$task=Get-ScheduledTask -TaskName ${name} -ErrorAction SilentlyContinue;`+
     // A deterministic name must never let one user replace another user's task.
     "if($task){$owner=$task.Principal.UserId;if($owner -notmatch '^S-1-'){$owner=([System.Security.Principal.NTAccount]$owner).Translate([System.Security.Principal.SecurityIdentifier]).Value};"+
     "if($owner -ne $sid){throw 'Background task belongs to another Windows account'}};";
-  if(action==='remove')return preamble+`if($task){Stop-ScheduledTask -TaskName ${name};Unregister-ScheduledTask -TaskName ${name} -Confirm:$false};exit 0`;
-  const args=[path.win32.join(root,'runner.mjs'),root].map(quote).join(' ');
+  if(action==='remove')return preamble+`if($task){Stop-ScheduledTask -TaskName ${name};Unregister-ScheduledTask -TaskName ${name} -Confirm:$false};`+migrateShortcut+'exit 0';
   const register=`$a=New-ScheduledTaskAction -Execute ${ps(node)} -Argument ${ps(args)} -WorkingDirectory ${ps(root)};`+
     "$p=New-ScheduledTaskPrincipal -UserId $sid -LogonType Interactive -RunLevel Limited;"+
     "$t=New-ScheduledTaskTrigger -AtLogOn -User $sid;"+
     "$s=New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries;"+
     `Register-ScheduledTask -TaskName ${name} -Action $a -Trigger $t -Principal $p -Settings $s -Force|Out-Null;`;
   // Refresh the action on installation; ordinary start reuses the registered task.
-  if(action==='register')return preamble+register;
+  if(action==='register')return preamble+register+migrateShortcut;
   return preamble+`if(-not $task){${register}}Start-ScheduledTask -TaskName ${name}`;
 }
 export async function windowsBackground(action,root,node){
