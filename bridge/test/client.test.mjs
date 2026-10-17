@@ -72,9 +72,10 @@ test('agent protocol v2 reports health, deduplicates calls, rotates tokens and r
 
 test('uninstall preserves saved results unless purge is explicitly requested',async t=>{
  const dir=directory(t),data=path.join(dir,'data');fs.mkdirSync(data);fs.writeFileSync(path.join(data,'.desktop-bridge-client'),'desktop-bridge-client');fs.mkdirSync(path.join(data,'releases'));fs.writeFileSync(path.join(data,'journal.json'),'{}');fs.writeFileSync(path.join(data,'agent-config.json'),'{}');
- const env={...process.env,HOME:dir,APPDATA:path.join(dir,'AppData'),LOCALAPPDATA:path.join(dir,'LocalAppData'),XDG_CONFIG_HOME:path.join(dir,'config')};
+ const env={...process.env,USERDOMAIN:'WORKGROUP',HOME:dir,APPDATA:path.join(dir,'AppData'),LOCALAPPDATA:path.join(dir,'LocalAppData'),XDG_CONFIG_HOME:path.join(dir,'config')};
  await exited(child(process.execPath,[path.join(runtime,'install.mjs'),'--root',data,'--uninstall'],{env}));
  assert.equal(fs.existsSync(path.join(data,'releases')),false);assert.equal(fs.existsSync(path.join(data,'journal.json')),true);assert.equal(fs.existsSync(path.join(data,'agent-config.json')),true);
+ assert.equal(fs.existsSync(path.join(data,'install-lock')),false,'Maintenance must release its readable, deletable PID lock');
  await exited(child(process.execPath,[path.join(runtime,'install.mjs'),'--root',data,'--uninstall','--purge'],{env}));assert.equal(fs.existsSync(data),false);
 });
 

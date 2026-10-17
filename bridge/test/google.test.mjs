@@ -219,7 +219,9 @@ test('distribution: fresh Google users pair and authorize the same plugin withou
  const f=await fixture(t);
  const guide=await fetch(f.origin+'/start.html');assert.equal(guide.status,200);
  const html=await guide.text();
- assert.match(html,/href="\/downloads\/desktop-bridge-plugin\.zip"/);
+ assert.match(html,/https:\/\/mcp\.ilovestudy\.de\/mcp/);
+ assert.match(html,/OAuth/);
+ assert.doesNotMatch(html,/href="\/downloads\/desktop-bridge-plugin\.zip"/);
  assert.doesNotMatch(html,/https:\/\/chatgpt\.com\/plugins\/(?:plugin|plugins|dev)[_-]/);
  const signIn=async subject=>{
   const response=await f.callback(await f.begin(),{claims:{sub:subject,email:'same-display-email@example.com'}});

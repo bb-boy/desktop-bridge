@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { WebSocket } from 'ws';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import bundledCatalog from '../server/desktop-commander-tools.json' with {type:'json'};
 import { startServer } from '../server/index.mjs';
 import { opaque, hash, passwordHash } from '../server/security.mjs';
 
@@ -110,8 +111,8 @@ test('real MCP client discovers and invokes device tools; disconnects never repl
   await client.connect(transport);
   t.after(()=>client.close());
   const tools=await client.listTools();
-  assert.deepEqual(tools.tools.map(t=>t.name),['list_devices','list_calls','get_call_result','echo_tool']);
-  assert.ok(tools.tools[3].inputSchema.properties.device_id);
+  assert.deepEqual(tools.tools.map(t=>t.name),['list_devices','list_calls','get_call_result','who_am_i','ping','shutdown',...bundledCatalog.tools.map(t=>t.name),'echo_tool']);
+  assert.ok(tools.tools.find(t=>t.name==='echo_tool').inputSchema.properties.device_id);
   const good=await client.callTool({name:'echo_tool',arguments:{device_id:'p111',message:'hello'}});
   assert.equal(good.content[0].text,'hello');
   const badDevice=await client.callTool({name:'echo_tool',arguments:{device_id:'other',message:'hello'}});

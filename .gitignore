@@ -94,3 +94,7 @@ bridge/public/downloads/
 release-output/
 **/test/test_output/
 plugin/assets/client/
+
+# Python packaging/test caches
+__pycache__/
+*.py[cod]

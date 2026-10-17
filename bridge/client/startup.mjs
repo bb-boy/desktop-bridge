@@ -45,7 +45,7 @@ export async function setMode(root,node,mode) {
  if(!['manual','background'].includes(mode))throw new Error('Mode must be manual or background');
  await stopClient(root);
  await removeStartup(root);
- const settings={mode,version:'0.2.1'};
+ const settings={mode,version:'0.2.2'};
  fs.writeFileSync(path.join(root,'client-settings.json.tmp'),JSON.stringify(settings,null,2),{mode:0o600});
  fs.renameSync(path.join(root,'client-settings.json.tmp'),path.join(root,'client-settings.json'));
  writeInstructions(root,node,mode);

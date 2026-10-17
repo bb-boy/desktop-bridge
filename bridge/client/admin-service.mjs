@@ -61,7 +61,7 @@ function flag(state) {
  fs.writeFileSync(path.join(root,'maintenance.flag'),state,{mode:0o600});
 }
 function settings(mode) {
- writePrivateJson(path.join(root,'client-settings.json'),{mode,privilege:'administrator',version:'0.2.1'});
+ writePrivateJson(path.join(root,'client-settings.json'),{mode,privilege:'administrator',version:'0.2.2'});
 }
 function relocate(source,mode) {
  const {base}=validateSource(source);
@@ -93,7 +93,7 @@ function relocate(source,mode) {
      const previous=path.join(root,name);if(fs.existsSync(previous))copyTreeSafe(previous,path.join(stage,name));
      else if(fs.existsSync(path.join(base,name)))copyTreeSafe(path.join(base,name),path.join(stage,name));
    }
-   writePrivateJson(path.join(stage,'client-settings.json'),{mode,privilege:'administrator',version:'0.2.1'});
+   writePrivateJson(path.join(stage,'client-settings.json'),{mode,privilege:'administrator',version:'0.2.2'});
    fs.writeFileSync(path.join(stage,'maintenance.flag'),'installing',{mode:0o600});
    secureTree(stage);
    if(fs.existsSync(root))fs.renameSync(root,backup);
