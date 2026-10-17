@@ -20,6 +20,8 @@ export function openStore(directory) {
     CREATE TABLE IF NOT EXISTS monthly_usage(owner TEXT NOT NULL,month TEXT NOT NULL,calls INTEGER NOT NULL,started INTEGER NOT NULL,PRIMARY KEY(owner,month));
     CREATE TABLE IF NOT EXISTS invitations(hash TEXT PRIMARY KEY,expires INTEGER NOT NULL);
   `);
+  // Keep revoked registration records for owner-visible audit and re-pair guidance.
+  if(!db.prepare('PRAGMA table_info(registry)').all().some(r=>r.name==='revokedAt'))db.exec('ALTER TABLE registry ADD COLUMN revokedAt INTEGER');
   const columns=db.prepare('PRAGMA table_info(calls)').all().map(r=>r.name);
   for(const [name,type] of [['owner',"TEXT NOT NULL DEFAULT 'owner'"],['result','TEXT'],['error','TEXT']]) if(!columns.includes(name)) db.exec(`ALTER TABLE calls ADD COLUMN ${name} ${type}`);
   if(!db.prepare('PRAGMA table_info(devices)').all().some(r=>r.name==='owner'))db.exec('ALTER TABLE devices ADD COLUMN owner TEXT');
