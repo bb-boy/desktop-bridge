@@ -7,6 +7,12 @@ description: Use when the user wants to connect or manage their paired Windows, 
 
 Use the plugin's authenticated remote MCP tools. All computers use the same plugin and account endpoint; the selected device determines where a tool executes.
 
+## Connect in ChatGPT
+
+The ZIP contains the verified remote MCP endpoint and OAuth declaration. In ChatGPT's Plugins page, the user uploads this ZIP using Add → Upload plugin ZIP, connects Desktop Bridge, signs in with Google, and confirms client authorization. Do not ask the user to register a second MCP server, paste the endpoint, copy a token, or configure Google credentials.
+
+After account connection, call `list_devices` first. If a matching device is already paired and `toolsAvailable` is true, proceed with the requested task. Do not ask the user to reinstall or pair that computer again. If there are no paired devices, explain the one-time device setup below. Uploading a remote plugin ZIP does not by itself install or start software on a user's computer.
+
 ## Pair a computer
 
 The package contains one cross-platform installer under `assets/client/`. A fresh computer needs the device client installed once. When the user asks to connect the current computer in a host with local execution, run its matching installer from the package root (`Install.cmd` on Windows, `Install.command` on macOS, `Install.sh` on Linux). The installer automatically selects the runtime, prepares dependencies and starts pairing. In a host without access to the target computer, direct the user to download this same plugin ZIP from https://mcp.ilovestudy.de/downloads/desktop-bridge-plugin.zip and run its installer on that computer. Do not ask the user to create or copy a device token, edit a configuration file or register a second MCP endpoint.
