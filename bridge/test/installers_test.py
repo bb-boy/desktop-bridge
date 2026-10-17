@@ -179,6 +179,21 @@ class StandaloneTests(unittest.TestCase):
                 self.assertIn('control.ps1', p.stdout)
                 self.assertEqual(list(self.root.glob('desktop-bridge-setup-*')), [])
 
+    @unittest.skipUnless(os.name == 'nt', 'Windows native execution test')
+    def test_windows_noninteractive_requires_explicit_mode(self):
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, 'w') as archive:
+            archive.writestr('fixture/assets/client/install.ps1', 'exit 0\\n')
+        installer = self.root / 'no-default.cmd'
+        installer.write_bytes(downloads.render('windows.cmd.in', output.getvalue()).replace('\\n', '\\r\\n').encode())
+        self.env['TEMP'] = str(self.root)
+        self.env['TMP'] = str(self.root)
+        self.env.pop('DESKTOP_BRIDGE_INSTALL_MODE', None)
+        p = subprocess.run([os.environ.get('ComSpec', 'cmd.exe'), '/d', '/c', str(installer)],
+                           env=self.env, input='', capture_output=True, text=True, timeout=30)
+        self.assertNotEqual(p.returncode, 0)
+        self.assertIn('DESKTOP_BRIDGE_INSTALL_MODE', p.stdout + p.stderr)
+
     def test_windows_payload_is_complete_and_checked(self):
         output = io.BytesIO()
         with zipfile.ZipFile(output, 'w') as archive:
@@ -190,6 +205,9 @@ class StandaloneTests(unittest.TestCase):
         self.assertIn(hashlib.sha256(payload).hexdigest(), text)
         self.assertLess(text.index('Get-FileHash'), text.index('Expand-Archive'))
         self.assertIn('Read-Host', text)
+        self.assertIn('selection required', text)
+        self.assertNotIn('defaultChoice', text)
+        self.assertNotIn('if (!$choice) { $mode = $defaultMode }', text)
         self.assertIn('DESKTOP_BRIDGE_INSTALL_MODE', text)
         self.assertIn('-Mode $mode', text)
         self.assertIn('if not defined DESKTOP_BRIDGE_INSTALL_MODE pause', text)
