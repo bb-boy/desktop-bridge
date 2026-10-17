@@ -230,7 +230,8 @@ test('a paused device is not treated as revoked, preserving its local Token',asy
   assert.equal((await account.request('/api/manage/devices/p111/pause',{})).status,200);
   const response=await fetch(f.origin+'/api/agent/revocation-status',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({deviceId:'p111'})});
   assert.equal(response.status,200);assert.deepEqual(await response.json(),{revoked:false});
-  assert.equal((await fetch(f.origin+'/api/agent/revocation-status',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({deviceId:{not:'valid'}}})).status,400);
+  const invalid=await fetch(f.origin+'/api/agent/revocation-status',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({deviceId:{not:'valid'}})});
+  assert.equal(invalid.status,400);
 });
 
 async function browser(f,username='owner',password=f.password) {
