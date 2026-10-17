@@ -200,6 +200,9 @@ function connect() {
   });
   socket.on('unexpected-response',(_request,response)=>{
     const status=response.statusCode;response.resume();
+    // ws delegates handshake failures to this listener: explicitly finish it
+    // so the normal reconnect/stop lifecycle can proceed.
+    socket.terminate();
     if(status!==403||stopping)return; // Pauses and other auth failures are not revocations.
     void remoteRevoked().then(revoked=>{
       if(!revoked||stopping)return;
