@@ -21,12 +21,16 @@
 | 电脑 | 下载 | 打开方式 |
 | --- | --- | --- |
 | Mac x64 / ARM64 | [Mac 安装器](https://mcp.ilovestudy.de/downloads/DesktopBridge-macOS.pkg) | 双击 PKG，按系统提示安装；随后自动打开进度窗口 |
-| Windows x64 / ARM64 | [Windows 安装器](https://mcp.ilovestudy.de/downloads/DesktopBridge-Windows.cmd) | 双击 CMD，按系统提示确认后自动运行 |
+| Windows x64 / ARM64 | [Windows 安装器](https://mcp.ilovestudy.de/downloads/DesktopBridge-Windows.cmd) | 双击 CMD，在终端选择手动运行或登录后后台自启 |
 | Linux x64 / ARM64 | [Linux 安装器](https://mcp.ilovestudy.de/downloads/DesktopBridge-Linux.sh) | 自解包脚本；桌面支持时选择「在终端中运行」，否则通过 shell 运行 |
 
 Mac 和 Windows 的独立入口不需要用户解压 ZIP、安装 Node.js 或输入安装命令。Linux 文件管理器对脚本的运行方式不同，不能保证所有桌面都能双击执行。
 
-这些入口自动选择**普通用户后台模式**：现在后台运行，用户登录操作系统后自启；不是管理员系统服务。Mac PKG 的系统安装步骤只安装应用程序中的启动器，真正的环境下载、工具安装、配对与 Agent 在已登录用户的会话中运行。
+**Windows** 安装器会明确询问运行模式：`1` 手动启动（安装后不运行、不设置登录自启，需使用 `Start.cmd` 启动和 `Stop.cmd` 停止）；`2` 普通用户后台模式（现在运行，登录 Windows 后自启）。新安装默认选择手动模式；重新安装会以原有模式作为回车默认选项。此选择不会删除设备配对，也不影响使用同一 Google 账号绑定。用于自动化部署时可设置环境变量 `DESKTOP_BRIDGE_INSTALL_MODE=manual` 或 `background` 以跳过交互。已安装设备可以通过 `control.mjs mode manual|background` 切换模式，无需重新配对。
+
+安装成功后，Windows 安装器会在终端列出 `Start.cmd`（启动）、`Stop.cmd`（停止）、`control.ps1 -Action status`（查看状态）和 `START-HERE.txt`（完整说明）的实际路径；交互式安装会停留在结果页，等待用户按键关闭，避免一闪而过。用户以后也可以在 `%LOCALAPPDATA%\\DesktopBridgeClient\\START-HERE.txt` 找到模式切换命令和操作说明。
+
+**macOS、Linux** 独立入口目前仍自动选择普通用户后台模式：现在后台运行，用户登录操作系统后自启；不是管理员系统服务。Mac PKG 的系统安装步骤只安装应用程序中的启动器，真正的环境下载、工具安装、配对与 Agent 在已登录用户的会话中运行。
 
 安装器会自动识别处理器、下载并校验官方 Node.js，安装固定版本的 Desktop Commander 和依赖，再打开配对网页。已有私有运行环境会复用；依赖损坏时按原安装器流程修复。
 

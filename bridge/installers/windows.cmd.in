@@ -4,6 +4,7 @@ set "DESKTOP_BRIDGE_SETUP_FILE=%~f0"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $text=[IO.File]::ReadAllText($env:DESKTOP_BRIDGE_SETUP_FILE); $parts=$text -split '(?m)^:__DESKTOP_BRIDGE_POWERSHELL__\r?\n',2; if($parts.Count -ne 2){throw 'Invalid installer'}; & ([scriptblock]::Create($parts[1]))"
 set "DESKTOP_BRIDGE_SETUP_RESULT=%ERRORLEVEL%"
 if not "%DESKTOP_BRIDGE_SETUP_RESULT%"=="0" pause
+if "%DESKTOP_BRIDGE_SETUP_RESULT%"=="0" if not defined DESKTOP_BRIDGE_INSTALL_MODE pause
 exit /b %DESKTOP_BRIDGE_SETUP_RESULT%
 :__DESKTOP_BRIDGE_POWERSHELL__
 $ErrorActionPreference = 'Stop'
@@ -36,10 +37,63 @@ try {
     $root = Get-ChildItem -LiteralPath (Join-Path $temp 'payload') -Directory
     if (@($root).Count -ne 1) { throw 'Invalid installer layout' }
     Write-Host 'Desktop Bridge - Install and connect'
+    # Always show the choice for interactive installs. Preserve the previously
+    # selected mode as the default when the installer is run again.
+    $defaultMode = 'manual'
+    if ($env:LOCALAPPDATA) {
+        $settingsFile = Join-Path (Join-Path $env:LOCALAPPDATA 'DesktopBridgeClient') 'client-settings.json'
+        if (Test-Path -LiteralPath $settingsFile) {
+            try {
+                $previousMode = (Get-Content -LiteralPath $settingsFile -Raw | ConvertFrom-Json).mode
+                if ($previousMode -in @('manual', 'background')) { $defaultMode = $previousMode }
+            } catch {
+                Write-Host 'Could not read saved mode; defaulting to manual.'
+            }
+        }
+    }
+    # Explicit noninteractive override for managed deployments and installer tests.
+    $mode = $env:DESKTOP_BRIDGE_INSTALL_MODE
+    if ($mode -and $mode -notin @('manual', 'background')) {
+        throw 'DESKTOP_BRIDGE_INSTALL_MODE must be manual or background.'
+    }
+    if (!$mode) {
+        Write-Host ''
+        Write-Host 'Choose Desktop Bridge startup mode:'
+        Write-Host '  1) Manual: start with Start.cmd, stop with Stop.cmd; no login autostart.'
+        Write-Host '  2) Background: start now and automatically after Windows sign-in.'
+        $defaultChoice = if ($defaultMode -eq 'background') { '2' } else { '1' }
+        $choice = (Read-Host ("Choose 1 or 2 [default $defaultChoice]")).Trim()
+        if (!$choice) { $mode = $defaultMode }
+        elseif ($choice -in @('1', 'manual')) { $mode = 'manual' }
+        elseif ($choice -in @('2', 'background')) { $mode = 'background' }
+        else { throw 'Invalid startup mode selection. Please rerun the installer.' }
+    }
+    Write-Host ('Selected startup mode: ' + $mode)
     $installer = Join-Path $root.FullName 'assets\client\install.ps1'
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer -Mode background
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer -Mode $mode
     if ($LASTEXITCODE -ne 0) { throw ('Installation did not finish (exit ' + $LASTEXITCODE + ').') }
-    Write-Host 'Setup complete. Return to GPT and ask it to check your computers.'
+    Write-Host ''
+    Write-Host '======================================================'
+    Write-Host 'Desktop Bridge setup completed successfully'
+    Write-Host ('Startup mode: ' + $mode)
+    Write-Host ''
+    $clientDir = Join-Path $env:LOCALAPPDATA 'DesktopBridgeClient'
+    if ($mode -eq 'manual') {
+        Write-Host 'Manual mode: no background autostart. Run Start.cmd when you need access.'
+        Write-Host 'Keep the Start.cmd window open; closing it stops the agent.'
+    } else {
+        Write-Host 'Background mode: running now; starts automatically after Windows sign-in.'
+    }
+    Write-Host ''
+    Write-Host 'Common commands (Windows CMD):'
+    Write-Host ('  Start:  "' + (Join-Path $clientDir 'Start.cmd') + '"')
+    Write-Host ('  Stop:   "' + (Join-Path $clientDir 'Stop.cmd') + '"')
+    Write-Host ('  Status: powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' + (Join-Path $clientDir 'control.ps1') + '" -Action status')
+    Write-Host ('  Guide:  "' + (Join-Path $clientDir 'START-HERE.txt') + '"')
+    Write-Host ''
+    Write-Host 'To change startup modes later, see START-HERE.txt.'
+    Write-Host 'Return to GPT to verify that your computer is connected.'
+    Write-Host '======================================================'
 } finally {
     Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue
 }
