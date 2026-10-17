@@ -51,12 +51,21 @@ class StandaloneTests(unittest.TestCase):
         return installer
 
     @unittest.skipIf(os.name == 'nt', 'POSIX shell required')
-    def test_self_extracts_defaults_to_manual_and_cleans_up(self):
+    def test_self_extracts_with_selected_manual_mode_and_cleans_up(self):
         installer = self.linux_fixture()
+        self.env['DESKTOP_BRIDGE_INSTALL_MODE'] = 'manual'
         p = subprocess.run(['/bin/sh', str(installer)], env=self.env, capture_output=True, text=True)
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertEqual(self.result.read_text().splitlines(), ['--mode', 'manual'])
         self.assertEqual(list(self.root.glob('desktop-bridge-setup.*')), [])
+
+    @unittest.skipIf(os.name == 'nt', 'POSIX shell required')
+    def test_linux_refuses_unselected_noninteractive_install(self):
+        installer = self.linux_fixture()
+        p = subprocess.run(['/bin/sh', str(installer)], env=self.env, capture_output=True, text=True)
+        self.assertNotEqual(p.returncode, 0)
+        self.assertIn('DESKTOP_BRIDGE_INSTALL_MODE', p.stderr)
+        self.assertFalse(self.result.exists())
 
     @unittest.skipIf(os.name == 'nt', 'POSIX shell required')
     def test_linux_respects_explicit_background_mode_and_prior_choice(self):
@@ -70,8 +79,8 @@ class StandaloneTests(unittest.TestCase):
         settings.parent.mkdir(parents=True)
         settings.write_text('{"mode":"background"}')
         p = subprocess.run(['/bin/sh', str(installer)], env=self.env, capture_output=True, text=True)
-        self.assertEqual(p.returncode, 0, p.stderr)
-        self.assertEqual(self.result.read_text().splitlines(), ['--mode', 'background'])
+        self.assertNotEqual(p.returncode, 0, 'saved background mode must not auto-select for a reinstall')
+        self.assertIn('DESKTOP_BRIDGE_INSTALL_MODE', p.stderr)
 
     @unittest.skipIf(os.name == 'nt', 'POSIX shell required')
     def test_posix_mode_selector_supports_both_platforms_and_rejects_bad_override(self):
@@ -79,8 +88,8 @@ class StandaloneTests(unittest.TestCase):
         for platform in ('darwin', 'linux'):
             p = subprocess.run(['/bin/sh', str(selector), platform], env=self.env,
                                input='', capture_output=True, text=True)
-            self.assertEqual(p.returncode, 0, p.stderr)
-            self.assertEqual(p.stdout.strip(), 'manual')
+            self.assertNotEqual(p.returncode, 0)
+            self.assertIn('DESKTOP_BRIDGE_INSTALL_MODE', p.stderr)
             settings = (pathlib.Path(self.env['HOME']) / 'Library/Application Support/DesktopBridge/client-settings.json'
                         if platform == 'darwin'
                         else pathlib.Path(self.env['XDG_DATA_HOME']) / 'desktop-bridge/client-settings.json')
@@ -88,8 +97,8 @@ class StandaloneTests(unittest.TestCase):
             settings.write_text('{"mode":"background","version":"0.2.6"}')
             p = subprocess.run(['/bin/sh', str(selector), platform], env=self.env,
                                input='', capture_output=True, text=True)
-            self.assertEqual(p.returncode, 0, p.stderr)
-            self.assertEqual(p.stdout.strip(), 'background')
+            self.assertNotEqual(p.returncode, 0)
+            self.assertIn('DESKTOP_BRIDGE_INSTALL_MODE', p.stderr)
             env = dict(self.env, DESKTOP_BRIDGE_INSTALL_MODE='manual')
             p = subprocess.run(['/bin/sh', str(selector), platform], env=env,
                                input='', capture_output=True, text=True)
@@ -118,6 +127,7 @@ class StandaloneTests(unittest.TestCase):
     def test_install_failure_is_reported_and_preserved(self):
         installer = self.linux_fixture()
         self.env['FIXTURE_EXIT'] = '17'
+        self.env['DESKTOP_BRIDGE_INSTALL_MODE'] = 'manual'
         p = subprocess.run(['/bin/sh', str(installer)], env=self.env, capture_output=True, text=True)
         self.assertEqual(p.returncode, 17)
         self.assertIn('安装未完成', p.stderr)
@@ -131,6 +141,10 @@ class StandaloneTests(unittest.TestCase):
         self.assertEqual(info['CFBundleExecutable'], 'DesktopBridgeSetup')
         self.assertTrue(os.access(app / 'MacOS/DesktopBridgeSetup', os.X_OK))
         self.assertTrue(os.access(scripts / 'postinstall', os.X_OK))
+        p = subprocess.run(['/bin/sh', str(app / 'Resources/Install.command')], env=self.env, capture_output=True, text=True)
+        self.assertNotEqual(p.returncode, 0, 'Mac must ask users to select a mode')
+        self.assertFalse(self.result.exists())
+        self.env['DESKTOP_BRIDGE_INSTALL_MODE'] = 'manual'
         p = subprocess.run(['/bin/sh', str(app / 'Resources/Install.command')], env=self.env, capture_output=True, text=True)
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertEqual(self.result.read_text().splitlines(), ['--mode', 'manual'])
