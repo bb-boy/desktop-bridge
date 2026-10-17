@@ -183,9 +183,9 @@ class StandaloneTests(unittest.TestCase):
     def test_windows_noninteractive_requires_explicit_mode(self):
         output = io.BytesIO()
         with zipfile.ZipFile(output, 'w') as archive:
-            archive.writestr('fixture/assets/client/install.ps1', 'exit 0\\n')
+            archive.writestr('fixture/assets/client/install.ps1', 'exit 0\n')
         installer = self.root / 'no-default.cmd'
-        installer.write_bytes(downloads.render('windows.cmd.in', output.getvalue()).replace('\\n', '\\r\\n').encode())
+        installer.write_bytes(downloads.render('windows.cmd.in', output.getvalue()).replace('\n', '\r\n').encode())
         self.env['TEMP'] = str(self.root)
         self.env['TMP'] = str(self.root)
         self.env.pop('DESKTOP_BRIDGE_INSTALL_MODE', None)
