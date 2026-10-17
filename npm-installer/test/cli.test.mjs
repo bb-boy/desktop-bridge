@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {spawnSync} from 'node:child_process';\nimport {readFileSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
+import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {parse,clientDataRoot} from '../bin/desktop-bridge.mjs';
 
@@ -28,11 +29,19 @@ test('keeps per-platform data directories compatible with existing client',()=>{
   assert.equal(clientDataRoot('linux',{},'/home/user'),'/home/user/.local/share/desktop-bridge');
 });
 
-test('npm package installation has no service-start lifecycle hooks',()=>{\n  const manifest=JSON.parse(requireManifest());\n  assert.equal(manifest.scripts?.postinstall,undefined);\n  assert.equal(manifest.scripts?.install,undefined);\n});\n\nfunction requireManifest(){return readFileSync(fileURLToPath(new URL('../package.json',import.meta.url)),'utf8');}\n\ntest('help and version do not install or start an agent',()=>{
+test('npm package installation has no service-start lifecycle hooks',()=>{
+  const manifest=JSON.parse(requireManifest());
+  assert.equal(manifest.scripts?.postinstall,undefined);
+  assert.equal(manifest.scripts?.install,undefined);
+});
+
+function requireManifest(){return readFileSync(fileURLToPath(new URL('../package.json',import.meta.url)),'utf8');}
+
+test('help and version do not install or start an agent',()=>{
   const help=spawnSync(process.execPath,[bin,'--help'],{encoding:'utf8'});
   assert.equal(help.status,0);
   assert.match(help.stdout,/setup \[/);
   const version=spawnSync(process.execPath,[bin,'--version'],{encoding:'utf8'});
   assert.equal(version.status,0);
-  assert.match(version.stdout,/^0\.2\.5/);
+  assert.match(version.stdout,/^0\.2\.6/);
 });
