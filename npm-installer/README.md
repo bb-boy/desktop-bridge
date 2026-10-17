@@ -21,6 +21,8 @@ desktop-bridge repair              # repairs AND re-pairs in the browser
 desktop-bridge uninstall           # preserves credentials/results unless --purge
 ```
 
+**macOS / zsh PATH troubleshooting:** If global installation succeeds but `desktop-bridge` is not found, try `export PATH="$(npm prefix -g)/bin:$PATH"`, `rehash`, and `desktop-bridge --version`. If that works, persist it with `echo 'export PATH="$(npm prefix -g)/bin:$PATH"' >> ~/.zshrc` and `source ~/.zshrc`. Otherwise inspect `npm prefix -g`, `npm root -g`, and `ls -l "$(npm prefix -g)/bin/desktop-bridge"` to check the executable symlink.
+
 **Installing the npm CLI does not start a service.** Run `desktop-bridge setup` to install/pair the client and select background operation by default. Use `--mode manual` for foreground operation; `--no-start` also selects manual mode. The native installers still ask the user to select a mode explicitly.
 
 On Windows, background mode registers a Task Scheduler task for the current user with limited privileges, starts it independently of the terminal/SSH session, and starts it again on user login. The task has no runtime time limit, allows battery operation, and restarts on failures. This mode requires that user to be logged into Windows; running before login is the separate administrator service option. `stop` leaves the task registered but stops the client; `start` resumes it; `mode manual` and `uninstall` remove it. An update migrates the old login shortcut to the managed task while preserving pairing and the saved mode.

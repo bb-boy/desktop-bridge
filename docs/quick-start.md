@@ -48,6 +48,8 @@ desktop-bridge setup
 desktop-bridge status
 ```
 
+**macOS / zsh：安装成功后提示 `command not found`**。先运行 `export PATH="$(npm prefix -g)/bin:$PATH"`、`rehash`、`desktop-bridge --version` 临时验证；成功后通过 `echo 'export PATH="$(npm prefix -g)/bin:$PATH"' >> ~/.zshrc` 和 `source ~/.zshrc` 持久化。如果仍失败，请检查 `npm prefix -g`、`npm root -g`、`ls -l "$(npm prefix -g)/bin/desktop-bridge"` 是否有安装链接。
+
 公开 npm Registry 已发布 0.2.7；`setup` 默认选择自动后台模式。首次连接仍需本人在网页确认配对；同一系统用户之前用原生安装器装好的客户端可继续使用原安装目录与设备配对。Windows 后台运行由当前用户的计划任务管理，退出终端或断开 SSH 后继续运行，登录 Windows 后自动启动。普通后台模式需要该用户已登录，不代表未登录时运行的管理员系统服务。
 
 日常使用 `desktop-bridge start`、`stop`、`restart`、`status`；升级使用 `desktop-bridge update`。仅运行 `npm update -g` 会更新命令行工具，升级正在使用的 Agent 应运行 `desktop-bridge update`。更新保留原配对、任务记录与已选模式。

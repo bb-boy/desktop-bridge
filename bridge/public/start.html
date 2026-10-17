@@ -47,7 +47,13 @@
 desktop-bridge setup
 desktop-bridge status</code></pre>
               <p><code>npm install</code> 仅安装 CLI；<code>setup</code> 才会安装客户端并引导配对。默认后台模式。首次安装要使用手动模式，可将第二条替换为 <code>desktop-bridge setup --mode manual</code>。</p>
-              <details class="npm-commands"><summary>更多命令：启动、停止、切换模式与升级</summary>
+              <details class="npm-commands" id="npm-path-help"><summary>Mac 安装成功却提示 command not found？</summary><p>如果 npm 全局安装成功，但 zsh 仍找不到 desktop-bridge，可先在终端执行：</p><pre class="install-command"><code>export PATH="$(npm prefix -g)/bin:$PATH"
+rehash
+desktop-bridge --version</code></pre><p>确认可以正常显示版本号后，执行以下命令使新终端也生效：</p><pre class="install-command"><code>echo 'export PATH="$(npm prefix -g)/bin:$PATH"' &gt;&gt; ~/.zshrc
+source ~/.zshrc</code></pre><p>仍找不到时，检查安装目录和命令链接：</p><pre class="install-command"><code>npm prefix -g
+npm root -g
+ls -l "$(npm prefix -g)/bin/desktop-bridge"</code></pre><p>如果链接不存在，需要进一步检查 npm 安装情况，而不只是修改 PATH。</p></details>
+                <details class="npm-commands"><summary>更多命令：启动、停止、切换模式与升级</summary>
                 <pre class="install-command"><code>desktop-bridge start
 desktop-bridge stop
 desktop-bridge restart
