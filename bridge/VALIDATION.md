@@ -106,6 +106,13 @@ Retention is bounded: cloud task/results expire after 30 days; local journal out
 - 新增真实 HTTP/MCP 账号隔离与计数持久化、月份切换、WebSocket nonce/超时/断线/授权变化，以及真实受守护 Agent 的停止、持久停止标记、凭据保留、本地恢复、重复 shutdown 任务不重放、在途任务拒绝停止等回归。
 - 完整 Node 回归 99 项：98 通过、1 Windows 平台专项在 macOS 跳过、0 失败。Python 包装回归 9 项：8 通过、1 Windows 原生项跳过。三平台独立安装器 0.2.5 已构建，内含客户端 0.2.2。未做浏览器测试。
 
+## 0.2.6 upgrade review · 2026-10-17
+
+- Reproduced an unauthenticated malformed WebSocket request target escaping the HTTP upgrade listener as `ERR_INVALID_URL`. The listener now rejects it with HTTP 400; regression coverage includes the listener, a raw TCP upgrade, and a subsequent healthy HTTP request.
+- Updated the manual-mode status assertion for the existing `authStatus` field and fixed fixture teardown ordering so failed assertions stop child processes before deleting their PID files.
+- macOS / Node 24.19.0: Bridge suite **107 tests, 106 passed, 1 platform skip, 0 failures**; npm CLI **5/5 passed**; native installer tests **9 passed, 2 platform skips**; package metadata **3/3 passed**.
+- Built version 0.2.6 Windows, Linux and macOS downloads and SHA256 manifest. macOS remains unsigned/unnotarized. These are build and protocol checks, not a claim of full native installation acceptance on every OS.
+
 ## npm client 0.2.7 — managed Windows background mode
 
 - npm setup now selects background mode by default; explicit manual/no-start options remain available. Native installers retain their explicit choice, and routine updates/repairs preserve the saved mode.
