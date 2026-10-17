@@ -272,3 +272,32 @@ body:not(.dashboard) .card{margin:24px auto}
 .installer-links .button.nes-btn{font-size:.76rem;padding:8px 12px;min-height:39px}
 .button.nes-btn.secondary{background:#fff;color:var(--ink)}
 .button.nes-btn.secondary:hover{background:#f4f8f5;color:var(--ink)}
+
+
+/* Shared public onboarding page: preserve the new workflow from main. */
+.header-link{margin-left:auto;color:#203e44;font-weight:800;white-space:nowrap;font-size:.87rem}
+.header-inner>.account{margin-left:0}
+.start-workspace{max-width:1030px;padding-bottom:64px}
+.start-workspace .intro h1{font-size:clamp(2rem,4vw,3rem);margin-bottom:22px}
+.setup-steps{list-style:none;padding:0;margin:0;display:grid;gap:23px}
+.setup-step{display:grid;grid-template-columns:47px minmax(0,1fr);gap:20px;padding:29px;background:#fffef8;border:4px solid var(--ink);box-shadow:5px 5px 0 #24282b}
+.step-number{display:grid;place-items:center;align-self:start;width:44px;height:44px;background:var(--yellow);border:3px solid var(--ink);font-size:1.13rem;font-weight:900}
+.setup-step h2{font-size:1.35rem}
+.setup-step p,.setup-help p{font-size:.93rem;color:#424d46;margin:12px 0 18px}
+.setup-step p:last-child{margin-bottom:0}
+.setup-step .actions{gap:14px}
+.getting-started .button{padding:10px 14px;font-weight:800;font-size:.84rem;border:3px solid var(--ink);box-shadow:4px 4px 0 var(--ink);background:#369a70;color:#fff;text-decoration:none;display:inline-flex;align-items:center;min-height:42px}
+.getting-started .button.secondary{background:#fff;color:var(--ink)}
+.getting-started .button:hover{filter:brightness(.95)}
+.setup-prompt{padding:18px 20px;background:#ffe49b;border-left:5px solid var(--ink);margin:18px 0;font-size:1.1rem;font-weight:800}
+.setup-help{margin-top:30px;border:4px solid var(--ink);padding:23px 29px;background:#fffef8;box-shadow:5px 5px 0 #24282b}
+.setup-help summary{cursor:pointer;font-weight:900}
+.setup-help section{margin-top:26px}
+.setup-help h2{font-size:1.13rem}
+@media(max-width:650px){
+ .header-link{font-size:.8rem}
+ .setup-step{grid-template-columns:31px minmax(0,1fr);padding:19px 13px;gap:13px}
+ .step-number{width:30px;height:30px;font-size:.89rem}
+ .setup-step .button{width:100%}
+ .setup-help{padding:19px 14px}
+}

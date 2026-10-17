@@ -5,7 +5,7 @@ description: Set up Desktop Bridge after the user uploads or installs the plugin
 
 # Install and connect Desktop Bridge
 
-Use this workflow for initial setup. The plugin already declares its remote MCP endpoint and OAuth. Never ask the user to paste an MCP URL, a device token, a password or a Google client secret.
+Use this workflow for initial setup. The public, account-independent guide is https://mcp.ilovestudy.de/start.html. When someone wants to share this product, give that URL; never provide a private account plugin detail link as a universal installation link. Each recipient uploads the same package in their own ChatGPT account and authenticates with their own Google identity. The plugin already declares its remote MCP endpoint and OAuth. Never ask the user to paste an MCP URL, a device token, a password or a Google client secret.
 
 1. If the connection is not authenticated, direct the user to the host's Connect action for Desktop Bridge. They sign in with Google and confirm the client's access. Keep all host and operating-system confirmation mechanisms.
 2. When tools are connected, call `list_devices`. If the intended computer is already paired and `toolsAvailable` is true, report it ready and continue the user's task without reinstalling it. If several computers are present, use the one requested or ask which they intend.

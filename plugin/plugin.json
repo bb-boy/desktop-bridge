@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "desktop-bridge-p111",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "通过同一自托管 MCP 插件连接 Windows、macOS 和 Linux；Google 身份隔离、自动配对、设备授权管理、健康检查与断线结果恢复。",
   "license": "MIT",
   "homepage": "https://mcp.ilovestudy.de",

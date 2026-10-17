@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import {once} from 'node:events';
+import {WebSocket} from 'ws';
+import {Client} from '@modelcontextprotocol/sdk/client/index.js';
+import {StreamableHTTPClientTransport} from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { createHash } from 'node:crypto';
 import { generateKeyPair, exportJWK, SignJWT } from 'jose';
 import { startServer } from '../server/index.mjs';
@@ -209,4 +213,70 @@ test('Google: concurrent callbacks exchange a flow once and failed provider exch
   const failed=await f.begin();
   assert.equal((await f.callback(failed,{afterToken:()=>{throw new Error('Provider connection failed');}})).status,403);
   assert.equal((await f.callback(failed)).status,403);assert.equal(f.exchanges.length,2);
+});
+
+test('distribution: fresh Google users pair and authorize the same plugin without owner intervention or cross-account access',async t=>{
+ const f=await fixture(t);
+ const guide=await fetch(f.origin+'/start.html');assert.equal(guide.status,200);
+ const html=await guide.text();
+ assert.match(html,/href="\/downloads\/desktop-bridge-plugin\.zip"/);
+ assert.doesNotMatch(html,/https:\/\/chatgpt\.com\/plugins\/(?:plugin|plugins|dev)[_-]/);
+ const signIn=async subject=>{
+  const response=await f.callback(await f.begin(),{claims:{sub:subject,email:'same-display-email@example.com'}});
+  assert.equal(response.status,303);return f.fromSessionCookie(sessionCookie(response));
+ };
+ const alice=await signIn('distribution-alice'),bob=await signIn('distribution-bob');
+ assert.notEqual(alice.account.id,bob.account.id);assert.notEqual(alice.account.id,'owner');assert.notEqual(bob.account.id,'owner');
+ for(const user of [alice,bob]){
+  assert.deepEqual((await(await fetch(f.origin+'/api/manage/devices',{headers:user.headers})).json()).devices,[]);
+  assert.equal(f.server.store.account(user.account.username).password,'','no local password or invitation was required');
+ }
+ const pairingResponse=await f.post('/api/pair/start',{name:'Alice Windows',platform:'win32',version:'0.2.1'});
+ assert.equal(pairingResponse.status,200);const pairing=await pairingResponse.json();
+ assert.equal((await f.post('/api/manage/pair',{code:pairing.userCode,decision:'approve'},alice.headers)).status,200);
+ const poll=await f.post('/api/pair/poll',{deviceCode:pairing.deviceCode});assert.equal(poll.status,200);
+ const credentials=await poll.json();
+ assert.equal((await f.post('/api/manage/devices/'+credentials.deviceId+'/rename',{name:'not yours'},bob.headers)).status,404);
+ const registration=await f.post('/register',{client_name:'Shared distribution fixture',redirect_uris:['https://client.example/callback'],token_endpoint_auth_method:'none',grant_types:['authorization_code','refresh_token'],response_types:['code']});
+ assert.equal(registration.status,201);const registered=await registration.json();
+ async function connectMcp(user){
+  const verifier=opaque(),challenge=createHash('sha256').update(verifier).digest('base64url');
+  const params=new URLSearchParams({client_id:registered.client_id,response_type:'code',redirect_uri:'https://client.example/callback',code_challenge:challenge,code_challenge_method:'S256',scope:'desktop',state:opaque()});
+  const authorization=await fetch(f.origin+'/authorize?'+params,{redirect:'manual'});assert.equal(authorization.status,302);
+  const consentCookie=authorization.headers.getSetCookie()[0].split(';')[0];
+  const request=new URL(authorization.headers.get('location'),f.origin).searchParams.get('request');
+  const cookie=user.headers.cookie+'; '+consentCookie;
+  const page=await fetch(f.origin+'/oauth/consent?request='+request,{headers:{cookie}});assert.equal(page.status,200);
+  const csrf=(await page.text()).match(/name="csrf" value="([^"]+)"/)[1];
+  const approved=await f.post('/oauth/approve',{request,csrf,authMode:'session',ownerId:user.account.id,sessionCsrf:user.headers['x-csrf-token'],decision:'approve'},{origin:f.origin,cookie});
+  assert.equal(approved.status,303);
+  const code=new URL(approved.headers.get('location')).searchParams.get('code');
+  const tokenResponse=await fetch(f.origin+'/token',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'authorization_code',client_id:registered.client_id,code,code_verifier:verifier,redirect_uri:'https://client.example/callback'})});
+  assert.equal(tokenResponse.status,200);const tokens=await tokenResponse.json();
+  const client=new Client({name:'distribution-test',version:'1'},{capabilities:{}});
+  await client.connect(new StreamableHTTPClientTransport(new URL(f.origin+'/mcp'),{requestInit:{headers:{authorization:'Bearer '+tokens.access_token}}}));
+  return client;
+ }
+ let ws,aliceClient,bobClient,dispatched=0;
+ try{
+  ws=new WebSocket(f.origin.replace('http:','ws:')+'/agent',{headers:{authorization:'Bearer '+credentials.deviceToken}});
+  await once(ws,'open');
+  ws.on('message',data=>{const message=JSON.parse(data);if(message.type==='call'){dispatched++;ws.send(JSON.stringify({type:'result',id:message.id,result:{content:[{type:'text',text:'read-only fixture result'}]}}));}});
+  ws.send(JSON.stringify({type:'hello',protocol:2,version:'0.2.1',deviceId:credentials.deviceId,tools:[{name:'distribution_echo',description:'Read-only fixture echo',inputSchema:{type:'object',properties:{}}}]}));
+  ws.send(JSON.stringify({type:'health',ok:true}));
+  for(let i=0;i<100&&!f.server.broker.devices(alice.account.id)[0]?.toolsAvailable;i++)await new Promise(resolve=>setTimeout(resolve,10));
+  assert.equal(f.server.broker.devices(alice.account.id)[0]?.toolsAvailable,true);
+  aliceClient=await connectMcp(alice);bobClient=await connectMcp(bob);
+  const devices=client=>client.callTool({name:'list_devices',arguments:{}}).then(r=>JSON.parse(r.content[0].text));
+  const own=await devices(aliceClient);assert.equal(own.length,1);assert.equal(own[0].id,credentials.deviceId);assert.equal(own[0].toolsAvailable,true);
+  assert.deepEqual(await devices(bobClient),[]);
+  assert.ok((await aliceClient.listTools()).tools.some(tool=>tool.name==='distribution_echo'));
+  assert.ok(!(await bobClient.listTools()).tools.some(tool=>tool.name==='distribution_echo'));
+  const result=await aliceClient.callTool({name:'distribution_echo',arguments:{device_id:credentials.deviceId}});assert.notEqual(result.isError,true);
+  const denied=await bobClient.callTool({name:'distribution_echo',arguments:{device_id:credentials.deviceId}});assert.equal(denied.isError,true);assert.equal(dispatched,1);
+  const tasks=JSON.parse((await aliceClient.callTool({name:'list_calls',arguments:{}})).content[0].text);assert.equal(tasks.length,1);
+  assert.deepEqual(JSON.parse((await bobClient.callTool({name:'list_calls',arguments:{}})).content[0].text),[]);
+  const hiddenResult=await bobClient.callTool({name:'get_call_result',arguments:{call_id:tasks[0].id}});assert.equal(hiddenResult.isError,true);
+  assert.equal(f.server.store.devices('owner').length,1,'original owner devices remain separate');
+ }finally{await aliceClient?.close();await bobClient?.close();ws?.terminate();}
 });
