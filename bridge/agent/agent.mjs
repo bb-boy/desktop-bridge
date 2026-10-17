@@ -36,7 +36,29 @@ function log(event,fields={}) {
 function unlock(){try{if(fs.readFileSync(lockPath,'utf8')===String(process.pid))fs.unlinkSync(lockPath);}catch{}}
 process.on('exit',unlock);
 
+function clearRevokedCredentials(reason,{stop=true}={}) {
+  delete config.deviceToken;delete config.deviceId;
+  saveConfig(configPath,config);
+  if(stop)fs.writeFileSync(path.join(directory,'maintenance.flag'),'device authorization revoked',{mode:0o600});
+  log('device_authorization_revoked',{reason});
+  console.error('设备授权已撤销，本地设备凭据已清除。请通过安装器重新配对。');
+}
+async function remoteRevoked() {
+  if(!config.deviceId||!config.deviceToken)return false;
+  const url=new URL('/api/agent/revocation-status',config.serverUrl);
+  if(url.protocol!=='https:'&&!['localhost','127.0.0.1'].includes(url.hostname))return false;
+  try {
+    const response=await fetch(url,{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({deviceId:config.deviceId}),signal:AbortSignal.timeout(5000)});
+    return response.ok&&(await response.json()).revoked===true;
+  } catch {return false;} // Never erase credentials on a timeout or ordinary network failure.
+}
 if(process.argv.includes('--pair')){delete config.deviceToken;delete config.deviceId;saveConfig(configPath,config);}
+else if(await remoteRevoked()) {
+  const installing=process.argv.includes('--setup-only');
+  clearRevokedCredentials('startup_preflight',{stop:!installing});
+  if(!installing)process.exit(78); // Do not silently re-authorize an unlinked device.
+}
 if(!config.deviceToken||!config.deviceId)await pairDevice(config,configPath,{openBrowser:!process.argv.includes('--no-browser')});
 if(process.argv.includes('--setup-only'))process.exit(0);
 const requireRuntime=createRequire(path.join(config.runtimeDir,'package.json'));
@@ -167,9 +189,23 @@ function connect() {
       else if(message.type==='recover'&&welcomed){for(const id of message.ids??[])recover(id,socket);}
       else if(message.type==='health_check'&&welcomed)void checkHealth(socket);
       else if(message.type==='rotate'&&welcomed){if(!/^[A-Za-z0-9_-]{43}$/.test(message.token))throw new Error('Invalid token');config.deviceToken=message.token;saveConfig(configPath,config);send(socket,{type:'rotate_ack',tokenHash:createHash('sha256').update(message.token).digest('hex')});}
+      else if(message.type==='revoked'&&welcomed) {
+        clearRevokedCredentials('server_revocation');
+        send(socket,{type:'revoked_ack'});
+        void shutdown(78);
+      }
       else if(message.type==='call' && welcomed) void execute(message,socket);
       else socket.close(1008,'Invalid server message');
     } catch {socket.close(1008,'Invalid server message');}
+  });
+  socket.on('unexpected-response',(_request,response)=>{
+    const status=response.statusCode;response.resume();
+    if(status!==403||stopping)return; // Pauses and other auth failures are not revocations.
+    void remoteRevoked().then(revoked=>{
+      if(!revoked||stopping)return;
+      clearRevokedCredentials('reconnect_rejected');
+      void shutdown(78);
+    }).catch(()=>{}); // Preserve credentials if status cannot be verified.
   });
   socket.on('error',error=>log('connection_error',{message:String(error.message).slice(0,240)}));
   socket.on('close',(code)=>{
