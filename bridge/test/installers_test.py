@@ -122,7 +122,7 @@ class StandaloneTests(unittest.TestCase):
                                          stdout=subprocess.PIPE, stderr=slave, env=self.env)
                     os.close(slave)
                     slave = -1
-                    os.write(master, b'\\n2\\n')
+                    os.write(master, b'\n2\n')
                     selected, _ = p.communicate(timeout=10)
                     self.assertEqual(p.returncode, 0)
                     self.assertEqual(selected.decode().strip(), 'background',
