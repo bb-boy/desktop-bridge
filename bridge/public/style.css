@@ -216,6 +216,7 @@ dialog.nes-dialog{border:4px solid #22252a;background:#fffef8;color:var(--ink);w
 dialog::backdrop{background:#2226259c}
 dialog pre{background:#f5f2e2;border:3px solid #262a2d;padding:17px;overflow:auto;max-height:58vh;white-space:pre-wrap;overflow-wrap:anywhere;font-size:.78rem}
 @media(max-width:900px){
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
   .workspace{padding:36px 21px}
   .header-inner{padding-inline:21px}
   .login-intro,.login-form-panel{padding:30px}
