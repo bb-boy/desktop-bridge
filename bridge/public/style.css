@@ -194,8 +194,6 @@ body:not(.dashboard) input:not([type=hidden]){width:100%;max-width:100%;display:
 body:not(.dashboard) .card{margin:24px auto}
 
 /* Standalone native installers introduced in 0.2.2. */
-.install-section{margin-top:29px;padding-top:24px;border-top:3px dashed #c5c3ac}
-.install-section h3{margin-bottom:16px}
 .installer-links{display:flex;flex-wrap:wrap;gap:13px;margin:14px 0 0}
 .installer-links .button.nes-btn{font-size:.76rem;padding:8px 12px;min-height:39px}
 .button.nes-btn.secondary{background:#fff;color:var(--ink)}
