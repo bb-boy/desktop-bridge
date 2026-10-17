@@ -19,7 +19,7 @@ try{
   assert.match(help.stdout,/Desktop Bridge/);
   const version=spawnSync(process.execPath,[entry,'--version'],{encoding:'utf8'});
   assert.equal(version.status,0,version.stderr);
-  assert.match(version.stdout,/^0\.2\.6/);
+  assert.match(version.stdout,/^0\.2\.7/);
   const invalid=spawnSync(process.execPath,[entry,'not-a-command'],{encoding:'utf8'});
   assert.equal(invalid.status,1,'Invalid command must fail before side effects');
 
@@ -38,6 +38,7 @@ try{
   const data=path.join(temporary,'data with spaces');
   fs.mkdirSync(data);
   fs.writeFileSync(path.join(data,'launch.json'),'{}');
+  fs.writeFileSync(path.join(data,'client-settings.json'),JSON.stringify({mode:'manual'}));
   function check(args,expected){
     fs.rmSync(capture,{force:true});
     const result=spawnSync(process.execPath,[entry,...args,'--root',data],{
@@ -49,10 +50,12 @@ try{
   }
   const at=(script,args)=>({script,args:[...args,'--root',data]});
   check(['setup','--mode','manual'],[at('install.mjs',['--mode','manual'])]);
+  check(['setup'],[at('install.mjs',['--mode','background'])]);
+  check(['setup','--no-start'],[at('install.mjs',['--no-start'])]);
   for(const action of ['start','stop','status','pair'])check([action],[at('control.mjs',[action])]);
   check(['mode','background'],[at('control.mjs',['mode','background'])]);
   check(['restart'],[at('control.mjs',['stop']),at('control.mjs',['start'])]);
-  check(['repair'],[at('install.mjs',['--repair'])]);
+  check(['repair'],[at('install.mjs',['--repair','--mode','manual'])]);
   check(['uninstall'],[at('install.mjs',['--uninstall'])]);
   check(['uninstall','--purge'],[at('install.mjs',['--uninstall','--purge'])]);
   console.log('Tarball CLI smoke tests passed: help/version/invalid and 10 safe command dispatch scenarios.');

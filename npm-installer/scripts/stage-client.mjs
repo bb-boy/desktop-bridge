@@ -16,7 +16,7 @@ const clientFiles=[
   'connection.json','control.mjs','control.ps1','environment-probe.mjs',
   'environment.mjs','install-options.mjs','install.mjs','install.ps1',
   'launch.sh','lifecycle.mjs','node-runtime.json','package-lock.json',
-  'package.json','runner.mjs','start.sh','startup.mjs','stop.sh','uninstall.ps1'
+  'package.json','runner.mjs','start.sh','startup.mjs','windows-background.mjs','stop.sh','uninstall.ps1'
 ];
 const agentFiles=['agent.mjs','pair.mjs'];
 const needs=(source,rel)=>{

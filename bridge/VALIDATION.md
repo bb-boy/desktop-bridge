@@ -105,3 +105,11 @@ Retention is bounded: cloud task/results expire after 30 days; local journal out
 - 新增 `who_am_i`、`ping`、`shutdown`，预置标准目录增至 31 项。账号统计按 UTC 自然月持久化，包含认证后的失败调用，不虚构自建服务的额度或百分比。
 - 新增真实 HTTP/MCP 账号隔离与计数持久化、月份切换、WebSocket nonce/超时/断线/授权变化，以及真实受守护 Agent 的停止、持久停止标记、凭据保留、本地恢复、重复 shutdown 任务不重放、在途任务拒绝停止等回归。
 - 完整 Node 回归 99 项：98 通过、1 Windows 平台专项在 macOS 跳过、0 失败。Python 包装回归 9 项：8 通过、1 Windows 原生项跳过。三平台独立安装器 0.2.5 已构建，内含客户端 0.2.2。未做浏览器测试。
+
+## npm client 0.2.7 — managed Windows background mode
+
+- npm setup now selects background mode by default; explicit manual/no-start options remain available. Native installers retain their explicit choice, and routine updates/repairs preserve the saved mode.
+- Windows uses a per-installation Task Scheduler task with the current user's interactive token and limited privileges. The task starts at login, has no execution time limit, supports battery operation and restarts on failure. Stop preserves the registration and credentials; manual mode and uninstall remove it. The prior login shortcut is migrated on setup/update.
+- macOS Node 24 regression: 108 tests, 106 passed, 2 platform skips, 0 failures. npm unit tests: 7 passed. Packed CLI dispatch, offline 0.2.6 → 0.2.7 replacement, and both-mode sandbox reinstall passed. Native installer checks: 9 passed, 2 platform skips; metadata: 3 passed.
+- Actual Windows p111: 2/2 isolated Task Scheduler tests passed, including installation paths containing spaces, apostrophes, percent signs and ampersands. Repeated with a Limited/Interactive user token: 2/2 passed. Covered launcher exit survival, repeated start, stop/resume and registration removal. Tests used a harmless fixture and removed their tasks.
+- Ordinary background operation requires the Windows user to be logged in. Boot-before-login remains the explicit administrator service option. No live-user sign-out or OS reboot is claimed by these tests.

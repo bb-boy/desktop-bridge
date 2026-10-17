@@ -51,13 +51,14 @@ export function parse(argv){
       }else if(!['--administrator','--no-browser','--no-start'].includes(a))throw new Error('Unknown setup option: '+a);
     }
   }
+  if(command==='setup'&&!remainder.includes('--mode')&&!remainder.includes('--no-start'))remainder.push('--mode','background');
   return {command,args:remainder,root:customRoot};
 }
 
 function usage(){
   return 'Desktop Bridge '+manifest.version+'\n\n'+
     'Usage: desktop-bridge <command> [options]\n\n'+
-    '  setup [--mode manual|background] [--administrator]  Install and pair\n'+
+    '  setup [--mode manual|background] [--administrator]  Install and pair (default: background)\n'+
     '  start | stop | restart                           Manage local agent\n'+
     '  status                                           Show local connection status\n'+
     '  pair                                             Re-pair in your browser\n'+
@@ -93,7 +94,10 @@ export async function main(argv=process.argv.slice(2)){
   if(parsed.command==='update')return performUpdate({root,packageRoot,packageName:manifest.name});
   if(parsed.command==='repair'){
     console.log('Repair also requires browser re-pairing approval.');
-    return childRun(installer,['--repair',...rootArgs]);
+    const {savedMode}=await import('../dist/client/install-options.mjs');
+    const mode=savedMode(root);
+    if(!mode)throw new Error('Cannot identify saved startup mode. Run setup --mode manual|background.');
+    return childRun(installer,['--repair','--mode',mode,...rootArgs]);
   }
   if(parsed.command==='uninstall'){
     const status=await childRun(installer,['--uninstall',...parsed.args,...rootArgs]);

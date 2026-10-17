@@ -36,6 +36,10 @@ export function startupFile(root,platform=process.platform,env=process.env,home=
   return platform==='win32'?path.join(env.APPDATA??path.join(home,'AppData','Roaming'),'Microsoft','Windows','Start Menu','Programs','Startup','Desktop Bridge.lnk'):platform==='darwin'?path.join(home,'Library','LaunchAgents','de.desktopbridge.agent.plist'):path.join(env.XDG_CONFIG_HOME??path.join(home,'.config'),'autostart','desktop-bridge.desktop');
 }
 export async function removeStartup(root) {
+  if(process.platform==='win32'){
+    const {windowsBackground}=await import('./windows-background.mjs');
+    await windowsBackground('remove',root);
+  }
   const file=startupFile(root);
   if(process.platform==='darwin'&&fs.existsSync(file))try{await run('launchctl',['bootout','gui/'+process.getuid(),file],{stdio:'ignore'});}catch{}
   fs.rmSync(file,{force:true});

@@ -106,7 +106,7 @@ const requireRuntime=createRequire(path.join(config.runtimeDir,'package.json'));
 const {Client}=await import(pathToFileURL(requireRuntime.resolve('@modelcontextprotocol/sdk/client/index.js')));
 const {StdioClientTransport}=await import(pathToFileURL(requireRuntime.resolve('@modelcontextprotocol/sdk/client/stdio.js')));
 const WebSocket=requireRuntime('ws');
-const client=new Client({name:'personal-desktop-bridge-agent',version:'0.2.6'},{capabilities:{}});
+const client=new Client({name:'personal-desktop-bridge-agent',version:'0.2.7'},{capabilities:{}});
 const transport=new StdioClientTransport({command:process.execPath,args:[config.mcpEntry],cwd:config.workingDirectory??directory,env:{...process.env},stderr:'pipe'});
 let ws,retryTimer,stopping=false,attempt=0,localHealthy=false,checkingHealth=false,healthFailures=0,remoteStopping=false;
 const heartbeatPath=path.join(directory,'heartbeat.json');
@@ -221,7 +221,7 @@ function connect() {
   let lastSeen=Date.now(),welcomed=false;
   const heartbeat=setInterval(()=>{if(Date.now()-lastSeen>65000)socket.terminate();},15000);
   socket.on('ping',()=>lastSeen=Date.now());
-  socket.on('open',()=>{send(socket,{type:'hello',protocol:2,deviceId:config.deviceId,tools,capabilities:{shutdown:true},version:'0.2.6',platform:process.platform});});
+  socket.on('open',()=>{send(socket,{type:'hello',protocol:2,deviceId:config.deviceId,tools,capabilities:{shutdown:true},version:'0.2.7',platform:process.platform});});
   socket.on('message',data=>{
     lastSeen=Date.now();
     try {
