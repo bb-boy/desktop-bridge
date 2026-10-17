@@ -1,10 +1,93 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Desktop Bridge · 我的电脑</title><link rel="stylesheet" href="/style.css"><script defer src="/app.js"></script></head>
-<body class="dashboard"><header><a class="brand" href="/">DB<span>Desktop Bridge</span></a><span class="version">0.2.0</span><div class="account"><span id="account-name"></span><button id="logout" class="secondary" hidden>退出</button></div></header>
-<main class="workspace"><p id="message" role="status" aria-live="polite"></p>
-<section id="login-panel" class="card"><p class="eyebrow">你的电脑，由你连接</p><h1>在对话里，继续电脑上的工作。</h1><p class="muted">登录后绑定设备，查看连接状态，并找回断线前的执行结果。</p><button id="google-login" hidden>使用 Google 登录</button><p id="google-login-hint" class="muted" hidden>每个 Google 账号拥有独立的设备、授权和任务。</p><form id="login-form"><label>账号<input name="username" autocomplete="username" maxlength="48" required value="owner"></label><label>密码<input name="password" type="password" autocomplete="current-password" maxlength="256" required></label><button type="submit">登录</button></form><form id="signup-form" hidden><p>你正在使用邀请链接创建独立账号。每个账号只能访问自己的设备和任务。</p><label>账号<input name="username" autocomplete="username" maxlength="48" minlength="3" required></label><label>密码（至少 12 位）<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="256" required></label><button type="submit">创建账号</button></form><p class="muted">新用户需要管理员邀请。已有账号的用户可直接登录。</p><button id="toggle-login" class="secondary" hidden>使用已有账号登录</button></section>
-<section id="app-panel" hidden><div class="intro"><div><p class="eyebrow">MY WORKSPACE</p><h1>我的电脑</h1><p class="muted">连接、执行，以及每一次可靠的返回。</p></div><div class="downloads"><a class="button" href="/downloads/desktop-bridge-plugin.zip">下载通用插件 ZIP</a></div></div><div class="stats"><article><span>已绑定设备</span><strong id="stat-total">—</strong></article><article><span>工具可用</span><strong id="stat-ready">—</strong></article><article><span>等待结果</span><strong id="stat-waiting">—</strong></article></div>
-<nav aria-label="管理页面"><button class="tab active" data-tab="devices">设备</button><button class="tab" data-tab="calls">任务与结果</button><button class="tab" data-tab="authorizations">授权与账号</button></nav>
-<section id="devices-tab"><div class="section-title"><h2>设备状态</h2><button id="refresh" class="secondary">刷新状态</button></div><div id="devices" class="device-grid"></div><section class="pair-box"><div><h2>绑定一台新电脑</h2><p class="muted">在目标电脑解压同一份插件 ZIP，运行对应系统的安装器，再输入它显示的配对码。网页自动打开时会帮你填好。</p></div><form id="pair-form"><label>配对码<input name="code" id="pair-code" placeholder="ABCD-2345" maxlength="16" required autocomplete="off"></label><button type="submit">查看待绑定设备</button></form><div id="pair-preview" hidden></div></section></section>
-<section id="calls-tab" hidden><div class="section-title"><h2>最近任务</h2><span class="muted">结果保留 30 天 · 仅在查询时显示内容</span></div><div id="calls"></div><p class="muted">“结果未知”表示执行结果无法确定。请先检查电脑，避免重复执行有副作用的操作。</p></section>
-<section id="authorizations-tab" hidden><section class="pair-box" id="google-panel" hidden><h2>Google 账号</h2><p id="google-status" class="muted"></p><button id="google-link">绑定 Google 账号</button><button id="google-unlink" class="secondary" hidden>解除绑定</button></section><h2>已授权的客户端</h2><div id="authorizations"></div><section class="pair-box" id="invite-panel" hidden><h2>邀请新用户</h2><p class="muted">邀请链接限用一次，24 小时后失效。新用户会获得独立账号。</p><button id="invite">生成邀请链接</button><p id="invite-link"></p></section><section class="pair-box"><h2>修改账号密码</h2><form id="password-form"><label>当前密码<input name="currentPassword" type="password" required autocomplete="current-password"></label><label>新密码<input name="password" type="password" required minlength="12" maxlength="256" autocomplete="new-password"></label><p class="muted">修改后会退出其他浏览器，并撤销已有客户端授权；客户端需要重新关联。</p><button type="submit">修改密码</button></form></section></section></section>
-<footer>Desktop Bridge · 自托管远程工具服务<br>设备只属于完成配对的账号；暂停和解绑会立即阻止新的工具调用。</footer></main><dialog id="result-dialog"><div class="section-title"><h2>任务结果</h2><button id="close-dialog" class="secondary">关闭</button></div><pre id="result-content"></pre></dialog></body></html>
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f8f5">
+  <meta name="description" content="Desktop Bridge — 管理设备、连接状态、授权与任务结果。">
+  <title>Desktop Bridge · 我的电脑</title>
+  <link rel="stylesheet" href="/style.css">
+  <script defer src="/app.js"></script>
+</head>
+<body class="dashboard">
+  <a class="skip-link" href="#main">跳转到主要内容</a>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="/" aria-label="Desktop Bridge 首页">
+        <span class="brand-mark" aria-hidden="true">DB</span>
+        <span class="brand-name">Desktop <strong>Bridge</strong></span>
+      </a>
+      <span class="version">v0.2.1</span>
+      <div class="account"><span id="account-name"></span><button id="logout" class="secondary" type="button" hidden>退出登录</button></div>
+    </div>
+  </header>
+  <main class="workspace" id="main">
+    <p id="message" role="status" aria-live="polite"></p>
+    <section id="login-panel" class="card login-shell">
+      <div class="login-intro">
+        <p class="eyebrow">DESKTOP BRIDGE / CONNECT</p>
+        <h1>你的工作空间，<br><em>始终在线。</em></h1>
+        <p class="lead">安全连接自己的电脑。设备状态、访问授权和任务结果，一目了然。</p>
+        <div class="login-steps"><span>01 · 登录</span><span>02 · 绑定</span><span>03 · 使用</span></div>
+      </div>
+      <div class="login-form-panel">
+        <p class="eyebrow">WELCOME BACK</p>
+        <h2>登录工作空间</h2>
+        <p class="muted">继续管理你的设备与任务。</p>
+        <button id="google-login" class="google-button wide" type="button" hidden>使用 Google 登录</button>
+        <p id="google-login-hint" class="muted" hidden>每个 Google 账号拥有独立的设备、授权和任务。</p>
+        <form id="login-form">
+          <label>账号<input name="username" autocomplete="username" maxlength="48" required value="owner"></label>
+          <label>密码<input name="password" type="password" autocomplete="current-password" maxlength="256" required></label>
+          <button class="wide" type="submit">登录 <span aria-hidden="true">→</span></button>
+        </form>
+        <form id="signup-form" hidden>
+          <p class="muted">通过一次性邀请链接创建独立账号。</p>
+          <label>账号<input name="username" autocomplete="username" maxlength="48" minlength="3" required></label>
+          <label>密码（至少 12 位）<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="256" required></label>
+          <button class="wide" type="submit">创建账号</button>
+        </form>
+        <p class="muted login-note">新用户需要管理员邀请。已有账号可直接登录。</p>
+        <button id="toggle-login" class="secondary" type="button" hidden>使用已有账号登录</button>
+      </div>
+    </section>
+    <section id="app-panel" hidden>
+      <div class="intro">
+        <div><p class="eyebrow">YOUR WORKSPACE / 设备管理</p><h1>我的电脑<span class="title-dot">.</span></h1><p class="muted">连接、管理，以及每一次可靠的返回。</p></div>
+        <div class="downloads"><a class="button" href="/downloads/desktop-bridge-plugin.zip">下载通用插件 ZIP <span aria-hidden="true">↗</span></a></div>
+      </div>
+      <div class="stats" aria-label="工作空间概览">
+        <article><span>已绑定设备</span><strong id="stat-total">—</strong><small>当前账号下的电脑</small></article>
+        <article><span>工具可用</span><strong id="stat-ready">—</strong><small>可接受新的任务</small></article>
+        <article><span>等待结果</span><strong id="stat-waiting">—</strong><small>执行中与待补交</small></article>
+      </div>
+      <nav class="tabs" aria-label="管理页面" role="tablist">
+        <button id="tab-devices" class="tab active" data-tab="devices" type="button" role="tab" aria-controls="devices-tab" aria-selected="true">设备</button>
+        <button id="tab-calls" class="tab" data-tab="calls" type="button" role="tab" aria-controls="calls-tab" aria-selected="false">任务与结果</button>
+        <button id="tab-authorizations" class="tab" data-tab="authorizations" type="button" role="tab" aria-controls="authorizations-tab" aria-selected="false">授权与账号</button>
+      </nav>
+      <section id="devices-tab" role="tabpanel" aria-labelledby="tab-devices">
+        <div class="section-title"><div><p class="section-kicker">YOUR DEVICES</p><h2>设备状态</h2></div><button id="refresh" class="secondary" type="button">刷新状态</button></div>
+        <div id="devices" class="device-grid"></div>
+        <section class="pair-box">
+          <div><p class="section-kicker">CONNECT A DEVICE</p><h2>连接一台新电脑</h2><p class="muted">下载同一份插件 ZIP，在目标电脑运行安装器。输入显示的配对码并确认设备身份。</p><p class="platform-note">Windows · macOS · Linux</p></div>
+          <div class="pair-controls"><form id="pair-form"><label>设备配对码<input name="code" id="pair-code" placeholder="ABCD-2345" maxlength="16" autocomplete="off" spellcheck="false" required></label><button class="wide" type="submit">查看待绑定设备</button></form><div id="pair-preview" hidden></div></div>
+        </section>
+      </section>
+      <section id="calls-tab" role="tabpanel" aria-labelledby="tab-calls" hidden>
+        <div class="section-title"><div><p class="section-kicker">ACTIVITY</p><h2>最近任务</h2></div><span class="muted">结果保留 30 天</span></div><div id="calls"></div>
+        <p class="footnote">“结果未知”表示执行结果无法确定。请先检查电脑，避免重复执行有副作用的操作。</p>
+      </section>
+      <section id="authorizations-tab" role="tabpanel" aria-labelledby="tab-authorizations" hidden>
+        <div class="section-title"><div><p class="section-kicker">ACCESS CONTROL</p><h2>授权与账号</h2></div></div>
+        <section class="pair-box account-section" id="google-panel" hidden><div><h3>Google 账号</h3><p id="google-status" class="muted"></p></div><div class="actions"><button id="google-link" type="button">绑定 Google 账号</button><button id="google-unlink" class="secondary" type="button" hidden>解除绑定</button></div></section>
+        <h3 class="list-heading">已授权的客户端</h3><div id="authorizations"></div>
+        <section class="pair-box account-section" id="invite-panel" hidden><div><h3>邀请新用户</h3><p class="muted">邀请链接限用一次，24 小时后失效。</p><p id="invite-link"></p></div><button id="invite" type="button">生成邀请链接</button></section>
+        <section class="pair-box account-section"><div><h3>修改账号密码</h3><p class="muted">修改后其他浏览器会退出，客户端需要重新关联。</p></div><form id="password-form"><label>当前密码<input name="currentPassword" type="password" required autocomplete="current-password"></label><label>新密码<input name="password" type="password" required minlength="12" maxlength="256" autocomplete="new-password"></label><button type="submit">修改密码</button></form></section>
+      </section>
+    </section>
+    <footer><span>Desktop Bridge · 自托管远程工具服务</span><span>设备只属于完成配对的账号；暂停和解绑会阻止新的工具调用。</span></footer>
+  </main>
+  <dialog id="result-dialog" aria-labelledby="result-heading"><div class="section-title"><div><p class="section-kicker">TASK DETAILS</p><h2 id="result-heading">任务结果</h2></div><button id="close-dialog" class="secondary" type="button">关闭</button></div><pre id="result-content"></pre></dialog>
+</body>
+</html>

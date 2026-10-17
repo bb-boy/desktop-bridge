@@ -34,3 +34,12 @@ Retention is bounded: cloud task/results expire after 30 days; local journal out
 - The existing Windows p111 device was upgraded to protocol v2 and reconnected; local MCP health passed. This is an actual Windows agent compatibility check, not a full Windows universal-installer or boot/startup acceptance test.
 - The public plugin download matches the accepted universal ZIP SHA256 `609cf2d35fe882967bc0114b952e493866a81749c221bb9adfe9e455c5f82e31`.
 - No browser automation was used. A real Google account sign-in still requires the user to complete Google's interactive authentication; successful account login, account binding and real two-user isolation are not claimed yet.
+
+## 0.2.1 集成分支补充验证（2026-10-17）
+
+- 集成分支 `feature/admin-service-integration`，Node.js 24.19.0 / macOS ARM64：**88 项测试，87 项通过，1 项跳过，0 失败**。
+- 覆盖客户端手动/后台模式切换、信号退出与子进程清理、运行环境安装/损坏修复、管理员受保护目录与授权调用规划、服务器端账户/Google/OAuth/MCP/任务恢复回归。
+- 管理页面使用自托管 CSS 和原生 JavaScript，新增响应式布局与可访问性改进；增加 4 项静态 DOM/样式/可访问性检查（最终回归测试总数另计）。
+- macOS Chrome Headless 使用**模拟账号和设备数据**完成登录后管理页浏览器烟测：1366px/390px，设备卡片渲染、无水平溢出、标签切换以及方向键导航通过。仍需人工检查 Safari、Edge、真实账号登录流程及系统权限提示，**不声称跨浏览器视觉回归完整覆盖**。
+- Windows 专项 bootstrap 测试在 macOS 下跳过。**未**进行 Windows UAC SYSTEM 任务、macOS root LaunchDaemon 或 Linux systemd 的实际高权限安装/开机恢复与卸载验收。
+- 当前生产环境 `https://mcp.ilovestudy.de` 的 0.2.0 部署记录保持不变；**0.2.1 分支代码与 ZIP 并未自动部署到生产**。
