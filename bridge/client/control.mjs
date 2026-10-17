@@ -26,7 +26,7 @@ if(settings.privilege==='administrator'&&process.env.BRIDGE_ADMIN_CONTEXT!=='1')
  const request=elevationRequest(action,{mode:value});
  await run(request.command,request.args);
  if(action==='mode'){
-   fs.writeFileSync(path.join(root,'client-settings.json'),JSON.stringify({mode:value,privilege:'administrator',version:'0.2.2'},null,2),{mode:0o600});
+   fs.writeFileSync(path.join(root,'client-settings.json'),JSON.stringify({mode:value,privilege:'administrator',version:'0.2.6'},null,2),{mode:0o600});
    writeInstructions(root,launch.node,value,'administrator');
  }
  process.exit(0);
