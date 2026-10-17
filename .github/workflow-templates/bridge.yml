@@ -22,6 +22,7 @@ jobs:
       - run: npm ci --prefix bridge --ignore-scripts
       - run: npm test --prefix bridge
       - run: python bridge/test/installers_test.py
+      - run: python bridge/test/package_manifest_test.py
   universal-package:
     runs-on: macos-latest
     steps:

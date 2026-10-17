@@ -54,3 +54,9 @@ Retention is bounded: cloud task/results expire after 30 days; local journal out
 - 本轮 macOS Node 24 回归：89 项，88 通过、1 跳过、0 失败；独立包 Python 测试：6 项，5 通过、1 Windows 原生执行项在本机跳过。
 - 在 Windows PowerShell 5.1 上实际运行带无副作用模拟载荷的独立 CMD，私有 ACL、校验、解包、后台参数和清理均通过；在 Linux 主机实际运行相同入口结构的模拟载荷，解包、校验、参数和清理通过。两次均未安装或启动真实客户端。
 - Mac PKG 使用系统 pkgbuild 构建，经 pkgutil 完整展开验证应用、Agent/客户端文件、执行权限与脚本语法，确认包未签名；没有执行系统安装。
+
+## 0.2.3 ChatGPT 上传元数据修复
+
+- 用户在 ChatGPT 上传 0.2.2 ZIP 时收到「无法添加插件」。排查发现该包缺少导入要求的 `author.name` 和 `interface.developerName`；通用 portable schema 允许缺省，不等于 ChatGPT 导入要求已通过。
+- 从同一身份 `desktop-bridge-p111` 的现有私人插件读取原作者名称，补齐这两个字段；不加入作者邮箱、密钥或设备凭据。版本更新为 0.2.3，并在打包前检查这两个必填项。新增三项元数据回归检查。
+- 通过 Plugin Creator 的实际账户更新接口成功导入 0.2.3，更新原有私人插件，保留同一插件身份及 OAuth MCP 地址。导入成功不等于 Google 登录或本地设备安装成功。
