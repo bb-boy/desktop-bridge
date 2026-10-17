@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {spawnSync} from 'node:child_process';
+import {spawnSync} from 'node:child_process';\nimport {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {parse,clientDataRoot} from '../bin/desktop-bridge.mjs';
 
@@ -28,7 +28,7 @@ test('keeps per-platform data directories compatible with existing client',()=>{
   assert.equal(clientDataRoot('linux',{},'/home/user'),'/home/user/.local/share/desktop-bridge');
 });
 
-test('help and version do not install or start an agent',()=>{
+test('npm package installation has no service-start lifecycle hooks',()=>{\n  const manifest=JSON.parse(requireManifest());\n  assert.equal(manifest.scripts?.postinstall,undefined);\n  assert.equal(manifest.scripts?.install,undefined);\n});\n\nfunction requireManifest(){return readFileSync(fileURLToPath(new URL('../package.json',import.meta.url)),'utf8');}\n\ntest('help and version do not install or start an agent',()=>{
   const help=spawnSync(process.execPath,[bin,'--help'],{encoding:'utf8'});
   assert.equal(help.status,0);
   assert.match(help.stdout,/setup \[/);
