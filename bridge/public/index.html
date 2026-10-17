@@ -17,7 +17,7 @@
         <span class="brand-mark" aria-hidden="true">DB</span>
         <span class="brand-name">Desktop <strong>Bridge</strong></span>
       </a>
-      <span class="version">v0.2.1</span>
+      <span class="version">v0.2.2</span>
       <div class="account"><span id="account-name"></span><button id="logout" class="secondary" type="button" hidden>退出登录</button></div>
     </div>
   </header>
@@ -40,6 +40,7 @@
           <label>密码（至少 12 位）<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="256" required></label>
           <button class="wide" type="submit">创建账号</button>
         </form>
+        <section class="install-section"><h3>安装并连接</h3><div class="installer-links"><a class="button secondary" href="/downloads/DesktopBridge-macOS.pkg" download>Mac 安装器</a><a class="button secondary" href="/downloads/DesktopBridge-Windows.cmd" download>Windows 安装器</a><a class="button secondary" href="/downloads/DesktopBridge-Linux.sh" download>Linux 安装器</a></div></section>
         <button id="toggle-login" class="secondary" type="button" hidden>使用已有账号登录</button>
       </div>
     </section>
@@ -61,8 +62,8 @@
       <section id="devices-tab" role="tabpanel" aria-labelledby="tab-devices">
         <div class="section-title"><div><h2>设备状态</h2></div><button id="refresh" class="secondary" type="button">刷新状态</button></div>
         <div id="devices" class="device-grid"></div>
-        <section class="pair-box">
-          <div><h2>连接一台新电脑</h2></div>
+        <section class="pair-box" id="device-install">
+          <div><h2>安装并连接</h2><div class="installer-links"><a class="button secondary" href="/downloads/DesktopBridge-macOS.pkg" download>Mac 安装器</a><a class="button secondary" href="/downloads/DesktopBridge-Windows.cmd" download>Windows 安装器</a><a class="button secondary" href="/downloads/DesktopBridge-Linux.sh" download>Linux 安装器</a></div></div>
           <div class="pair-controls"><form id="pair-form"><label>设备配对码<input name="code" id="pair-code" placeholder="ABCD-2345" maxlength="16" autocomplete="off" spellcheck="false" required></label><button class="wide" type="submit">查看待绑定设备</button></form><div id="pair-preview" hidden></div></div>
         </section>
       </section>

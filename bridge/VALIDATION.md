@@ -43,3 +43,14 @@ Retention is bounded: cloud task/results expire after 30 days; local journal out
 - macOS Chrome Headless 使用**模拟账号和设备数据**完成登录后管理页浏览器烟测：1366px/390px，设备卡片渲染、无水平溢出、标签切换以及方向键导航通过。仍需人工检查 Safari、Edge、真实账号登录流程及系统权限提示，**不声称跨浏览器视觉回归完整覆盖**。
 - Windows 专项 bootstrap 测试在 macOS 下跳过。**未**进行 Windows UAC SYSTEM 任务、macOS root LaunchDaemon 或 Linux systemd 的实际高权限安装/开机恢复与卸载验收。
 - 当前生产环境 `https://mcp.ilovestudy.de` 的 0.2.0 部署记录保持不变；**0.2.1 分支代码与 ZIP 并未自动部署到生产**。
+
+## 0.2.2 独立安装入口与 GPT 设置引导
+
+- 插件保留同一身份与远程 OAuth MCP 地址，新增 `onboardingSkill` 指向包内首次设置技能。上传后由宿主设置入口或用户请求触发；不宣称网页上传会执行本机程序。
+- 新增 Mac PKG（安装启动器后在已登录用户会话打开进度窗口）、Windows 自解包 CMD、Linux 自解包脚本；复用现有固定校验的运行环境与安装/配对实现，选择普通用户后台模式。
+- 新增原生包构建、自解包/篡改拒绝/失败退出码/临时目录清理测试与 HTTP attachment 下载测试。Mac PKG 可构建并展开检查；未在开发电脑实际安装持久化客户端。
+- 本机没有 Developer ID 签名身份，生成的 Mac PKG 未签名、公证；Windows CMD 未签名。签名与原生图形首装验收、ChatGPT 账号的实际上传和首次设置触发、真实 Google 登录仍待完成。
+
+- 本轮 macOS Node 24 回归：89 项，88 通过、1 跳过、0 失败；独立包 Python 测试：6 项，5 通过、1 Windows 原生执行项在本机跳过。
+- 在 Windows PowerShell 5.1 上实际运行带无副作用模拟载荷的独立 CMD，私有 ACL、校验、解包、后台参数和清理均通过；在 Linux 主机实际运行相同入口结构的模拟载荷，解包、校验、参数和清理通过。两次均未安装或启动真实客户端。
+- Mac PKG 使用系统 pkgbuild 构建，经 pkgutil 完整展开验证应用、Agent/客户端文件、执行权限与脚本语法，确认包未签名；没有执行系统安装。

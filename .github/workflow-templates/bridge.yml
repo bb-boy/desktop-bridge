@@ -21,15 +21,16 @@ jobs:
           cache-dependency-path: bridge/package-lock.json
       - run: npm ci --prefix bridge --ignore-scripts
       - run: npm test --prefix bridge
+      - run: python bridge/test/installers_test.py
   universal-package:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python bridge/scripts/package-plugin.py --output release-output/desktop-bridge-plugin.zip
+      - run: python bridge/scripts/package-downloads.py --output release-output/downloads
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-bridge-universal-plugin
-          path: release-output/desktop-bridge-plugin.zip*
+          path: release-output/downloads/

@@ -13,6 +13,7 @@ import { installOAuth } from './oauth.mjs';
 import { Broker } from './broker.mjs';
 import { createSessions, installManagement } from './management.mjs';
 import { installGoogle } from './google.mjs';
+import { installerDownload } from './downloads.mjs';
 
 const root=path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 export async function startServer(config,dependencies={}) {
@@ -66,6 +67,7 @@ export async function startServer(config,dependencies={}) {
     try {await server.connect(transport); await transport.handleRequest(req,res,req.body);}
     catch {if(!res.headersSent) res.status(500).json({error:'MCP request failed'});}
   });
+  app.use('/downloads',installerDownload);
   app.use(express.static(path.join(root,'public'),{dotfiles:'deny',maxAge:0}));
   app.use((_req,res)=>res.status(404).json({error:'Not found'}));
   app.use((error,_req,res,_next)=>{

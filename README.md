@@ -17,7 +17,11 @@
 
 在 ChatGPT「插件」页选择「添加 → 上传插件压缩包」，直接上传 `desktop-bridge-plugin.zip`，然后连接插件、使用 Google 登录并确认客户端授权。插件已包含服务地址和 OAuth 配置，无需手动添加 MCP 地址。在对话中选择 Desktop Bridge 并说「列出我的电脑」，即可使用账号下已绑定且工具可用的设备。
 
-只有首次连接一台尚未安装客户端的电脑时，才需要在那台电脑解压同一个 ZIP，运行对应入口；上传插件不会自动在远端电脑安装或启动程序：
+0.2.2 的首次设置引导会提供「安装并连接」下载入口。新电脑优先使用无需解压的独立安装器：[Mac PKG](https://mcp.ilovestudy.de/downloads/DesktopBridge-macOS.pkg)、[Windows CMD](https://mcp.ilovestudy.de/downloads/DesktopBridge-Windows.cmd)、[Linux 自解包脚本](https://mcp.ilovestudy.de/downloads/DesktopBridge-Linux.sh)。下载后打开，安装器自动准备环境、选择普通用户后台模式，并打开网页登录确认绑定。Mac / Windows 无需输入命令；Linux 的打开方式取决于桌面环境。详见 [GPT 首次连接指南](docs/quick-start.md)。
+
+当前独立安装器尚未签名，Mac PKG 尚未公证，系统可能阻止打开；图形安装和 ChatGPT 上传仍需实际验收。
+
+原有通用 ZIP 仍包含以下安装入口，作为高级使用方式；上传插件不会自动在远端电脑安装或启动程序：
 
 | 系统 | 入口 |
 | --- | --- |

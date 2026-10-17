@@ -15,9 +15,9 @@ After account connection, call `list_devices` first. If a matching device is alr
 
 ## Pair a computer
 
-The package contains one cross-platform installer under `assets/client/`. A fresh computer needs the device client installed once. When the user asks to connect the current computer in a host with local execution, run its matching installer from the package root (`Install.cmd` on Windows, `Install.command` on macOS, `Install.sh` on Linux). The installer automatically selects the runtime, prepares dependencies and starts pairing. In a host without access to the target computer, direct the user to download this same plugin ZIP from https://mcp.ilovestudy.de/downloads/desktop-bridge-plugin.zip and run its installer on that computer. Do not ask the user to create or copy a device token, edit a configuration file or register a second MCP endpoint.
+For first-time setup, follow [Install and connect](../setup/SKILL.md). Prefer the native standalone installer link for the target OS; the user downloads and opens one file rather than unpacking the GPT plugin. Keep the universal ZIP's existing `Install.cmd`, `Install.command`, and `Install.sh` as an advanced/offline-source fallback.
 
-Pairing opens https://mcp.ilovestudy.de with a short-lived code. The user signs in to their account, verifies the computer name and confirms the binding. A code can also be entered on the management page from another device. The device's long credential is generated, delivered and saved automatically. Do not expose it in chat. A plugin ZIP alone cannot start a background process on a different computer.
+The installer prepares the private runtime, downloads dependencies, and opens https://mcp.ilovestudy.de with a short-lived pairing code. The user signs in to the same account connected to this plugin, verifies the computer name, and confirms the binding. A code may also be entered on the management page from another device. The long device credential is generated and saved automatically; never expose it in chat. Uploading a plugin alone cannot start a process on a different computer.
 
 ## Select and operate
 
