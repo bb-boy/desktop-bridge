@@ -43,8 +43,8 @@ test('responsive style preserves focus states, hidden controls and consent page 
   assert.match(css,/:focus-visible/);
   for(const cls of ['.card','.notice','.error','.device','.pair-box','.badge','.row','.tabs'])assert.ok(css.includes(cls),cls);
   assert.match(html,/name="viewport"/);
-  assert.match(html,/href="\/style\.css"/);
-  assert.match(html,/src="\/app\.js"/);
+  assert.match(html,/href="\/style\.css(?:\?[^"]+)?"/);
+  assert.match(html,/src="\/app\.js(?:\?[^"]+)?"/);
 });
 test('plain text render operations keep device names and task details out of HTML interpolation',()=>{
   assert.match(js,/n\.textContent=text/);
@@ -146,7 +146,7 @@ test('device cards are compact four-column launchers with platform icons and mod
   assert.match(js,/if\(!dialog\.open\)dialog\.showModal\(\)/);
   assert.match(html,/id="device-dialog"[^>]*aria-labelledby="device-detail-heading"/);
   assert.match(js,/\['客户端版本',d\.clientVersion/);
-  assert.match(js,/\['系统',d\.platform/);
+  assert.match(js,/\['系统',platformInfo\(d\.platform\)\.name/);
   assert.match(js,/\['最后在线',time\(d\.lastSeen\)/);
   assert.doesNotMatch(js,/button\('重命名'|run\('rename'|编辑设备名/);
 });
