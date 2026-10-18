@@ -37,6 +37,7 @@ jobs:
       GIT_CONFIG_COUNT: '1'
       GIT_CONFIG_KEY_0: 'http.version'
       GIT_CONFIG_VALUE_0: 'HTTP/1.1'
+      npm_config_cache: /runner/.npm
     timeout-minutes: 25
 
     steps:
@@ -53,8 +54,13 @@ jobs:
       - name: Verify Python 3.12 preinstalled in isolated runner
         run: python -c "import sys; assert sys.version_info[:2] == (3, 12), sys.version"
 
+      - name: Prepare checksum-verified Node 24.19.0 archive cache
+        run: |
+          archive="$(node bridge/scripts/prepare-ci-node-cache.mjs)"
+          echo "DESKTOP_BRIDGE_CI_NODE_ARCHIVE=$archive" >> "$GITHUB_ENV"
+
       - name: Install locked server dependencies
-        run: npm ci --prefix bridge
+        run: npm ci --prefix bridge --prefer-offline --no-audit --no-fund
 
       # Keep serial execution while isolating reliability fixtures from client bootstrap tests.
       - name: JavaScript core tests (serial, includes real installer download)
@@ -109,6 +115,7 @@ jobs:
       GIT_CONFIG_COUNT: '1'
       GIT_CONFIG_KEY_0: 'http.version'
       GIT_CONFIG_VALUE_0: 'HTTP/1.1'
+      npm_config_cache: /runner/.npm
     timeout-minutes: 10
     steps:
       - name: Check out PR source
