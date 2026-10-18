@@ -1,19 +1,8 @@
 name: Desktop Bridge CI
 
 on:
-  pull_request:
-    paths:
-      - 'bridge/**'
-      - 'plugin/**'
-      - 'docs/**'
-      - '.github/workflows/desktop-bridge-ci.yml'
   push:
-    branches: [main]
-    paths:
-      - 'bridge/**'
-      - 'plugin/**'
-      - 'docs/**'
-      - '.github/workflows/desktop-bridge-ci.yml'
+  pull_request:
   workflow_dispatch:
     inputs:
       run_hosted_cross_platform:
