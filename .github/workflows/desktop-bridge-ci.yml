@@ -33,6 +33,10 @@ jobs:
     name: Test Linux (inA) / Node 24
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64, ina-docker]
+    env:
+      GIT_CONFIG_COUNT: '1'
+      GIT_CONFIG_KEY_0: 'http.version'
+      GIT_CONFIG_VALUE_0: 'HTTP/1.1'
     timeout-minutes: 25
 
     steps:
@@ -79,6 +83,10 @@ jobs:
     name: Installer choice / Linux (inA)
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64, ina-docker]
+    env:
+      GIT_CONFIG_COUNT: '1'
+      GIT_CONFIG_KEY_0: 'http.version'
+      GIT_CONFIG_VALUE_0: 'HTTP/1.1'
     timeout-minutes: 10
     steps:
       - name: Check out PR source
