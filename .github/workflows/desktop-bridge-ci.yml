@@ -50,10 +50,8 @@ jobs:
           cache: npm
           cache-dependency-path: bridge/package-lock.json
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+      - name: Verify Python 3.12 preinstalled in isolated runner
+        run: python -c "import sys; assert sys.version_info[:2] == (3, 12), sys.version"
 
       - name: Install locked server dependencies
         run: npm ci --prefix bridge
@@ -91,10 +89,8 @@ jobs:
     steps:
       - name: Check out PR source
         uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+      - name: Verify Python 3.12 preinstalled in isolated runner
+        run: python -c "import sys; assert sys.version_info[:2] == (3, 12), sys.version"
       - name: Test native installers and explicit mode selection
         run: python bridge/test/installers_test.py
 
