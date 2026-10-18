@@ -57,10 +57,10 @@ jobs:
         run: npm ci --prefix bridge
 
       # Keep serial execution while isolating reliability fixtures from client bootstrap tests.
-      - name: JavaScript core tests (serial, bounded)
+      - name: JavaScript core tests (serial, includes real installer download)
         working-directory: bridge
         run: |
-          node --test --test-concurrency=1 --test-timeout=45000 \
+          node --test --test-concurrency=1 \
             test/accounts.test.mjs \
             test/admin-runtime.test.mjs \
             test/bootstrap-environment.test.mjs \
