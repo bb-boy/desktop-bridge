@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {spawn} from 'node:child_process';
 import {once} from 'node:events';
+import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {parseInstallerOptions,chooseMode,savedMode} from '../client/install-options.mjs';
 import {commandFor,startupContent,shellQuote,powershellQuote} from '../client/startup.mjs';
@@ -89,5 +90,30 @@ test('generated commands preserve literal paths with spaces, apostrophes and she
 test('environment preflight repairs a missing private Node/npm using the verified bootstrap runtime',async t=>{
  const dir=directory(t),runtime=path.join(dir,'runtime',`node-v24.19.0-${process.platform}-${process.arch}`);fs.mkdirSync(runtime,{recursive:true});
  const node=path.join(runtime,process.platform==='win32'?'node.exe':'bin/node');assert.equal(await runtimeReady(node,path.join(runtime,'missing-npm')),false);
- const result=await ensureRuntime(dir,client);assert.equal(await runtimeReady(result.node,result.npm),true);
+ // CI alone can serve the byte-for-byte official archive from the persistent
+ // runner cache. The production downloader/extractor and its pinned SHA-256 check
+ // still run unchanged; no installer accepts a cache override.
+ const cachedArchive=process.env.DESKTOP_BRIDGE_CI_NODE_ARCHIVE;
+ const originalFetch=globalThis.fetch;
+ let cacheFetches=0;
+ if(cachedArchive){
+  const manifest=JSON.parse(fs.readFileSync(path.join(client,'node-runtime.json'),'utf8'));
+  const platform=process.platform==='win32'?'win':process.platform;
+  const entry=manifest.platforms[platform+'-'+process.arch];
+  assert.ok(entry,'CI runtime cache requires pinned platform metadata');
+  assert.equal(path.basename(cachedArchive),entry.filename);
+  const contents=fs.readFileSync(cachedArchive);
+  assert.equal(createHash('sha256').update(contents).digest('hex'),entry.sha256,'CI cache must contain the authentic official Node archive');
+  const url='https://nodejs.org/dist/v'+manifest.version+'/'+entry.filename;
+  globalThis.fetch=async requested=>{
+   assert.equal(String(requested),url,'only the pinned official archive may use the CI fixture');
+   cacheFetches++;
+   return new Response(contents,{status:200,headers:{'content-type':'application/gzip'}});
+  };
+ }
+ try{
+  const result=await ensureRuntime(dir,client);
+  assert.equal(await runtimeReady(result.node,result.npm),true);
+  if(cachedArchive)assert.equal(cacheFetches,1,'test used the verified local Node archive exactly once');
+ }finally{globalThis.fetch=originalFetch;}
 });

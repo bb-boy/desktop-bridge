@@ -1,20 +1,14 @@
 name: Desktop Bridge CI
 
 on:
-  pull_request:
-    paths:
-      - 'bridge/**'
-      - 'plugin/**'
-      - 'docs/**'
-      - '.github/workflows/desktop-bridge-ci.yml'
   push:
-    branches: [main]
-    paths:
-      - 'bridge/**'
-      - 'plugin/**'
-      - 'docs/**'
-      - '.github/workflows/desktop-bridge-ci.yml'
+  pull_request:
   workflow_dispatch:
+    inputs:
+      run_hosted_cross_platform:
+        description: 'Run Windows/macOS on GitHub-hosted runners (uses paid minutes after quota)'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -25,13 +19,112 @@ concurrency:
 
 jobs:
   test:
+    name: Test Linux (inA) / Node 24
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, linux, x64, ina-docker]
+    env:
+      GIT_CONFIG_COUNT: '1'
+      GIT_CONFIG_KEY_0: 'http.version'
+      GIT_CONFIG_VALUE_0: 'HTTP/1.1'
+      npm_config_cache: /runner/.npm
+      TMPDIR: /runner/_work/_temp
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out PR source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: bridge/package-lock.json
+
+      - name: Verify Python 3.12 preinstalled in isolated runner
+        run: python -c "import sys; assert sys.version_info[:2] == (3, 12), sys.version"
+
+      - name: Prepare checksum-verified Node 24.19.0 archive cache
+        run: |
+          archive="$(node bridge/scripts/prepare-ci-node-cache.mjs)"
+          echo "DESKTOP_BRIDGE_CI_NODE_ARCHIVE=$archive" >> "$GITHUB_ENV"
+
+      - name: Install locked server dependencies
+        run: npm ci --prefix bridge --prefer-offline --no-audit --no-fund
+
+      # Keep serial execution while isolating reliability fixtures from client bootstrap tests.
+      - name: JavaScript core tests (serial, includes real installer download)
+        working-directory: bridge
+        run: |
+          node --test --test-concurrency=1 \
+            test/accounts.test.mjs \
+            test/admin-runtime.test.mjs \
+            test/bootstrap-environment.test.mjs \
+            test/bridge.test.mjs \
+            test/client-mode.test.mjs \
+            test/client.test.mjs \
+            test/dashboard-ui.test.mjs \
+            test/downloads.test.mjs \
+            test/frontend.test.mjs \
+            test/google.test.mjs
+        env:
+          DESKTOP_BRIDGE_SUPPRESS_NOTIFICATIONS: '1'
+
+      - name: Reliability and regression tests (isolated, serial)
+        working-directory: bridge
+        run: |
+          node --test --test-concurrency=1 --test-timeout=45000 \
+            test/reliability.test.mjs \
+            test/retention.test.mjs \
+            test/upgrade.test.mjs \
+            test/windows-background.test.mjs
+        env:
+          DESKTOP_BRIDGE_SUPPRESS_NOTIFICATIONS: '1'
+
+      - name: Native installer tests
+        run: python bridge/test/installers_test.py
+
+      - name: Build full installer set on macOS
+        if: runner.os == 'macOS'
+        run: python bridge/scripts/package-downloads.py --output release-output/downloads
+
+      - name: Upload unsigned test build (not a release)
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-bridge-0.2.6-ci-unsigned
+          path: release-output/downloads/
+          if-no-files-found: error
+          retention-days: 7
+
+  installer-smoke:
+    name: Installer choice / Linux (inA)
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, linux, x64, ina-docker]
+    env:
+      GIT_CONFIG_COUNT: '1'
+      GIT_CONFIG_KEY_0: 'http.version'
+      GIT_CONFIG_VALUE_0: 'HTTP/1.1'
+      npm_config_cache: /runner/.npm
+      TMPDIR: /runner/_work/_temp
+    timeout-minutes: 10
+    steps:
+      - name: Check out PR source
+        uses: actions/checkout@v4
+      - name: Verify Python 3.12 preinstalled in isolated runner
+        run: python -c "import sys; assert sys.version_info[:2] == (3, 12), sys.version"
+      - name: Test native installers and explicit mode selection
+        run: python bridge/test/installers_test.py
+
+  test-hosted:
     name: Test ${{ matrix.os }} / Node 24
+    if: github.event_name == 'workflow_dispatch' && inputs.run_hosted_cross_platform
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [windows-latest, macos-latest]
 
     steps:
       - name: Check out PR source
@@ -73,14 +166,15 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  installer-smoke:
+  installer-smoke-hosted:
     name: Installer choice / ${{ matrix.os }}
+    if: github.event_name == 'workflow_dispatch' && inputs.run_hosted_cross_platform
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [windows-latest, macos-latest]
     steps:
       - name: Check out PR source
         uses: actions/checkout@v4

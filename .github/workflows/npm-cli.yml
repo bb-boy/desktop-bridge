@@ -1,33 +1,65 @@
 name: Desktop Bridge npm CLI
 
 on:
-  pull_request:
-    paths:
-      - 'npm-installer/**'
-      - 'bridge/client/**'
-      - 'bridge/agent/**'
-      - '.github/workflows/npm-cli.yml'
   push:
-    branches:
-      - 'feat/npm-client-cli-*'
-    paths:
-      - 'npm-installer/**'
-      - 'bridge/client/**'
-      - 'bridge/agent/**'
-      - '.github/workflows/npm-cli.yml'
+  pull_request:
   workflow_dispatch:
+    inputs:
+      run_hosted_cross_platform:
+        description: 'Run Windows/macOS on GitHub-hosted runners (uses paid minutes after quota)'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
   package-and-cli:
+    name: npm CLI / Linux (inA)
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, linux, x64, ina-docker]
+    timeout-minutes: 25
+    env:
+      GIT_CONFIG_COUNT: '1'
+      GIT_CONFIG_KEY_0: 'http.version'
+      GIT_CONFIG_VALUE_0: 'HTTP/1.1'
+      npm_config_cache: /runner/.npm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+      - name: Test CLI without installing services
+        run: npm test
+        working-directory: npm-installer
+      - name: Create dry-run npm package manifest
+        run: npm pack --dry-run --json > npm-pack.json
+        working-directory: npm-installer
+      - name: Verify package contents and avoid secrets
+        run: node scripts/verify-pack.mjs npm-pack.json
+        working-directory: npm-installer
+      - name: Build real npm package without publishing
+        run: npm pack --pack-destination .
+        working-directory: npm-installer
+      - name: Smoke test packed CLI
+        run: node scripts/smoke-tarball.mjs
+        working-directory: npm-installer
+      - name: Validate isolated npm package upgrade preserves local data
+        run: node scripts/smoke-upgrade.mjs
+        working-directory: npm-installer
+      - name: Validate sandbox agent reinstall preserves credentials and mode
+        run: node scripts/smoke-client-upgrade.mjs
+        working-directory: npm-installer
+
+  package-and-cli-hosted:
     name: npm CLI / ${{ matrix.os }}
+    if: github.event_name == 'workflow_dispatch' && inputs.run_hosted_cross_platform
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
