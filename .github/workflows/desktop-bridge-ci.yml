@@ -56,8 +56,32 @@ jobs:
       - name: Install locked server dependencies
         run: npm ci --prefix bridge
 
-      - name: JavaScript tests (serial to avoid process interference)
-        run: npm test --prefix bridge
+      # Keep serial execution while isolating reliability fixtures from client bootstrap tests.
+      - name: JavaScript core tests (serial, bounded)
+        working-directory: bridge
+        run: |
+          node --test --test-concurrency=1 --test-timeout=45000 \
+            test/accounts.test.mjs \
+            test/admin-runtime.test.mjs \
+            test/bootstrap-environment.test.mjs \
+            test/bridge.test.mjs \
+            test/client-mode.test.mjs \
+            test/client.test.mjs \
+            test/dashboard-ui.test.mjs \
+            test/downloads.test.mjs \
+            test/frontend.test.mjs \
+            test/google.test.mjs
+        env:
+          DESKTOP_BRIDGE_SUPPRESS_NOTIFICATIONS: '1'
+
+      - name: Reliability and regression tests (isolated, serial)
+        working-directory: bridge
+        run: |
+          node --test --test-concurrency=1 --test-timeout=45000 \
+            test/reliability.test.mjs \
+            test/retention.test.mjs \
+            test/upgrade.test.mjs \
+            test/windows-background.test.mjs
         env:
           DESKTOP_BRIDGE_SUPPRESS_NOTIFICATIONS: '1'
 
