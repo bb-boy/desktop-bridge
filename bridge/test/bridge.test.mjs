@@ -338,12 +338,12 @@ test('browser sessions enforce CSRF, one-time invitations, pairing ownership and
 });
 
 test('network connectivity is distinct from tool health; stale and failed probes prevent dispatch',async t=>{
-  const f=await fixture(t,{healthStaleMs:70});
+  const f=await fixture(t,{healthStaleMs:600});
   const ws=await connectDevice(f,{deviceId:'p111',deviceToken:f.token},{health:false});
   assert.equal(f.server.broker.devices()[0].networkConnected,true);assert.equal(f.server.broker.devices()[0].toolsAvailable,false);
   await assert.rejects(f.server.broker.call('test_tool',{}),/健康检查/);
   ws.send(JSON.stringify({type:'health',ok:true}));await waitFor(()=>f.server.broker.devices()[0].toolsAvailable);
-  await sleep(90);assert.equal(f.server.broker.devices()[0].toolsAvailable,false);
+  await sleep(750);assert.equal(f.server.broker.devices()[0].toolsAvailable,false);
   ws.send(JSON.stringify({type:'health',ok:false}));await sleep(30);assert.equal(f.server.broker.devices()[0].health,'local_unavailable');
   await assert.rejects(f.server.broker.call('test_tool',{}),/健康检查/);
 });
