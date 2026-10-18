@@ -301,7 +301,7 @@ test('account identity and monthly counts are isolated, UTC-scoped and durable',
 });
 
 test('ping matches fresh nonces, cleans up timeouts and rechecks ownership and pause',async t=>{
- const f=await fixture(t,{pingTimeoutMs:80}),ws=await device(f,{autoPong:false});
+ const f=await fixture(t,{pingTimeoutMs:500}),ws=await device(f,{autoPong:false});
  await assert.rejects(f.server.broker.ping({},'alice'),/Unknown device/);
  ws.on('ping',()=>ws.pong('wrong-nonce'));await assert.rejects(f.server.broker.ping(),/timed out/);
  const conn=f.server.broker.connections.get('p111');assert.equal(conn.probes.size,0);assert.equal(conn.ws.listenerCount('pong'),1);
