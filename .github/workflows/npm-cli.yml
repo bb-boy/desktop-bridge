@@ -30,6 +30,11 @@ jobs:
     name: npm CLI / Linux (inA)
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64, ina-docker]
+    timeout-minutes: 25
+    env:
+      GIT_CONFIG_COUNT: '1'
+      GIT_CONFIG_KEY_0: 'http.version'
+      GIT_CONFIG_VALUE_0: 'HTTP/1.1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
