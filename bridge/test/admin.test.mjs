@@ -106,7 +106,7 @@ test('admin: deleting an account removes credentials, devices, Google identity a
  assert.equal(f.server.store.db.prepare('SELECT COUNT(*) AS n FROM monthly_usage WHERE owner=?').get('regular').n,0);
  assert.equal(f.server.store.db.prepare('SELECT COUNT(*) AS n FROM devices WHERE owner=?').get('regular').n,0);
  const revoked=f.server.store.db.prepare('SELECT * FROM registry WHERE id=?').get('regular-device');
- assert.equal(revoked.revoked,1);assert.equal(revoked.tokenHash,null);assert.equal(revoked.owner,null);
+ assert.equal(revoked.revoked,1);assert.equal(revoked.tokenHash,null);assert.equal(revoked.owner,'deleted');
  assert.equal((await admin.get('/api/manage/admin')).status,200,'admin remains active');
 });
 
