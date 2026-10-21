@@ -49,12 +49,15 @@ export function installManagement(app,config,store,broker,loginLimiter,sessions=
     const old=cookieValue(req,'bridge_session');if(old)store.db.prepare('DELETE FROM sessions WHERE hash=?').run(hash(old));
     res.clearCookie('bridge_login',cookieOptions);res.json(newSession(res,a.id));
   });
+  app.get('/api/registration',(_req,res)=>res.set('Cache-Control','no-store').json({enabled:store.registrationEnabled()}));
   app.post('/api/signup',loginLimiter,loginCsrf,async(req,res)=>{
+    if(!store.registrationEnabled())return json(res,403,'注册已关闭');
     const {username,password,invitation}=req.body;
     if(typeof username!=='string'||!/^\p{L}[\p{L}\p{N}_.-]{2,47}$/u.test(username)||typeof password!=='string'||password.length<12||password.length>256)return json(res,400,'账号需为 3–48 位；密码至少 12 位');
     const passwordEncoded=await passwordHash(password);
     try {
       const id=store.transaction(()=>{
+        if(!store.registrationEnabled())throw new Error('注册已关闭');
         const invite=store.db.prepare('SELECT hash FROM invitations WHERE hash=? AND expires>?').get(hash(String(invitation??'')),Date.now());
         if(!invite)throw new Error('邀请已失效');
         if(store.account(username))throw new Error('账号已存在');
@@ -69,6 +72,7 @@ export function installManagement(app,config,store,broker,loginLimiter,sessions=
   app.post('/api/logout',requireSession,(req,res)=>{store.db.prepare('DELETE FROM sessions WHERE hash=?').run(req.session.hash);res.clearCookie('bridge_session',cookieOptions);res.json({ok:true});});
   app.post('/api/invitations',requireSession,(req,res)=>{
     if(!store.accountById(req.session.owner).admin)return json(res,403,'仅管理员可邀请用户');
+    if(!store.registrationEnabled())return json(res,409,'注册已关闭');
     const token=opaque();store.db.prepare('INSERT INTO invitations VALUES (?,?)').run(hash(token),Date.now()+86400000);
     res.json({url:new URL('/?invite='+token,config.baseUrl).href,expiresIn:86400});
   });
