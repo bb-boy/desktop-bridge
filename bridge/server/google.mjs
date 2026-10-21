@@ -133,6 +133,7 @@ export function installGoogle(app,config,store,sessions,loginLimiter,dependencie
         } else if(flow.mode!=='login')return {status:403,error:'invalid_google_flow'};
         if(owner&&!store.accountById(owner))return {status:403,error:'google_account_missing'};
         if(!owner) {
+          if(!store.registrationEnabled())return {status:403,error:'registration_disabled'};
           owner=randomUUID();
           // No usable local password; the subject, never the email, determines identity.
           store.db.prepare('INSERT INTO accounts VALUES (?,?,?,?,?)').run(owner,'google_'+randomUUID(),'',0,Date.now());

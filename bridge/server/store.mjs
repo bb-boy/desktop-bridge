@@ -19,6 +19,7 @@ export function openStore(directory) {
     CREATE TABLE IF NOT EXISTS sessions(hash TEXT PRIMARY KEY,owner TEXT NOT NULL,csrf TEXT NOT NULL,expires INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS monthly_usage(owner TEXT NOT NULL,month TEXT NOT NULL,calls INTEGER NOT NULL,started INTEGER NOT NULL,PRIMARY KEY(owner,month));
     CREATE TABLE IF NOT EXISTS invitations(hash TEXT PRIMARY KEY,expires INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);
   `);
   // Keep revoked registration records for owner-visible audit and re-pair guidance.
   if(!db.prepare('PRAGMA table_info(registry)').all().some(r=>r.name==='revokedAt'))db.exec('ALTER TABLE registry ADD COLUMN revokedAt INTEGER');
@@ -46,6 +47,8 @@ export function openStore(directory) {
       // Only pre-existing single-owner grants lack ownerId. New grants always carry it.
       db.prepare("UPDATE grants SET value=json_set(value,'$.ownerId','owner') WHERE kind IN ('access','refresh','code') AND json_extract(value,'$.ownerId') IS NULL").run();
     },
+    registrationEnabled() {return db.prepare("SELECT value FROM settings WHERE key='registration_enabled'").get()?.value!=='0';},
+    setRegistrationEnabled(enabled) {db.prepare("INSERT INTO settings(key,value) VALUES ('registration_enabled',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(enabled?'1':'0');},
     account(username) {return db.prepare('SELECT * FROM accounts WHERE username=?').get(username);},
     accountById(id) {return db.prepare('SELECT id,username,admin FROM accounts WHERE id=?').get(id);},
     recordToolCall(owner,now=Date.now()) {

@@ -58,6 +58,7 @@ jobs:
         run: |
           node --test --test-concurrency=1 \
             test/accounts.test.mjs \
+            test/admin.test.mjs \
             test/admin-runtime.test.mjs \
             test/bootstrap-environment.test.mjs \
             test/bridge.test.mjs \

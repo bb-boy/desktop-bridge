@@ -28,6 +28,7 @@
             <span id="account-provider" class="account-provider"></span>
           </div>
           <button id="account-settings" class="account-manage" type="button">账号设置</button>
+          <button id="admin-entry" class="account-manage" type="button" hidden>后台管理</button>
           <button id="logout" class="account-signout" type="button">Sign out</button>
         </section>
       </div>
@@ -69,6 +70,7 @@
           <button class="wide nes-btn is-success" type="submit">创建账号</button>
         </form>
         <button id="toggle-login" class="secondary nes-btn" type="button" hidden>使用已有账号登录</button>
+        <p id="signup-unavailable" class="notice" role="status" hidden>管理员已关闭新用户注册，请使用已有账号登录。</p>
       </div>
     </section>
     <section id="app-panel" hidden>
@@ -114,6 +116,18 @@
       <p id="google-unlink-hint" class="muted" hidden>当前账号没有可用的密码登录方式，无法解除唯一的 Google 登录绑定。</p>
     </section>
     <section class="account-settings nes-container"><h3>修改账号密码</h3><form id="password-form"><label>当前密码<input class="nes-input" name="currentPassword" type="password" required autocomplete="current-password"></label><label>新密码<input class="nes-input" name="password" type="password" required minlength="12" maxlength="256" autocomplete="new-password"></label><button class="nes-btn is-primary" type="submit">修改密码</button></form></section>
+  </dialog>
+  <dialog class="nes-dialog admin-dialog" id="admin-dialog" aria-labelledby="admin-heading">
+    <div class="section-title"><h2 id="admin-heading">后台管理</h2><button id="close-admin-dialog" class="secondary nes-btn" type="button">关闭</button></div>
+    <p id="admin-feedback" class="account-feedback" role="alert" hidden></p>
+    <section class="admin-registration nes-container" aria-label="用户注册设置">
+      <div><h3>新用户注册</h3><p class="muted">关闭后不允许新账号创建，已有账号仍可登录。</p></div>
+      <label class="admin-toggle"><input type="checkbox" id="registration-enabled" role="switch"><span>允许注册</span></label>
+    </section>
+    <section class="admin-user-section">
+      <div class="section-title"><h3>用户列表 <span id="admin-user-count"></span></h3><button id="admin-refresh" class="secondary nes-btn" type="button">刷新</button></div>
+      <div id="admin-users" aria-live="polite"></div>
+    </section>
   </dialog>
   <dialog class="nes-dialog device-dialog" id="device-dialog" aria-labelledby="device-detail-heading"><div class="section-title"><div><h2 id="device-detail-heading">设备详情</h2></div><button id="close-device-dialog" class="secondary nes-btn" type="button">关闭</button></div><div id="device-detail-content" class="device-detail-content"></div></dialog>
   <dialog class="nes-dialog" id="result-dialog" aria-labelledby="result-heading"><div class="section-title"><div><h2 id="result-heading">任务结果</h2></div><button id="close-dialog" class="secondary nes-btn" type="button">关闭</button></div><pre id="result-content"></pre></dialog>
