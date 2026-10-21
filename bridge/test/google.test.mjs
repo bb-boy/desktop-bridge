@@ -111,6 +111,23 @@ test('Google: subjects create isolated accounts automatically, survive restart a
   assert.ok(!disk.includes(f.config.google.clientSecret));assert.ok(!disk.includes('google-access-not-retained'));
 });
 
+test('Google: closing registration blocks new subjects but permits existing Google identities',async t=>{
+  const f=await fixture(t),owner=await f.localLogin();
+  const first=await f.callback(await f.begin(),{claims:{sub:'already-created',email:'existing@example.com'}});
+  assert.equal(first.status,303);
+  const existing=await f.fromSessionCookie(sessionCookie(first));
+  const disabled=await f.post('/api/manage/admin/registration',{enabled:false},owner.headers);
+  assert.equal(disabled.status,200);
+  const repeat=await f.callback(await f.begin(),{claims:{sub:'already-created',email:'existing@example.com'}});
+  assert.equal(repeat.status,303,'existing Google identity remains able to sign in');
+  const loggedIn=await f.fromSessionCookie(sessionCookie(repeat));
+  assert.equal(loggedIn.account.id,existing.account.id);
+  const fresh=await f.callback(await f.begin(),{claims:{sub:'new-subject-while-closed',email:'new@example.com'}});
+  assert.equal(fresh.status,403,'new Google subjects must not create accounts');
+  assert.equal((await fresh.json()).error,'registration_disabled');
+  assert.equal(f.server.store.db.prepare('SELECT count(*) AS n FROM google_identities').get().n,1);
+});
+
 test('Google: explicit linking retains owner devices and unlinking preserves a password login',async t=>{
   const f=await fixture(t),owner=await f.localLogin();
   const response=await f.callback(await f.begin({session:owner,mode:'link'}));
