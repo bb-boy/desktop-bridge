@@ -458,3 +458,17 @@ button#tab-devices.active,button#tab-devices.active:hover {background:#cae9d9;bo
 @media(prefers-reduced-motion:reduce) {
   .device-status-dot.online {animation:none}
 }
+
+/* Account administration: matches the existing pixel dashboard without exposing controls to ordinary users. */
+.admin-dialog.nes-dialog{width:min(94vw,910px);max-height:87dvh;overflow-y:auto;overscroll-behavior:contain}
+.admin-registration.nes-container{background:#f1f8ed;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:22px;padding:23px 26px;margin:4px 0 30px}
+.admin-registration .muted{margin:8px 0 0}
+.admin-toggle{display:inline-flex;align-items:center;gap:12px;cursor:pointer;margin:0;padding:10px 15px;border:3px solid var(--ink);background:#fff}
+.admin-toggle input{width:22px;height:22px;accent-color:#278b4f}
+.admin-toggle span{white-space:nowrap}
+.admin-user-section .section-title{margin-bottom:16px}
+.admin-user-row{margin-bottom:12px!important}
+.admin-user-row strong{word-break:break-all}
+.admin-user-row .badge{flex:none}
+.admin-user-row button{white-space:nowrap}
+@media(max-width:650px){.admin-dialog.nes-dialog{padding:19px 14px}.admin-registration.nes-container{padding:18px}.admin-user-row{align-items:flex-start;flex-wrap:wrap}.admin-user-row .grow{flex-basis:100%}}
