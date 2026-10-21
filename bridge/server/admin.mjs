@@ -30,7 +30,7 @@ export function installAdmin(app,store,broker,sessions) {
       if(account.admin||account.id==='owner')return {status:403,error:'不能删除管理员账户'};
       const devices=store.db.prepare('SELECT id FROM registry WHERE owner=?').all(targetId).map(d=>d.id);
       // Revoke first. Keeping minimal tombstones lets installed agents detect revocation.
-      store.db.prepare("UPDATE registry SET revoked=1,tokenHash=NULL,pendingHash=NULL,owner=NULL,name='已注销设备',platform=NULL,version=NULL,revokedAt=? WHERE owner=?").run(Date.now(),targetId);
+      store.db.prepare("UPDATE registry SET revoked=1,tokenHash=NULL,pendingHash=NULL,owner='deleted',name='已注销设备',platform=NULL,version=NULL,revokedAt=? WHERE owner=?").run(Date.now(),targetId);
       store.db.prepare('DELETE FROM devices WHERE owner=?').run(targetId);
       store.db.prepare('DELETE FROM pairings WHERE owner=?').run(targetId);
       store.db.prepare('DELETE FROM sessions WHERE owner=?').run(targetId);
