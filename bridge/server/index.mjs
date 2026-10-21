@@ -14,6 +14,7 @@ import {remoteTools,accountInfo,validateDeviceArgs} from './remote-tools.mjs';
 import { Broker } from './broker.mjs';
 import { createSessions, installManagement } from './management.mjs';
 import { installGoogle } from './google.mjs';
+import { installAdmin } from './admin.mjs';
 import { installerDownload } from './downloads.mjs';
 
 const root=path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -40,6 +41,7 @@ export async function startServer(config,dependencies={}) {
   const broker=new Broker(httpServer,config,store);
   installManagement(app,config,store,broker,loginLimiter,sessions);
   installGoogle(app,config,store,sessions,loginLimiter,{fetch:dependencies.googleFetch});
+  installAdmin(app,store,broker,sessions);
   const auth=requireBearerAuth({verifier:provider,requiredScopes:['desktop'],expectedResource:new URL('/mcp',base),resourceMetadataUrl:new URL('/.well-known/oauth-protected-resource/mcp',base).href});
   app.get('/healthz',(_req,res)=>res.json({status:'ok',version:'0.2.6'}));
   app.get('/api/devices',auth,(req,res)=>res.json({devices:broker.devices(req.auth.extra.ownerId)}));
