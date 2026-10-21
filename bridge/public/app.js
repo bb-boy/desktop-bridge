@@ -1,6 +1,6 @@
 'use strict';
 const $=s=>document.querySelector(s),el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
-let csrf,account,refreshing=false,googleEnabled=false;
+let csrf,account,refreshing=false,googleEnabled=false,registrationEnabled=true;
 const query=new URLSearchParams(location.search),invitation=query.get('invite');
 const healthLabels={ready:'工具可用',offline:'离线',paused:'已暂停',unverified:'网络已连接 · 待检查',local_unavailable:'网络已连接 · 工具异常'};
 const statusLabels={executing:'执行中',awaiting_result:'等待设备补交',unknown:'结果未知',completed:'已完成',failed:'执行失败'};
@@ -14,7 +14,7 @@ async function api(url,data) {
 async function action(fn){try{message('');await fn();}catch(e){message(e.message);}}
 function button(text,fn,cls='secondary'){const b=el('button',text,cls);b.type='button';b.classList.add('nes-btn');if(cls==='danger')b.classList.add('is-error');if(cls==='success')b.classList.add('is-success');b.onclick=()=>action(async()=>{b.disabled=true;try{await fn();}finally{b.disabled=false;}});return b;}
 function empty(parent,text){parent.replaceChildren(el('p',text,'empty'));}
-async function boot(){const [s,g]=await Promise.all([api('/api/session'),api('/api/auth/google').catch(()=>({enabled:false}))]);csrf=s.csrf;account=s.account;googleEnabled=g.enabled===true;const googleButton=$('#google-login');googleButton.hidden=false;googleButton.disabled=!googleEnabled;googleButton.querySelector('.google-text').textContent='使用 Google 登录';const googleAvailability=$('#google-availability');googleAvailability.hidden=googleEnabled;if(googleEnabled)googleButton.removeAttribute('aria-describedby');else googleButton.setAttribute('aria-describedby','google-availability');$('#login-panel').hidden=!!account;$('#app-panel').hidden=!account;$('#account-menu').hidden=!account;if(!account&&$('#account-dialog').open)$('#account-dialog').close();setAccountProfile();closeAccountMenu();$('#invite-panel').hidden=!account?.admin;if(account){history.replaceState(null,'',query.has('pair')?'/?pair='+encodeURIComponent(query.get('pair')):'/');await refresh();if(query.has('pair')){$('#pair-code').value=query.get('pair');await previewPair();}}else if(invitation){$('#login-form').hidden=true;$('#signup-form').hidden=false;$('#toggle-login').hidden=false;}}
+async function boot(){const [s,g,r]=await Promise.all([api('/api/session'),api('/api/auth/google').catch(()=>({enabled:false})),api('/api/registration')]);csrf=s.csrf;account=s.account;googleEnabled=g.enabled===true;registrationEnabled=r.enabled===true;const googleButton=$('#google-login');googleButton.hidden=false;googleButton.disabled=!googleEnabled;googleButton.querySelector('.google-text').textContent='使用 Google 登录';const googleAvailability=$('#google-availability');googleAvailability.hidden=googleEnabled;if(googleEnabled)googleButton.removeAttribute('aria-describedby');else googleButton.setAttribute('aria-describedby','google-availability');$('#login-panel').hidden=!!account;$('#app-panel').hidden=!account;$('#account-menu').hidden=!account;$('#admin-entry').hidden=!account?.admin;if(!account&&$('#account-dialog').open)$('#account-dialog').close();if(!account&&$('#admin-dialog').open)$('#admin-dialog').close();setAccountProfile();closeAccountMenu();$('#invite-panel').hidden=!account?.admin;if(account){history.replaceState(null,'',query.has('pair')?'/?pair='+encodeURIComponent(query.get('pair')):'/');await refresh();if(query.has('pair')){$('#pair-code').value=query.get('pair');await previewPair();}}else{$('#signup-unavailable').hidden=!(invitation&&!registrationEnabled);$('#login-form').hidden=false;$('#signup-form').hidden=true;$('#toggle-login').hidden=true;if(invitation&&registrationEnabled){$('#login-form').hidden=true;$('#signup-form').hidden=false;$('#toggle-login').hidden=false;}}}
 $('#toggle-login').onclick=()=>{$('#login-form').hidden=!$('#login-form').hidden;$('#signup-form').hidden=!$('#signup-form').hidden;};
 $('#login-form').onsubmit=e=>{e.preventDefault();action(async()=>{const s=await api('/api/login',Object.fromEntries(new FormData(e.target)));csrf=s.csrf;account=s.account;e.target.reset();await boot();});};
 $('#signup-form').onsubmit=e=>{e.preventDefault();action(async()=>{const s=await api('/api/signup',{...Object.fromEntries(new FormData(e.target)),invitation});csrf=s.csrf;account=s.account;e.target.reset();await boot();});};
@@ -84,6 +84,47 @@ $('#account-settings').onclick=()=>{
  if(googleEnabled)void accountAction(renderGoogle);
 };
 $('#close-account-dialog').onclick=()=>$('#account-dialog').close();
+
+async function adminAction(fn){
+ const feedback=$('#admin-feedback');feedback.hidden=true;
+ try{await fn();}catch(error){feedback.textContent=error.message;feedback.hidden=false;}
+}
+async function renderAdmin(){
+ const data=await api('/api/manage/admin');
+ $('#registration-enabled').checked=data.registrationEnabled;
+ $('#admin-user-count').textContent='('+data.users.length+')';
+ const parent=$('#admin-users');parent.replaceChildren();
+ if(!data.users.length){empty(parent,'暂无用户');return;}
+ for(const user of data.users){
+  const row=el('article',undefined,'row nes-container admin-user-row');
+  const info=el('div',undefined,'grow');
+  const display=user.email||user.username;
+  info.append(el('strong',display));
+  if(user.email)info.append(el('p','登录账号：'+user.username,'muted'));
+  info.append(el('p','创建时间：'+time(user.created)+' · 设备：'+user.deviceCount,'muted'));
+  const role=el('span',user.admin?'管理员':'用户','badge '+(user.admin?'ready':''));
+  row.append(info,role);
+  if(!user.admin&&user.id!==account?.id)row.append(button('删除账户',()=>adminAction(async()=>{
+   if(prompt('删除账户将撤销会话、授权及设备绑定且不可恢复。请输入“'+display+'”确认：')!==display)return;
+   await api('/api/manage/admin/users/'+encodeURIComponent(user.id)+'/delete',{});
+   await renderAdmin();
+  }),'danger'));
+  parent.append(row);
+ }
+}
+$('#admin-entry').onclick=()=>{if(!account?.admin)return;closeAccountMenu();void adminAction(async()=>{
+ await renderAdmin();
+ const dialog=$('#admin-dialog');if(!dialog.open)dialog.showModal();
+});};
+$('#close-admin-dialog').onclick=()=>$('#admin-dialog').close();
+$('#admin-refresh').onclick=()=>void adminAction(renderAdmin);
+$('#registration-enabled').onchange=()=>void adminAction(async()=>{
+ const control=$('#registration-enabled'),enabled=control.checked;control.disabled=true;
+ try{await api('/api/manage/admin/registration',{enabled});registrationEnabled=enabled;await renderAdmin();}
+ catch(error){control.checked=!enabled;throw error;}
+ finally{control.disabled=false;}
+});
+
 async function refresh(){if(!account||refreshing)return;refreshing=true;try{const [d,c,a]=await Promise.all([api('/api/manage/devices'),api('/api/manage/calls'),api('/api/manage/authorizations')]);renderDevices(d.devices);renderCalls(c.calls);renderAuth(a.authorizations);if(googleEnabled)await renderGoogle();$('#stat-total').textContent=d.devices.length;$('#stat-ready').textContent=d.readyDevices;$('#stat-tools').textContent=d.toolCount;$('#stat-waiting').textContent=c.calls.filter(x=>['executing','awaiting_result'].includes(x.status)).length;}finally{refreshing=false;}}
 function platformInfo(platform){
  const raw=String(platform??'').toLowerCase();
