@@ -70,6 +70,6 @@ test('Dashboard: Google account settings opens from the avatar menu, not a top-l
   assert.ok(script.includes("$('#close-account-dialog').onclick=()=>$('#account-dialog').close()"));
   assert.ok(script.includes("$('#google-unlink').disabled=!g.canUnlink"));
   assert.match(css,/\.account-dialog\.nes-dialog\{[^}]*overflow-y:auto/);
-  assert.match(html,/app\.js\?v=20261018-account-dialog/);
-  assert.match(html,/style\.css\?v=20261018-account-dialog/);
+  assert.match(html,/app\.js\?v=20261022-device-limits/);
+  assert.match(html,/style\.css\?v=20261022-device-limits/);
 });
