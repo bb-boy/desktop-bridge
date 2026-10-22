@@ -199,7 +199,8 @@ export function installManagement(app,config,store,broker,loginLimiter,sessions=
       const p=store.db.prepare("SELECT * FROM pairings WHERE userHash=? AND expires>? AND status='pending'").get(codeHash(req.body.code),Date.now());
       if(!p)return {status:404,error:'配对码已过期或已使用'};
       if(req.body.decision==='deny'){store.db.prepare("UPDATE pairings SET status='denied' WHERE hash=?").run(p.hash);return;}
-      if(store.devices(req.session.owner).length>=50)return {status:409,error:'每个账号最多绑定 50 台设备'};
+      const limit=store.deviceLimit(req.session.owner);
+      if(store.devices(req.session.owner).length>=limit)return {status:409,error:'设备绑定已达到此账号的上限（'+limit+' 台）'};
       store.db.prepare('INSERT INTO registry(id,owner,name,version,platform) VALUES (?,?,?,?,?)').run(p.device,req.session.owner,p.name,p.version,p.platform);
       store.db.prepare("UPDATE pairings SET status='approved',owner=? WHERE hash=?").run(req.session.owner,p.hash);
     });

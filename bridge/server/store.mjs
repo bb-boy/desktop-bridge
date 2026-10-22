@@ -20,6 +20,7 @@ export function openStore(directory) {
     CREATE TABLE IF NOT EXISTS monthly_usage(owner TEXT NOT NULL,month TEXT NOT NULL,calls INTEGER NOT NULL,started INTEGER NOT NULL,PRIMARY KEY(owner,month));
     CREATE TABLE IF NOT EXISTS invitations(hash TEXT PRIMARY KEY,expires INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS account_device_limits(owner TEXT PRIMARY KEY,max_devices INTEGER NOT NULL CHECK(max_devices BETWEEN 0 AND 1000));
   `);
   // Keep revoked registration records for owner-visible audit and re-pair guidance.
   if(!db.prepare('PRAGMA table_info(registry)').all().some(r=>r.name==='revokedAt'))db.exec('ALTER TABLE registry ADD COLUMN revokedAt INTEGER');
@@ -49,6 +50,9 @@ export function openStore(directory) {
     },
     registrationEnabled() {return db.prepare("SELECT value FROM settings WHERE key='registration_enabled'").get()?.value!=='0';},
     setRegistrationEnabled(enabled) {db.prepare("INSERT INTO settings(key,value) VALUES ('registration_enabled',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(enabled?'1':'0');},
+    // Existing accounts without an override keep the historical 50-device limit.
+    deviceLimit(owner) {return db.prepare('SELECT max_devices FROM account_device_limits WHERE owner=?').get(owner)?.max_devices??50;},
+    setDeviceLimit(owner,limit) {db.prepare('INSERT INTO account_device_limits(owner,max_devices) VALUES (?,?) ON CONFLICT(owner) DO UPDATE SET max_devices=excluded.max_devices').run(owner,limit);},
     account(username) {return db.prepare('SELECT * FROM accounts WHERE username=?').get(username);},
     accountById(id) {return db.prepare('SELECT id,username,admin FROM accounts WHERE id=?').get(id);},
     recordToolCall(owner,now=Date.now()) {

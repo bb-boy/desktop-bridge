@@ -9,8 +9,11 @@ export function installAdmin(app,store,broker,sessions) {
   app.get('/api/manage/admin',requireAdmin,(_req,res)=>{
     const users=store.db.prepare(`
       SELECT a.id,a.username,a.admin,a.created,g.email,
-        (SELECT COUNT(*) FROM registry r WHERE r.owner=a.id AND r.revoked=0) AS deviceCount
-      FROM accounts a LEFT JOIN google_identities g ON g.owner=a.id
+        (SELECT COUNT(*) FROM registry r WHERE r.owner=a.id AND r.revoked=0) AS deviceCount,
+        COALESCE(l.max_devices,50) AS deviceLimit
+      FROM accounts a
+      LEFT JOIN google_identities g ON g.owner=a.id
+      LEFT JOIN account_device_limits l ON l.owner=a.id
       ORDER BY a.admin DESC,a.created DESC,a.id
     `).all();
     res.json({registrationEnabled:store.registrationEnabled(),users});
@@ -19,6 +22,18 @@ export function installAdmin(app,store,broker,sessions) {
     if(typeof req.body?.enabled!=='boolean')return json(res,400,'enabled 必须是布尔值');
     store.transaction(()=>store.setRegistrationEnabled(req.body.enabled));
     res.json({registrationEnabled:store.registrationEnabled()});
+  });
+  app.post('/api/manage/admin/users/:id/device-limit',requireAdmin,(req,res)=>{
+    const targetId=req.params.id,limit=req.body?.limit;
+    if(typeof targetId!=='string'||!targetId||targetId.length>128)return json(res,400,'无效用户');
+    if(!Number.isSafeInteger(limit)||limit<0||limit>1000)return json(res,400,'设备上限必须为 0–1000 的整数');
+    const result=store.transaction(()=>{
+      if(!store.accountById(targetId))return null;
+      store.setDeviceLimit(targetId,limit);
+      return {deviceLimit:store.deviceLimit(targetId)};
+    });
+    if(!result)return json(res,404,'账户不存在');
+    res.json(result);
   });
   app.post('/api/manage/admin/users/:id/delete',requireAdmin,(req,res)=>{
     const targetId=req.params.id;
@@ -38,6 +53,7 @@ export function installAdmin(app,store,broker,sessions) {
       store.db.prepare('DELETE FROM google_identities WHERE owner=?').run(targetId);
       store.db.prepare('DELETE FROM calls WHERE owner=?').run(targetId);
       store.db.prepare('DELETE FROM monthly_usage WHERE owner=?').run(targetId);
+      store.db.prepare('DELETE FROM account_device_limits WHERE owner=?').run(targetId);
       store.db.prepare('DELETE FROM accounts WHERE id=?').run(targetId);
       return {devices};
     });

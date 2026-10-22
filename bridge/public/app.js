@@ -101,9 +101,25 @@ async function renderAdmin(){
   const display=user.email||user.username;
   info.append(el('strong',display));
   if(user.email)info.append(el('p','登录账号：'+user.username,'muted'));
-  info.append(el('p','创建时间：'+time(user.created)+' · 设备：'+user.deviceCount,'muted'));
+  info.append(el('p','创建时间：'+time(user.created)+' · 设备：'+user.deviceCount+' / '+user.deviceLimit+(user.deviceCount>user.deviceLimit?' · 已超出上限':''),'muted'));
   const role=el('span',user.admin?'管理员':'用户','badge '+(user.admin?'ready':''));
-  row.append(info,role);
+  const controls=el('form',undefined,'admin-limit-controls');
+  const limitLabel=el('label','设备上限');
+  const limitInput=el('input',undefined,'nes-input');
+  limitInput.type='number';limitInput.min='0';limitInput.max='1000';limitInput.step='1';limitInput.required=true;
+  limitInput.value=String(user.deviceLimit);
+  limitInput.setAttribute('aria-label',display+' 的设备上限');
+  limitLabel.append(limitInput);
+  const save=el('button','保存','nes-btn is-primary');save.type='submit';
+  controls.append(limitLabel,save);
+  controls.onsubmit=event=>{event.preventDefault();void adminAction(async()=>{
+    const limit=Number(limitInput.value);
+    if(!Number.isSafeInteger(limit)||limit<0||limit>1000)throw new Error('设备上限必须为 0–1000 的整数');
+    save.disabled=true;
+    try{await api('/api/manage/admin/users/'+encodeURIComponent(user.id)+'/device-limit',{limit});await renderAdmin();}
+    finally{save.disabled=false;}
+  });};
+  row.append(info,role,controls);
   if(!user.admin&&user.id!==account?.id)row.append(button('删除账户',()=>adminAction(async()=>{
    if(prompt('删除账户将撤销会话、授权及设备绑定且不可恢复。请输入“'+display+'”确认：')!==display)return;
    await api('/api/manage/admin/users/'+encodeURIComponent(user.id)+'/delete',{});

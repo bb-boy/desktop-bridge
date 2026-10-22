@@ -95,6 +95,7 @@ test('admin: deleting an account removes credentials, devices, Google identity a
  assert.equal(users.users.find(a=>a.id==='regular').deviceCount,1);
  assert.equal((await regular.post('/api/manage/admin/users/owner/delete')).status,403);
  assert.equal((await admin.post('/api/manage/admin/users/owner/delete')).status,403);
+ f.server.store.setDeviceLimit('regular',12);
  assert.equal((await admin.post('/api/manage/admin/users/regular/delete')).status,200);
  assert.equal((await admin.post('/api/manage/admin/users/regular/delete')).status,404);
  assert.equal((await regular.get('/api/manage/devices')).status,401);
@@ -104,6 +105,7 @@ test('admin: deleting an account removes credentials, devices, Google identity a
  assert.equal(f.server.store.db.prepare('SELECT COUNT(*) AS n FROM grants WHERE hash=?').get(hash('access')).n,0);
  assert.equal(f.server.store.db.prepare('SELECT COUNT(*) AS n FROM pairings WHERE owner=?').get('regular').n,0);
  assert.equal(f.server.store.db.prepare('SELECT COUNT(*) AS n FROM monthly_usage WHERE owner=?').get('regular').n,0);
+ assert.equal(f.server.store.db.prepare('SELECT COUNT(*) AS n FROM account_device_limits WHERE owner=?').get('regular').n,0);
  assert.equal(f.server.store.db.prepare('SELECT COUNT(*) AS n FROM devices WHERE owner=?').get('regular').n,0);
  const revoked=f.server.store.db.prepare('SELECT * FROM registry WHERE id=?').get('regular-device');
  assert.equal(revoked.revoked,1);assert.equal(revoked.tokenHash,null);assert.equal(revoked.owner,'deleted');
@@ -119,5 +121,69 @@ test('admin: UI exposes separate administrator dialog without adding a standard 
  assert.match(html,/id="registration-enabled" role="switch"/);
  assert.match(js,/admin-entry'\)\.hidden=!account\?\.admin/);
  assert.match(js,/api\/manage\/admin\/users/);
+ assert.match(js,/device-limit/);
+ assert.match(js,/limitInput\.min='0';limitInput\.max='1000'/);
  assert.doesNotMatch(js,/innerHTML\s*=/);
+});
+
+
+test('admin: per-user device limits default to 50, validate input, respect role and survive restart',async t=>{
+ const f=await fixture(t),admin=await f.authenticated(),db=f.server.store.db;
+ db.prepare('INSERT INTO accounts VALUES (?,?,?,?,?)').run('regular','regular',f.encoded,0,Date.now());
+ const regular=await f.authenticated('regular');
+ const endpoint='/api/manage/admin/users/regular/device-limit';
+ const users=(await(await admin.get('/api/manage/admin')).json()).users;
+ assert.equal(users.find(u=>u.id==='regular').deviceLimit,50);
+ assert.equal(users.find(u=>u.id==='owner').deviceLimit,50);
+ assert.equal((await f.send(endpoint,{limit:1})).status,401);
+ assert.equal((await regular.post(endpoint,{limit:1})).status,403);
+ assert.equal((await admin.post(endpoint,{limit:'1'})).status,400);
+ for(const limit of [-1,1001,1.2,null,true])assert.equal((await admin.post(endpoint,{limit})).status,400);
+ assert.equal((await f.send(endpoint,{limit:1},{...admin.headers,origin:'https://not-our-site.invalid'})).status,403);
+ assert.equal((await admin.post('/api/manage/admin/users/nonexistent/device-limit',{limit:5})).status,404);
+ assert.equal((await admin.post(endpoint,{limit:0})).status,200,'zero disables future pairs');
+ assert.equal(f.server.store.deviceLimit('regular'),0);
+ assert.equal((await admin.post(endpoint,{limit:1000})).status,200);
+ assert.equal(f.server.store.deviceLimit('regular'),1000);
+ assert.equal((await admin.post(endpoint,{limit:2})).status,200);
+ await f.restart();
+ assert.equal(f.server.store.deviceLimit('regular'),2);
+ const after=(await(await(await f.authenticated()).get('/api/manage/admin')).json()).users;
+ assert.equal(after.find(u=>u.id==='regular').deviceLimit,2);
+ assert.equal(after.find(u=>u.id==='owner').deviceLimit,50);
+});
+
+test('admin: per-user limit is enforced atomically at pairing approval, without evicting existing devices',async t=>{
+ const f=await fixture(t),admin=await f.authenticated(),db=f.server.store.db;
+ db.prepare('INSERT INTO accounts VALUES (?,?,?,?,?)').run('regular','regular',f.encoded,0,Date.now());
+ const regular=await f.authenticated('regular');
+ const limitEndpoint='/api/manage/admin/users/regular/device-limit';
+ assert.equal((await admin.post(limitEndpoint,{limit:1})).status,200);
+ async function startPair(name){
+   const response=await f.send('/api/pair/start',{name,platform:'darwin',version:'0.2.7'});
+   assert.equal(response.status,200);
+   return response.json();
+ }
+ const first=await startPair('First');
+ const second=await startPair('Second');
+ assert.equal((await regular.post('/api/manage/pair',{code:first.userCode,decision:'approve'})).status,200);
+ const conflict=await regular.post('/api/manage/pair',{code:second.userCode,decision:'approve'});
+ assert.equal(conflict.status,409);
+ assert.match((await conflict.json()).error,/1 台/);
+ let users=(await(await admin.get('/api/manage/admin')).json()).users;
+ assert.equal(users.find(u=>u.id==='regular').deviceCount,1);
+ assert.equal((await admin.post(limitEndpoint,{limit:0})).status,200);
+ users=(await(await admin.get('/api/manage/admin')).json()).users;
+ assert.equal(users.find(u=>u.id==='regular').deviceCount,1,'lowering a limit does not unbind devices');
+ assert.equal(users.find(u=>u.id==='regular').deviceLimit,0);
+ assert.equal((await regular.post('/api/manage/pair',{code:second.userCode,decision:'approve'})).status,409);
+ const deviceId=db.prepare('SELECT id FROM registry WHERE owner=? AND revoked=0').get('regular').id;
+ assert.equal((await regular.post('/api/manage/devices/'+deviceId+'/unlink',{})).status,200);
+ assert.equal((await regular.post('/api/manage/pair',{code:second.userCode,decision:'approve'})).status,409,'limit zero still blocks pairing');
+ assert.equal((await admin.post(limitEndpoint,{limit:1})).status,200);
+ assert.equal((await regular.post('/api/manage/pair',{code:second.userCode,decision:'approve'})).status,200,'slot is available after unlink');
+ const poll=await f.send('/api/pair/poll',{deviceCode:second.deviceCode});
+ assert.equal(poll.status,200);
+ assert.ok((await poll.json()).deviceToken);
+ assert.equal(db.prepare('SELECT COUNT(*) AS n FROM registry WHERE owner=? AND revoked=0').get('regular').n,1);
 });
