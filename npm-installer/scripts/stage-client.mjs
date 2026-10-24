@@ -18,7 +18,7 @@ const clientFiles=[
   'launch.sh','lifecycle.mjs','node-runtime.json','package-lock.json',
   'package.json','runner.mjs','start.sh','startup.mjs','windows-background.mjs','stop.sh','uninstall.ps1'
 ];
-const agentFiles=['agent.mjs','pair.mjs'];
+const agentFiles=['agent.mjs','pair.mjs','mcp-manager.mjs'];
 const needs=(source,rel)=>{
   const file=path.join(source,rel);
   if(!fs.statSync(file).isFile()||fs.lstatSync(file).isSymbolicLink())throw new Error('Unsafe source: '+file);

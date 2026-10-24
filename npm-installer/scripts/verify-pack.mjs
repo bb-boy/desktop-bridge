@@ -16,6 +16,7 @@ for(const required of [
   'dist/client/package.json','dist/client/package-lock.json',
   'dist/client/node-runtime.json','dist/client/environment.mjs',
   'dist/client/agent/agent.mjs','dist/client/agent/pair.mjs',
+  'dist/client/agent/mcp-manager.mjs',
   'dist/client/Install.cmd','dist/client/Install.sh'
 ]){
   assert.ok(paths.has(required),'Missing required file: '+required);
