@@ -21,6 +21,7 @@ export function openStore(directory) {
     CREATE TABLE IF NOT EXISTS invitations(hash TEXT PRIMARY KEY,expires INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS account_device_limits(owner TEXT PRIMARY KEY,max_devices INTEGER NOT NULL CHECK(max_devices BETWEEN 0 AND 1000));
+    CREATE TABLE IF NOT EXISTS device_tool_policies(owner TEXT NOT NULL,device TEXT NOT NULL,mode TEXT NOT NULL CHECK(mode IN ('full','read_only','custom')),allowed TEXT NOT NULL,updated INTEGER NOT NULL,PRIMARY KEY(owner,device));
   `);
   // Keep revoked registration records for owner-visible audit and re-pair guidance.
   if(!db.prepare('PRAGMA table_info(registry)').all().some(r=>r.name==='revokedAt'))db.exec('ALTER TABLE registry ADD COLUMN revokedAt INTEGER');
@@ -65,6 +66,21 @@ export function openStore(directory) {
       return {month,toolCalls:row?.calls??0,countedSince:row?new Date(row.started).toISOString():null};
     },
     device, devices(owner) {return owner===undefined?db.prepare('SELECT * FROM registry WHERE revoked=0').all():db.prepare('SELECT * FROM registry WHERE owner=? AND revoked=0').all(owner);},
+    devicePolicy(owner,id) {
+      if(!db.prepare('SELECT id FROM registry WHERE id=? AND owner=? AND revoked=0').get(id,owner))throw new Error('Device not found');
+      const row=db.prepare('SELECT mode,allowed,updated FROM device_tool_policies WHERE owner=? AND device=?').get(owner,id);
+      return row?{device_id:id,mode:row.mode,allowed_tools:JSON.parse(row.allowed),updated:row.updated}:{device_id:id,mode:'full',allowed_tools:[],updated:null};
+    },
+    saveDevicePolicy(owner,id,mode,allowed=[]) {
+      if(!['full','read_only','custom'].includes(mode))throw new Error('Invalid permission mode');
+      if(!Array.isArray(allowed)||allowed.length>128||allowed.some(n=>typeof n!=='string'||n.length>128)||new Set(allowed).size!==allowed.length)throw new Error('Invalid allowed tools');
+      if(!db.prepare('SELECT id FROM registry WHERE id=? AND owner=? AND revoked=0').get(id,owner))throw new Error('Device not found');
+      const known=JSON.parse(db.prepare('SELECT tools FROM devices WHERE id=? AND owner=?').get(id,owner)?.tools??'[]').map(t=>t.name);
+      if(mode==='custom'&&allowed.some(name=>name!=='shutdown'&&!known.includes(name)))throw new Error('Unknown device tool');
+      const normalized=mode==='custom'?allowed:[];
+      db.prepare("INSERT INTO device_tool_policies(owner,device,mode,allowed,updated) VALUES (?,?,?,?,?) ON CONFLICT(owner,device) DO UPDATE SET mode=excluded.mode,allowed=excluded.allowed,updated=excluded.updated").run(owner,id,mode,JSON.stringify(normalized),Date.now());
+      return this.devicePolicy(owner,id);
+    },
     getClient(id) {return parse(db.prepare('SELECT value FROM clients WHERE id=?').get(id));},
     putClient(client) {db.prepare('INSERT INTO clients VALUES (?,?,?)').run(client.client_id,JSON.stringify(client),Date.now());},
     clientCount() {return db.prepare('SELECT count(*) AS n FROM clients').get().n;},

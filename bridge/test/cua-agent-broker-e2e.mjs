@@ -68,6 +68,13 @@ try {
  assert.match(entry.result?.content?.[0]?.text??'',/Found \d+ window/i);
  console.log('BROKER_RESULT_KEYS='+Object.keys(entry.result?.structuredContent??{}).join(','));
  console.log('BROKER_CUA_WINDOWS_CALL_PASS=true');
+ server.broker.setDevicePermissions({device_id:deviceId,mode:'read_only'},'owner');
+ await assert.rejects(()=>server.broker.call('cua_click',{device_id:deviceId},'owner'),/permission denied/);
+ await assert.rejects(()=>server.broker.call('start_process',{device_id:deviceId},'owner'),/permission denied/);
+ const readonlyWindows=await server.broker.call('cua_list_windows',{device_id:deviceId},'owner');
+ assert.match(readonlyWindows.content[0].text,/Found \d+ window/i);
+ console.log('BROKER_READONLY_ENFORCED=true');
+ server.broker.setDevicePermissions({device_id:deviceId,mode:'full'},'owner');
  async function remoteCall(name,args){
   const requestId=randomUUID();
   connected.ws.send(JSON.stringify({type:'call',id:requestId,name,arguments:args}));

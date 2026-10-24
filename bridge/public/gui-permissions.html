@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Desktop Bridge · 设备权限</title>
+<style>
+  :root{color-scheme:light dark;font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+  *{box-sizing:border-box}
+  body{margin:0;padding:16px;color:var(--app-text-color,CanvasText);background:var(--app-background-color,Canvas)}
+  main{max-width:640px;margin:auto}
+  h2{font-size:17px;margin:0 0 3px}
+  p{margin:0 0 14px;color:var(--app-secondary-text-color,GrayText);font-size:12px}
+  label{cursor:pointer}
+  select,button{font:inherit;border-radius:9px}
+  select{width:100%;padding:10px;border:1px solid #8886;background:transparent;color:inherit}
+  fieldset{border:1px solid #8885;border-radius:12px;margin:12px 0;padding:11px}
+  legend{font-weight:600;padding:0 7px}
+  .option{display:flex;align-items:start;gap:8px;padding:6px 1px}
+  .option small{display:block;color:GrayText}
+  .controls{display:flex;justify-content:space-between;align-items:center;gap:12px}
+  .group{border-top:1px solid #8883;padding:11px 0}
+  .group h3{font-size:13px;margin:0 0 7px}
+  .tools{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:6px}
+  .tools label{display:flex;gap:8px;align-items:center;font-size:12px;min-width:0;overflow-wrap:anywhere}
+  button{padding:9px 15px;background:#1469dd;color:white;border:0;cursor:pointer}
+  button.secondary{color:inherit;border:1px solid #8885;background:transparent}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  #status{min-height:20px;font-size:12px;color:var(--app-secondary-text-color,GrayText)}
+  #status[data-error="true"]{color:#d22}
+  #catalog[hidden]{display:none}
+</style>
+</head>
+<body>
+<main>
+  <h2>Desktop Bridge · 设备权限</h2>
+  <p>此设置仅控制 Desktop Bridge 自身的远程工具权限。ChatGPT 原生确认、Cua 和 Windows 系统权限仍然独立生效。</p>
+  <label for="device">选择设备</label>
+  <select id="device" aria-label="选择设备" disabled><option>读取设备中…</option></select>
+  <fieldset>
+    <legend>执行权限</legend>
+    <label class="option"><input type="radio" name="mode" value="full" checked><span><strong>全部允许（默认）</strong><small>Desktop Commander 与 Cua 的全部工具均可使用</small></span></label>
+    <label class="option"><input type="radio" name="mode" value="read_only"><span><strong>仅查看</strong><small>允许读取文件、窗口和状态；阻止点击、写文件、执行命令</small></span></label>
+    <label class="option"><input type="radio" name="mode" value="custom"><span><strong>自定义</strong><small>逐个选择允许使用的工具；新出现的工具默认关闭</small></span></label>
+  </fieldset>
+  <section id="catalog" hidden>
+    <div class="group"><h3>Desktop Commander</h3><div class="tools" id="desktop-tools"></div></div>
+    <div class="group"><h3>Cua Driver · GUI</h3><div class="tools" id="cua-tools"></div></div>
+    <p>注意：通用终端工具可以执行复杂命令；关闭 Cua 工具不代表已经禁止桌面脚本操作。</p>
+  </section>
+  <div class="controls">
+    <button id="reload" class="secondary">重新加载</button>
+    <button id="save" disabled>保存权限</button>
+  </div>
+  <p id="status" role="status" aria-live="polite"></p>
+</main>
+<script type="module">
+  const $=selector=>document.querySelector(selector);
+  const device=$('#device'),catalog=$('#catalog'),save=$('#save'),status=$('#status');
+  let current=null, busy=false, requestNumber=0;
+  const pending=new Map();
+  function setStatus(text,error=false){status.textContent=text;status.dataset.error=String(error);}
+  function rpcRequest(method,params) {
+    return new Promise((resolve,reject)=>{
+      const id=++requestNumber;pending.set(id,{resolve,reject});
+      window.parent.postMessage({jsonrpc:'2.0',id,method,params},'*');
+    });
+  }
+  function rpcNotify(method,params){window.parent.postMessage({jsonrpc:'2.0',method,params},'*');}
+  window.addEventListener('message',event=>{
+    if(event.source!==window.parent||!event.data||event.data.jsonrpc!=='2.0')return;
+    const message=event.data;
+    if(typeof message.id==='number'&&pending.has(message.id)){
+      const task=pending.get(message.id);pending.delete(message.id);
+      if(message.error)task.reject(new Error(message.error.message||'MCP 请求失败'));
+      else task.resolve(message.result);
+    }
+    if(message.method==='ui/notifications/tool-result'&&message.params?.structuredContent){
+      show(message.params.structuredContent);
+    }
+  });
+  const ready=(async()=>{
+    await rpcRequest('ui/initialize',{appInfo:{name:'desktop-bridge-device-permissions',version:'1.0.0'},appCapabilities:{},protocolVersion:'2026-01-26'});
+    rpcNotify('ui/notifications/initialized',{});
+  })();
+  async function call(name,args) {
+    await ready;
+    const result=await rpcRequest('tools/call',{name,arguments:args});
+    if(result?.isError)throw new Error(result.content?.[0]?.text||'操作失败');
+    if(!result?.structuredContent)throw new Error('服务端没有返回权限数据');
+    return result.structuredContent;
+  }
+  function mode(){return document.querySelector('input[name="mode"]:checked')?.value||'full';}
+  function renderTools(list){
+    for(const source of ['desktop','cua']){
+      const parent=document.getElementById(source+'-tools');parent.replaceChildren();
+      const tools=list.filter(t=>t.source===source);
+      if(!tools.length){parent.textContent='该设备尚未注册此类工具';continue;}
+      for(const tool of tools){
+        const label=document.createElement('label'),check=document.createElement('input'),text=document.createElement('span');
+        check.type='checkbox';check.dataset.tool=tool.name;
+        check.checked=current.allowed_tools.includes(tool.name);
+        text.textContent=tool.name+(tool.annotations?.readOnlyHint?' · 只读':'');
+        label.append(check,text);parent.append(label);
+      }
+    }
+  }
+  function show(data){
+    if(!data||!Array.isArray(data.tools)||!Array.isArray(data.devices))return;
+    current=data;
+    device.replaceChildren();
+    for(const d of data.devices){
+      const option=document.createElement('option');
+      option.value=d.id;option.textContent=d.name+' · '+d.id;
+      device.append(option);
+    }
+    device.value=data.device_id;device.disabled=false;
+    const selected=document.querySelector('input[name="mode"][value="'+data.mode+'"]');
+    if(selected)selected.checked=true;
+    renderTools(data.tools);
+    catalog.hidden=mode()!=='custom';
+    save.disabled=false;
+    setStatus('已加载设备权限'+(data.updated?'':'（使用默认：全部允许）'));
+  }
+  async function load(id){
+    if(busy)return;busy=true;save.disabled=true;device.disabled=true;
+    setStatus('正在读取权限…');
+    try {show(await call('get_device_permissions',id?{device_id:id}:{}));}
+    catch(error){setStatus(error.message,true);}
+    finally {busy=false;device.disabled=false;save.disabled=!current;}
+  }
+  device.addEventListener('change',()=>load(device.value));
+  document.querySelectorAll('input[name="mode"]').forEach(el=>el.addEventListener('change',()=>{catalog.hidden=mode()!=='custom';}));
+  $('#reload').addEventListener('click',()=>load(device.value||undefined));
+  save.addEventListener('click',async()=>{
+    if(busy||!current)return;
+    busy=true;save.disabled=true;setStatus('正在保存…');
+    try {
+      const payload={device_id:device.value,mode:mode()};
+      if(payload.mode==='custom')payload.allowed_tools=[...document.querySelectorAll('[data-tool]:checked')].map(el=>el.dataset.tool);
+      show(await call('set_device_permissions',payload));
+      setStatus('已保存：'+({'full':'全部允许','read_only':'仅查看','custom':'自定义'}[payload.mode]));
+    } catch(error){setStatus(error.message,true);}
+    finally{busy=false;save.disabled=!current;}
+  });
+  ready.then(()=>load()).catch(error=>setStatus('ChatGPT 网页组件初始化失败：'+error.message,true));
+</script>
+</body>
+</html>

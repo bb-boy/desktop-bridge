@@ -111,7 +111,7 @@ test('real MCP client discovers and invokes device tools; disconnects never repl
   await client.connect(transport);
   t.after(()=>client.close());
   const tools=await client.listTools();
-  assert.deepEqual(tools.tools.map(t=>t.name),['list_devices','list_calls','get_call_result','who_am_i','ping','shutdown',...bundledCatalog.tools.map(t=>t.name),'echo_tool']);
+  assert.deepEqual(tools.tools.map(t=>t.name),['list_devices','list_calls','get_call_result','who_am_i','ping','shutdown','get_device_permissions','set_device_permissions',...bundledCatalog.tools.map(t=>t.name),'echo_tool']);
   assert.ok(tools.tools.find(t=>t.name==='echo_tool').inputSchema.properties.device_id);
   const good=await client.callTool({name:'echo_tool',arguments:{device_id:'p111',message:'hello'}});
   assert.equal(good.content[0].text,'hello');
@@ -291,9 +291,9 @@ test('dashboard distinguishes ready devices from executable MCP tool count',asyn
   t.after(()=>ws.terminate());
   const connected=await(await account.request('/api/manage/devices')).json();
   assert.equal(connected.readyDevices,1,'one ready device is not one tool');
-  assert.equal(6+bundledCatalog.tools.length,31,'standard Desktop Bridge catalog has 31 tools');
-  assert.equal(connected.toolCount,32,'the connected test device registers one additional test_tool');
-  assert.equal(connected.toolCount,6+f.server.broker.tools(account.account.id).length);
+  assert.equal(8+bundledCatalog.tools.length,33,'standard Desktop Bridge catalog now has 33 tools');
+  assert.equal(connected.toolCount,34,'the connected test device registers one additional test_tool plus two permission tools');
+  assert.equal(connected.toolCount,8+f.server.broker.tools(account.account.id).length);
 });
 
 test('browser sessions enforce CSRF, one-time invitations, pairing ownership and account isolation',async t=>{

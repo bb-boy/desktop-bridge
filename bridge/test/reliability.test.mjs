@@ -51,12 +51,12 @@ async function mcp(t,f,owner) {
   return client;
 }
 
-test('first authenticated discovery has 31 tools before pairing and remains stable through device lifecycle',async t=>{
+test('first authenticated discovery has 33 tools before pairing and remains stable through device lifecycle',async t=>{
   const f=await fixture(t,{devices:[]}),store=f.server.store;
   const client=await mcp(t,f,'owner');
   const initial=(await client.listTools()).tools;
-  assert.equal(initial.length,31);
-  assert.equal(new Set(initial.map(tool=>tool.name)).size,31);
+  assert.equal(initial.length,33);
+  assert.equal(new Set(initial.map(tool=>tool.name)).size,33);
   for(const name of ['write_file','start_process','read_file','edit_block']) {
     const tool=initial.find(tool=>tool.name===name);
     assert.ok(tool?.inputSchema.properties.device_id);
@@ -151,8 +151,8 @@ test('MCP catalogs, task queries and device result routing stay within the authe
   store.beginCall('owner-task','p111','test_tool','owner');
   store.beginCall('alice-task','alice-pc','private_tool','alice');
   const owner=await mcp(t,f,'owner'),alice=await mcp(t,f,'alice');
-  assert.deepEqual((await owner.listTools()).tools.map(x=>x.name),['list_devices','list_calls','get_call_result','who_am_i','ping','shutdown',...bundledCatalog.tools.map(t=>t.name),'test_tool']);
-  assert.deepEqual((await alice.listTools()).tools.map(x=>x.name),['list_devices','list_calls','get_call_result','who_am_i','ping','shutdown',...bundledCatalog.tools.map(t=>t.name),'private_tool']);
+  assert.deepEqual((await owner.listTools()).tools.map(x=>x.name),['list_devices','list_calls','get_call_result','who_am_i','ping','shutdown','get_device_permissions','set_device_permissions',...bundledCatalog.tools.map(t=>t.name),'test_tool']);
+  assert.deepEqual((await alice.listTools()).tools.map(x=>x.name),['list_devices','list_calls','get_call_result','who_am_i','ping','shutdown','get_device_permissions','set_device_permissions',...bundledCatalog.tools.map(t=>t.name),'private_tool']);
   const ownDevices=JSON.parse((await owner.callTool({name:'list_devices',arguments:{}})).content[0].text);
   assert.deepEqual(ownDevices.map(x=>x.id),['p111']);
   const otherDevices=JSON.parse((await alice.callTool({name:'list_devices',arguments:{}})).content[0].text);

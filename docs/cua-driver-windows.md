@@ -53,3 +53,25 @@ node test\cua-agent-broker-e2e.mjs
 已观察到：Cua 真机共 63 个工具；1 个 fixture 工具加上 Cua 为 64 个；计算器截图在 MCP 中约 35 KB，经临时 Broker 转发约 34 KB。此处不是带完整 25 个 Desktop Commander 工具的生产目录计数。
 
 尚待完成：Windows 正式安装器中的“启用 Cua”选择和配置、精细化屏幕/窗口权限、隐私审计、超大图像处理、部分完整旧回归的失败排查，以及真实在线部署验收。测试文件没有扩展名 `.test.mjs`，不会在缺少 Windows/Cua 的环境被普通 `npm test` 自动执行。
+
+## ChatGPT 网页端统一工具权限（Feature 06-08）
+
+本分支已开发统一权限面板，运行位置是 `chatgpt.com` 的 MCP Apps 内嵌 iframe，不是 Windows 本地 App。Windows 仅运行 Desktop Bridge Agent 和 Cua Driver：
+
+1. 通过聊天使用 `get_device_permissions` 调出设备权限卡片。
+2. 选择所管理的设备，默认“全部允许”。“仅查看”由 Broker 拒绝一切可能写入/点击/执行的工具；“自定义”按 Desktop Commander / Cua Driver 分组逐个勾选。
+3. 点击“保存权限”调用 app-only `set_device_permissions`，更改保存在 Broker SQLite 中；强制生效点是 Broker.call，不依赖工具是否在 ChatGPT 列表隐藏。
+4. 服务端为工具生成 MCP risk annotations，供 ChatGPT 网页原生插件权限机制参考：`start_process`、`cua_click` 等有潜在副作用；`read_file`、`cua_list_windows` 等只读。复合工具的风险不能按某次参数静态降级。
+5. 此默认“全部允许”仅表示 Broker 不进行额外拒绝；它不能更改 ChatGPT 用户手动设置的原生审批政策，不能绕过 Cua standard 或 Windows UAC。
+6. 改动部署后，须在 chatgpt.com 插件设置刷新 MCP 工具目录，再测试“允许低风险操作”条件下 ChatGPT 的实际授权行为。ChatGPT 原生审批是否出现由平台决定，本项目只提供准确的风险提示。
+
+本地验收：
+```powershell
+cd C:\Users\justl\desktop-bridge-cua-windows
+node --test bridge\test\device-permissions.test.mjs bridge\test\permissions-mcp.test.mjs bridge\test\mcp-manager.test.mjs bridge\test\frontend.test.mjs bridge\test\dashboard-ui.test.mjs
+npm test --prefix npm-installer
+cd bridge
+node test\cua-agent-broker-e2e.mjs
+```
+
+注意：全量旧回归中部分真实 Agent 生命周期/Windows 安装器测试仍失败；未在生产环境部署。若权限从 full 切换为 restricted，已经开始执行的远程调用不会被取消；新调用会被 Broker 拒绝。
