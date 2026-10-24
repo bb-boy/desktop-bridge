@@ -80,7 +80,9 @@ test('switching background/manual persists selection, removes login startup and 
 
 test('generated commands preserve literal paths with spaces, apostrophes and shell metacharacters',async t=>{
  const dir=directory(t),root=path.join(dir,"client ' $(echo injected) $HOME `false` &");fs.mkdirSync(root);fs.writeFileSync(path.join(root,'control.mjs'),"console.log(JSON.stringify(process.argv.slice(2)));");
- const command=commandFor(process.execPath,root,'mode manual');assert.equal(await capture('/bin/sh',['-c',command]),'["mode","manual"]');
+ if(process.platform!=='win32') {
+   const command=commandFor(process.execPath,root,'mode manual');assert.equal(await capture('/bin/sh',['-c',command]),'["mode","manual"]');
+ }
  assert.equal(shellQuote("a'b"),"'a'\\''b'");assert.equal(powershellQuote("a'b"),"'a''b'");
  const windows=commandFor('C:\\Program Files\\node.exe',"C:\\a'b\\%TEMP% & $x",'start','win32');assert.match(windows,/^& 'C:\\Program Files\\node.exe'/);assert.ok(windows.includes("a''b"));assert.ok(windows.includes('%TEMP% & $x'));
  const plist=startupContent('/node & <xml>',root,'darwin');assert.ok(plist.includes('/node &amp; &lt;xml&gt;'));assert.doesNotMatch(plist,/<string>\/node & <xml>/);

@@ -27,3 +27,17 @@
 - [ ] 原有 `npm test --prefix bridge` 未全部通过：一部分旧 Agent 端到端测试超时，Windows 安装器相关用例失败，仍需排查；不能发布/合并。
 - [ ] 当前测试使用临时设备凭据和测试服务器，不改写运行中的 p111 Desktop Bridge Agent 配置。
 - [ ] 尚未推送功能分支、创建 PR、合并或部署。
+
+## 2026-10-25 Windows 全量回归修复完成
+- [x] 查明原来的 Agent 重连、解绑、关闭测试失败原因是 Windows 测试 teardown 在子进程退出前删除临时目录，导致 EPERM。
+- [x] `reliability.test.mjs` 与 `bridge.test.mjs` fixture 统一追踪并提前停止其创建的子进程，再关闭服务器与删除目录；核心 29/29 通过。
+- [x] Windows 没有符号链接创建权限时单独跳过符号链接逃逸测试，其他管理员权限测试正常执行。
+- [x] `dataRoot` 依据目标平台使用正确路径分隔符，修复模拟 darwin/linux 的 Windows 测试。
+- [x] Windows 上使用 maintenance.flag 验证 Agent 正常退出，不再把 `child.kill('SIGTERM')` 误当优雅退出。
+- [x] POSIX `/bin/sh` 执行断言仅在 POSIX 环境运行；保留 Windows 命令引用检查。
+- [x] downloads fixture 在服务器关闭后删除临时目录；标准测试通过。
+- [x] 验证 `--test-force-exit` 在 Windows Node 中触发 libuv assert 的测试运行器问题，正式验收使用原项目标准命令，无需强制退出。
+- [x] `npm test --prefix bridge`：146 个测试，129 通过、0 失败、17 跳过（符合当前 Windows OS 和权限环境），Exit 0。
+- [x] `npm test --prefix npm-installer`：7/7 通过。
+- [x] 真机 Windows Broker + Cua Driver 端到端权限拦截与截图测试通过。
+- [ ] GitHub CI 的其他操作系统和 ChatGPT 网页 MCP Apps 实际渲染仍待 PR 与测试环境验收；不直接发布生产。

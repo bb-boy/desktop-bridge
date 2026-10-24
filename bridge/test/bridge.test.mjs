@@ -24,8 +24,22 @@ async function fixture(t,extra={}) {
   const origin='http://127.0.0.1:'+server.httpServer.address().port;
   // Keep the security origin equal to the actual ephemeral endpoint.
   config.baseUrl=origin;
-  const result={server,origin,token,password,config,directory};
-  t.after(async()=>{await result.server.close();fs.rmSync(directory,{recursive:true,force:true});});
+  const result={server,origin,token,password,config,directory,children:new Set()};
+  result.track=child=>{result.children.add(child);return child;};
+  t.after(async()=>{
+    for(const child of result.children) {
+      if(child.exitCode!==null||child.signalCode!==null)continue;
+      const stopped=once(child,'exit').catch(()=>{});
+      child.kill('SIGTERM');
+      await Promise.race([stopped,sleep(3000)]);
+      if(child.exitCode===null&&child.signalCode===null){
+        child.kill('SIGKILL');
+        await Promise.race([stopped,sleep(1500)]);
+      }
+    }
+    await result.server.close();
+    fs.rmSync(directory,{recursive:true,force:true,maxRetries:12,retryDelay:100});
+  });
   return result;
 }
 async function form(url,data,headers={}) {
@@ -172,8 +186,8 @@ test('actual agent persists duplicate-call protection across restarts',async t=>
   const configPath=path.join(f.directory,'agent-config.json');
   fs.writeFileSync(configPath,JSON.stringify({serverUrl:f.origin,deviceId:'p111',deviceToken:f.token,runtimeDir:project,mcpEntry:fileURLToPath(new URL('fixture-mcp.mjs',import.meta.url)),workingDirectory:f.directory}));
   let child;
-  async function start(){child=spawn(process.execPath,[path.join(project,'agent/agent.mjs'),configPath],{stdio:'ignore'});await waitFor(()=>f.server.broker.devices()[0].toolsAvailable);}
-  async function stop(){if(child && child.exitCode===null){const done=once(child,'exit');child.kill('SIGTERM');await done;}if(f.server.httpServer.listening)await waitFor(()=>!f.server.broker.devices()[0].online);}
+  async function start(){child=f.track(spawn(process.execPath,[path.join(project,'agent/agent.mjs'),configPath],{stdio:'ignore'}));await waitFor(()=>f.server.broker.devices()[0].toolsAvailable);}
+  async function stop(){if(child && child.exitCode===null&&child.signalCode===null){const done=once(child,'exit');child.kill('SIGTERM');await done;}if(f.server.httpServer.listening)await waitFor(()=>!f.server.broker.devices()[0].online);}
   t.after(stop);
   await start();
   const id='12345678-1234-1234-1234-123456789012';
@@ -195,8 +209,8 @@ test('unlinked online device loses its server hash and local Agent credentials',
   const f=await fixture(t),account=await browser(f);
   const project=fileURLToPath(new URL('..',import.meta.url)),configPath=path.join(f.directory,'agent-config.json');
   fs.writeFileSync(configPath,JSON.stringify({serverUrl:f.origin,deviceId:'p111',deviceToken:f.token,runtimeDir:project,mcpEntry:fileURLToPath(new URL('fixture-mcp.mjs',import.meta.url)),workingDirectory:f.directory}));
-  const child=spawn(process.execPath,[path.join(project,'agent/agent.mjs'),configPath],{stdio:'ignore',env:{...process.env,DESKTOP_BRIDGE_SUPPRESS_NOTIFICATIONS:'1'}});
-  t.after(()=>{if(child.exitCode===null)child.kill('SIGTERM');});
+  const child=f.track(spawn(process.execPath,[path.join(project,'agent/agent.mjs'),configPath],{stdio:'ignore',env:{...process.env,DESKTOP_BRIDGE_SUPPRESS_NOTIFICATIONS:'1'}}));
+  // The fixture awaits child exit before removing temporary directory.
   await waitFor(()=>f.server.broker.devices()[0].toolsAvailable);
   assert.equal((await account.request('/api/manage/devices/p111/unlink',{})).status,200);
   const record=f.server.store.db.prepare('SELECT revoked,tokenHash,pendingHash FROM registry WHERE id=?').get('p111');
@@ -223,8 +237,8 @@ test('offline revoked device clears saved credentials on next Agent launch',asyn
   const project=fileURLToPath(new URL('..',import.meta.url)),configPath=path.join(f.directory,'agent-config.json');
   fs.writeFileSync(configPath,JSON.stringify({serverUrl:f.origin,deviceId:'p111',deviceToken:f.token,runtimeDir:project,mcpEntry:fileURLToPath(new URL('fixture-mcp.mjs',import.meta.url)),workingDirectory:f.directory}));
   assert.equal((await account.request('/api/manage/devices/p111/unlink',{})).status,200);
-  const child=spawn(process.execPath,[path.join(project,'agent/agent.mjs'),configPath],{stdio:'ignore',env:{...process.env,DESKTOP_BRIDGE_SUPPRESS_NOTIFICATIONS:'1'}});
-  t.after(()=>{if(child.exitCode===null)child.kill('SIGTERM');});
+  const child=f.track(spawn(process.execPath,[path.join(project,'agent/agent.mjs'),configPath],{stdio:'ignore',env:{...process.env,DESKTOP_BRIDGE_SUPPRESS_NOTIFICATIONS:'1'}}));
+  // The fixture awaits child exit before removing temporary directory.
   const [exitCode]=await once(child,'exit');
   assert.equal(exitCode,78);
   const local=JSON.parse(fs.readFileSync(configPath,'utf8'));

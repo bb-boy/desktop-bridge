@@ -34,7 +34,13 @@ test('source validation requires paired https credential and rejects unsafe mani
 test('privileged payload rejects escaping symlinks, rewrites only child paths',t=>{
  const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'bridge-admin-copy-'));t.after(()=>fs.rmSync(tmp,{recursive:true,force:true}));
  const src=path.join(tmp,'src');fs.mkdirSync(src);fs.writeFileSync(path.join(src,'ok'),'safe');
- fs.symlinkSync('/etc/passwd',path.join(src,'outside'));
+ try{fs.symlinkSync('/etc/passwd',path.join(src,'outside'));}
+ catch(error) {
+   // Windows without Developer Mode or SeCreateSymbolicLinkPrivilege cannot
+   // create test symlinks. Do not skip the surrounding elevation test suite.
+   if(process.platform==='win32'&&error.code==='EPERM')return t.skip('Windows account cannot create symlinks without Developer Mode');
+   throw error;
+ }
  assert.throws(()=>copyTreeSafe(src,path.join(tmp,'dest')),/escapes/);
  assert.deepEqual(rewritePaths({a:'/root/old/file',b:'/root/older/file'},'/root/old','/private/admin'),{a:'/private/admin/file',b:'/root/older/file'});
 });

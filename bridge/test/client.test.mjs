@@ -64,7 +64,10 @@ test('agent protocol v2 reports health, deduplicates calls, rotates tokens and r
  await until(()=>messages.filter(m=>m.type==='result'&&m.id===id).length===2);assert.equal(fs.readFileSync(path.join(dir,'counter.txt'),'utf8'),'1');
  const token='b'.repeat(43);send({type:'rotate',token});await until(()=>messages.find(m=>m.type==='rotate_ack'&&m.tokenHash===createHash('sha256').update(token).digest('hex')));
  assert.equal(JSON.parse(fs.readFileSync(config)).deviceToken,token);
- const completed=exited(processAgent);processAgent.kill('SIGTERM');await completed;
+ // Windows child.kill('SIGTERM') is a forced termination and has no exit code.
+ // Exercise the Agent's cross-platform graceful stop path instead.
+ const completed=exited(processAgent);fs.writeFileSync(path.join(dir,'maintenance.flag'),'test stop');await completed;
+ fs.rmSync(path.join(dir,'maintenance.flag'));
  const connected=once(wss,'connection');start();const [next]=await connected;messages=[];next.on('message',data=>messages.push(JSON.parse(data)));
  await until(()=>messages.find(m=>m.type==='hello'));next.send(JSON.stringify({type:'welcome',recover:[id]}));
  const recovered=await until(()=>messages.find(m=>m.type==='result'&&m.id===id));assert.equal(recovered.result.content[0].text,'1');assert.equal(fs.readFileSync(path.join(dir,'counter.txt'),'utf8'),'1');

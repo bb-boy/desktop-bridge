@@ -4,7 +4,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 export const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 export function dataRoot(platform=process.platform,env=process.env,home=os.homedir()) {
-  return platform==='win32'?path.join(env.LOCALAPPDATA??path.join(home,'AppData','Local'),'DesktopBridgeClient'):platform==='darwin'?path.join(home,'Library','Application Support','DesktopBridge'):path.join(env.XDG_DATA_HOME??path.join(home,'.local','share'),'desktop-bridge');
+  return platform==='win32'?path.win32.join(env.LOCALAPPDATA??path.win32.join(home,'AppData','Local'),'DesktopBridgeClient'):platform==='darwin'?path.posix.join(home,'Library','Application Support','DesktopBridge'):path.posix.join(env.XDG_DATA_HOME??path.posix.join(home,'.local','share'),'desktop-bridge');
 }
 export function run(command,args,options={}) {
   return new Promise((resolve,reject)=>{const child=spawn(command,args,{stdio:'inherit',...options});child.once('error',reject);child.once('exit',(code,signal)=>code===0?resolve():reject(new Error(`${path.basename(command)} failed (${signal??code})`)));});

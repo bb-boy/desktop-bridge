@@ -23,9 +23,24 @@ async function until(predicate) {
 async function fixture(t,extra={}) {
   const directory=fs.mkdtempSync(path.join(os.tmpdir(),'bridge-reliability-')),token=opaque();
   const config={baseUrl:'http://127.0.0.1:9876',port:0,dataDir:directory,ownerPasswordHash:await passwordHash(opaque()),devices:[{id:'p111',name:'Owner computer',tokenHash:hash(token)}],...extra};
-  const f={directory,config,token,server:await startServer(config)};
+  const f={directory,config,token,server:await startServer(config),children:new Set()};
+  f.track=child=>{f.children.add(child);return child;};
   f.origin='http://127.0.0.1:'+f.server.httpServer.address().port;
-  t.after(async()=>{await f.server.close();fs.rmSync(directory,{recursive:true,force:true});});
+  t.after(async()=>{
+    // Windows refuses to remove a temp working directory while a child owns it.
+    for(const child of f.children) {
+      if(child.exitCode!==null||child.signalCode!==null)continue;
+      const stopped=once(child,'exit').catch(()=>{});
+      child.kill('SIGTERM');
+      await Promise.race([stopped,sleep(3000)]);
+      if(child.exitCode===null&&child.signalCode===null) {
+        child.kill('SIGKILL');
+        await Promise.race([stopped,sleep(1500)]);
+      }
+    }
+    await f.server.close();
+    fs.rmSync(directory,{recursive:true,force:true,maxRetries:12,retryDelay:100});
+  });
   return f;
 }
 async function device(f,{capabilities={},autoPong=true,id='p111',token=f.token,tools=[{name:'test_tool',description:'Owner tool',inputSchema:{type:'object',properties:{}}}],message=()=>{}}={}) {
@@ -248,8 +263,8 @@ test('an actual agent recovers persisted results after relay restart and never r
   fs.writeFileSync(path.join(f.directory,'counter.txt'),'1');
   fs.writeFileSync(journalPath,JSON.stringify({[completed]:{status:'completed',time:Date.now(),result:{content:[{type:'text',text:'1'}]}},[interrupted]:{status:'executing',time:Date.now()}}));
   fs.writeFileSync(configPath,JSON.stringify({serverUrl:f.origin,deviceId:'p111',deviceToken:f.token,runtimeDir:project,mcpEntry:fileURLToPath(new URL('fixture-mcp.mjs',import.meta.url)),workingDirectory:f.directory}));
-  const child=spawn(process.execPath,[path.join(project,'agent/agent.mjs'),configPath],{stdio:'ignore'});
-  t.after(async()=>{if(child.exitCode===null){const done=once(child,'exit');child.kill('SIGTERM');await done;}});
+  const child=f.track(spawn(process.execPath,[path.join(project,'agent/agent.mjs'),configPath],{stdio:'ignore'}));
+  // The fixture tracks and gracefully terminates this child before removing files.
   await until(()=>f.server.broker.devices()[0].toolsAvailable&&f.server.store.call(completed,'owner').status==='completed'&&f.server.store.call(interrupted,'owner').error);
   assert.equal(f.server.store.call(completed,'owner').result.content[0].text,'1');
   assert.equal(f.server.store.call(interrupted,'owner').status,'unknown');
@@ -265,8 +280,8 @@ test('a real side effect completed offline is recovered automatically after rela
   f.config.port=f.server.httpServer.address().port;
   const configPath=path.join(f.directory,'agent-config.json');
   fs.writeFileSync(configPath,JSON.stringify({serverUrl:f.origin,deviceId:'p111',deviceToken:f.token,runtimeDir:project,mcpEntry:fileURLToPath(new URL('fixture-delayed-mcp.mjs',import.meta.url)),workingDirectory:f.directory}));
-  const child=spawn(process.execPath,[path.join(project,'agent/agent.mjs'),configPath],{stdio:'ignore'});
-  t.after(async()=>{if(child.exitCode===null){const done=once(child,'exit');child.kill('SIGTERM');await done;}});
+  const child=f.track(spawn(process.execPath,[path.join(project,'agent/agent.mjs'),configPath],{stdio:'ignore'}));
+  // The fixture tracks and gracefully terminates this child before removing files.
   await until(()=>f.server.broker.devices()[0].toolsAvailable);
   const pending=f.server.broker.call('increment',{});
   await until(()=>fs.existsSync(path.join(f.directory,'counter.txt')));
@@ -330,8 +345,8 @@ test('shutdown stops a supervised agent, persists its result and requires local 
  fs.writeFileSync(config,JSON.stringify({serverUrl:f.origin,deviceId:'p111',deviceToken:f.token,runtimeDir:project,mcpEntry:fileURLToPath(new URL('fixture-mcp.mjs',import.meta.url)),workingDirectory:f.directory}));
  fs.writeFileSync(path.join(f.directory,'launch.json'),JSON.stringify({agent:path.join(project,'agent/agent.mjs'),config}));
  const children=[];
- const start=()=>{const p=spawn(process.execPath,[path.join(project,'client/runner.mjs'),f.directory],{stdio:'ignore'});children.push(p);return p;};
- t.after(async()=>{for(const p of children)if(p.exitCode===null&&p.signalCode===null){const done=once(p,'exit');p.kill('SIGTERM');await done;}});
+ const start=()=>{const p=f.track(spawn(process.execPath,[path.join(project,'client/runner.mjs'),f.directory],{stdio:'ignore'}));children.push(p);return p;};
+ // The fixture owns runner cleanup.
  const runner=start();await until(()=>f.server.broker.devices()[0].toolsAvailable);assert.equal(f.server.broker.devices()[0].remoteShutdownAvailable,true);
  const client=await mcp(t,f,'owner'),exited=once(runner,'exit');
  const result=await client.callTool({name:'shutdown',arguments:{device_id:'p111'}});assert.notEqual(result.isError,true);
@@ -353,8 +368,8 @@ test('an agent refuses shutdown while an earlier call has an uncertain in-flight
  const f=await fixture(t,{callTimeoutMs:50}),project=fileURLToPath(new URL('..',import.meta.url));
  const config=path.join(f.directory,'agent-config.json');
  fs.writeFileSync(config,JSON.stringify({serverUrl:f.origin,deviceId:'p111',deviceToken:f.token,runtimeDir:project,mcpEntry:fileURLToPath(new URL('fixture-delayed-mcp.mjs',import.meta.url)),workingDirectory:f.directory}));
- const child=spawn(process.execPath,[path.join(project,'agent/agent.mjs'),config],{stdio:'ignore'});
- t.after(async()=>{if(child.exitCode===null){const done=once(child,'exit');child.kill('SIGTERM');await done;}});
+ const child=f.track(spawn(process.execPath,[path.join(project,'agent/agent.mjs'),config],{stdio:'ignore'}));
+ // The fixture owns child cleanup.
  await until(()=>f.server.broker.devices()[0].toolsAvailable);
  const timed=await f.server.broker.call('increment',{});assert.equal(timed.isError,true);
  const rejected=await f.server.broker.call('shutdown',{});assert.equal(rejected.isError,true);assert.match(rejected.content[0].text,/executing call/);
