@@ -75,6 +75,17 @@ test('default policy is full access and Broker advertises trusted annotations',a
  assert.equal(f.sent,1);
 });
 
+test('web permission panel opens without device_id when an account has multiple computers',t=>{
+ const f=fixture(t);
+ f.store.db.prepare("INSERT INTO registry(id,owner,name,tokenHash) VALUES ('p222','owner','MacBook Neo','test')").run();
+ const initial=f.broker.devicePermissions();
+ assert.equal(initial.device_id,'p222','Default to first owned device by name');
+ assert.deepEqual(initial.devices.map(d=>d.id),['p222','p111']);
+ assert.equal(initial.mode,'full');
+ assert.equal(f.broker.devicePermissions({device_id:'p111'}).device_id,'p111');
+ assert.throws(()=>f.broker.devicePermissions({device_id:'not-owned'}),/Device not found/);
+});
+
 test('read_only allows only conservative reads; rejects file write, shell, click, unknown and shutdown',async t=>{
  const f=fixture(t);
  f.broker.setDevicePermissions({device_id:'p111',mode:'read_only'});

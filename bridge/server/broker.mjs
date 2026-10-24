@@ -140,10 +140,12 @@ export class Broker {
   }
   devicePermissions(args={},owner='owner') {
     if(!args||typeof args!=='object'||Array.isArray(args)||Object.keys(args).some(k=>k!=='device_id'))throw new Error('Only device_id is accepted');
-    const deviceId=args.device_id??(this.store.devices(owner).length===1?this.store.devices(owner)[0].id:null);
+    const ownedDevices=this.store.devices(owner).sort((a,b)=>a.name.localeCompare(b.name));
+    const deviceId=args.device_id??ownedDevices[0]?.id;
+    if(!deviceId&&ownedDevices.length===0)return {device_id:null,mode:'full',allowed_tools:[],updated:null,devices:[],tools:[]};
     if(typeof deviceId!=='string')throw new Error('Choose a device');
     const policy=this.store.devicePolicy(owner,deviceId);
-    const devices=this.store.devices(owner).map(d=>({id:d.id,name:d.name,policy_mode:this.store.devicePolicy(owner,d.id).mode}));
+    const devices=ownedDevices.map(d=>({id:d.id,name:d.name,policy_mode:this.store.devicePolicy(owner,d.id).mode}));
     const catalog=this.store.tools(deviceId,owner).map(t=>({name:t.name,source:toolSource(t.name),annotations:riskForTool(t.name)}));
     catalog.push({name:'shutdown',source:'desktop',annotations:riskForTool('shutdown')});
     return {...policy,devices,tools:catalog};
