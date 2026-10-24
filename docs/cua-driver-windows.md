@@ -35,3 +35,21 @@
 ## 已有验证
 - 独立 MCP Manager 单测与 Windows 双真实 stdio 子进程测试；
 - 现有完整回归中的失败/超时必须单独诊断，不能直接声称整体通过。
+
+## Windows p111 本机验证完成项（2026-10-25）
+
+使用 Cua Driver 0.38.0，已经通过开发分支的 `McpToolManager` 完成后台计算器 UI 测试：
+
+```powershell
+cd C:\Users\justl\desktop-bridge-cua-windows\bridge
+node test\cua-calculator-e2e.mjs
+node test\cua-agent-broker-e2e.mjs
+```
+
+第一条脚本会启动 Windows 计算器，通过真实 UI Automation 元素逐个执行 `6 × 7 =`，验证 UI 文本“显示为 42”，并在 MCP 响应中校验缩放后的计算器窗口截图。
+
+第二条脚本使用临时数据目录、随机临时设备令牌和 Windows 本机临时 Broker，启动开发分支 Agent，同时接入模拟 Desktop Commander MCP 与真实 Cua MCP，依次验证工具注册、`cua_list_windows`、`cua_launch_app` 和 `cua_get_window_state` 的截图跨 WebSocket 返回。整个过程不会修改已部署 Agent 的配置或连接生产服务。
+
+已观察到：Cua 真机共 63 个工具；1 个 fixture 工具加上 Cua 为 64 个；计算器截图在 MCP 中约 35 KB，经临时 Broker 转发约 34 KB。此处不是带完整 25 个 Desktop Commander 工具的生产目录计数。
+
+尚待完成：Windows 正式安装器中的“启用 Cua”选择和配置、精细化屏幕/窗口权限、隐私审计、超大图像处理、部分完整旧回归的失败排查，以及真实在线部署验收。测试文件没有扩展名 `.test.mjs`，不会在缺少 Windows/Cua 的环境被普通 `npm test` 自动执行。

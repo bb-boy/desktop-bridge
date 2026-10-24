@@ -17,3 +17,13 @@
 - [ ] Desktop Commander 保持可用，Cua 缺失不影响现有用户。
 - [ ] 测试输出可复现，明确列出未完成/未验证事项。
 - [ ] 未自动部署生产版。
+
+## 本次 Windows 测试快照（2026-10-25）
+- [x] 在 Windows p111 上使用 `Microsoft.WindowsCalculator_8wekyb3d8bbwe!App` AUMID 后台启动计算器。
+- [x] 通过 `get_window_state` 的 UI Automation 元素令牌执行 clear、6、multiply、7、equal；结果为 42。
+- [x] Cua 窗口截图可通过 MCP 返回（约 35 KB）。
+- [x] 临时 Broker + 临时 Agent + 实际 Cua Driver 的多 MCP 工具发现、`cua_list_windows`、`cua_launch_app`、`cua_get_window_state`（图片）完整端到端通过。
+- [x] 新增 MCP Manager 7/7 通过、npm 安装器 7/7 通过、npm dry-run 打包文件清单校验通过（前一阶段）。
+- [ ] 原有 `npm test --prefix bridge` 未全部通过：一部分旧 Agent 端到端测试超时，Windows 安装器相关用例失败，仍需排查；不能发布/合并。
+- [ ] 当前测试使用临时设备凭据和测试服务器，不改写运行中的 p111 Desktop Bridge Agent 配置。
+- [ ] 尚未推送功能分支、创建 PR、合并或部署。

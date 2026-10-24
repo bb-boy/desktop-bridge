@@ -20,3 +20,10 @@
 - [ ] 冲突目录/恶意工具名/工具过多均安全拒绝。
 - [ ] 不泄露其他账号设备工具目录。
 - [ ] Mock 设备与 broker 测试通过。
+
+## Windows p111 实测记录（2026-10-25）
+- [x] 真实 Cua Driver 0.38.0 可通过 Agent 的 `cua_` 命名空间提供工具。
+- [x] 临时 Desktop Commander MCP fixture + 真实 Cua 同时连接，发现 64 个工具（1 个 fixture + 63 个 Cua）。
+- [x] 临时本地 Broker 能注册 64 个工具，按设备下发 `cua_list_windows`，Windows Agent 正确处理并返回结果。
+- [x] `cua_get_window_state` 窗口截图经过 Windows Agent -> WebSocket -> Broker 返回完整 MCP image，约 34 KiB。
+- [ ] 服务端真实账户多设备权限和跨设备目录上限仍需专项验证；64 个工具不代表生产环境原始工具总数。
