@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {createInterface} from 'node:readline/promises';
-import {startupFile} from './lifecycle.mjs';
+import {startupFile,startupIsOwned,linuxSystemdUnitFile} from './lifecycle.mjs';
 export function parseInstallerOptions(args) {
  const options={};
  const switches={'--repair':'repair','--no-browser':'noBrowser','--no-start':'noStart','--stop':'stop','--uninstall':'uninstall','--purge':'purge','--administrator':'administrator'};
@@ -26,7 +26,11 @@ export function savedMode(root) {
  try{const mode=JSON.parse(fs.readFileSync(path.join(root,'client-settings.json'),'utf8')).mode;if(['manual','background'].includes(mode))return mode;throw new Error('Invalid saved mode');}
  catch(error){if(error.code!=='ENOENT')throw new Error('Cannot read saved client mode: '+error.message);}
  // Preserve the actual choice of installations created before settings existed.
- if(fs.existsSync(path.join(root,'.desktop-bridge-client'))||fs.existsSync(path.join(root,'agent-config.json')))return fs.existsSync(startupFile(root))?'background':'manual';
+ if(fs.existsSync(path.join(root,'.desktop-bridge-client'))||fs.existsSync(path.join(root,'agent-config.json'))){
+  const legacy=startupFile(root);
+  return startupIsOwned(legacy,root,process.platform)||
+   (process.platform==='linux'&&startupIsOwned(linuxSystemdUnitFile(),root,'systemd'))?'background':'manual';
+ }
 }
 export async function chooseMode(options,{previous,interactive=!!(process.stdin.isTTY&&process.stdout.isTTY),ask}={}) {
  if(options.stop||options.uninstall)return;

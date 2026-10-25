@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import {createHash} from 'node:crypto';
 import { spawn } from 'node:child_process';
 export const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 export function dataRoot(platform=process.platform,env=process.env,home=os.homedir()) {
@@ -35,6 +36,31 @@ export async function stopClient(root,{timeout=20000}={}) {
 export function startupFile(root,platform=process.platform,env=process.env,home=os.homedir()) {
   return platform==='win32'?path.join(env.APPDATA??path.join(home,'AppData','Roaming'),'Microsoft','Windows','Start Menu','Programs','Startup','Desktop Bridge.lnk'):platform==='darwin'?path.join(home,'Library','LaunchAgents','de.desktopbridge.agent.plist'):path.join(env.XDG_CONFIG_HOME??path.join(home,'.config'),'autostart','desktop-bridge.desktop');
 }
+export function linuxSystemdUnitFile(env=process.env,home=os.homedir()) {
+ return path.join(env.XDG_CONFIG_HOME??path.join(home,'.config'),'systemd','user','desktop-bridge.service');
+}
+export const startupRootId=root=>createHash('sha256').update(path.resolve(root)).digest('hex');
+// A legacy macOS plist/XDG desktop file has no ownership marker. Verify its
+// installed working directory before replacing or removing it.
+export function startupIsOwned(file,root,kind) {
+ if(!fs.existsSync(file))return false;
+ const value=fs.readFileSync(file,'utf8');
+ if(kind==='systemd')return value.includes('# DesktopBridge-Root: '+startupRootId(root)+'\n');
+ if(kind==='darwin'){
+  const escaped=String(root).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
+  return value.includes('<key>WorkingDirectory</key><string>'+escaped+'</string>');
+ }
+ if(kind==='linux'){
+  const quoted='"'+String(root).replace(/(["\\`$])/g,'\\$1').replace(/%/g,'%%')+'"';
+  return value.split(/\r?\n/).some(line=>line.startsWith('Exec=')&&line.includes(quoted));
+ }
+ return false;
+}
+export function ensureOwnedStartup(file,root,kind) {
+ if(fs.existsSync(file)&&!startupIsOwned(file,root,kind)){
+  throw new Error('Startup entry belongs to another installation or is unrecognized: '+file);
+ }
+}
 export async function removeStartup(root) {
   if(process.platform==='win32'){
     const {windowsBackground}=await import('./windows-background.mjs');
@@ -42,6 +68,22 @@ export async function removeStartup(root) {
     return; // The Windows helper removes only a shortcut owned by this root.
   }
   const file=startupFile(root);
+  ensureOwnedStartup(file,root,process.platform);
+  if(process.platform==='linux'){
+   const unit=linuxSystemdUnitFile();
+   ensureOwnedStartup(unit,root,'systemd');
+   if(fs.existsSync(unit)){
+    // Do not touch an unrelated user unit; this one is identified by root hash.
+    try{await run('systemctl',['--user','disable','--now','desktop-bridge.service'],{stdio:'ignore'});}
+    catch{
+     // During an SSH/non-graphical session the user bus can be unavailable.
+     // Disabling the unit file still removes login-start symlinks offline.
+     await run('systemctl',['--user','disable','desktop-bridge.service'],{stdio:'ignore'});
+    }
+    fs.rmSync(unit,{force:true});
+    await run('systemctl',['--user','daemon-reload'],{stdio:'ignore'});
+   }
+  }
   if(process.platform==='darwin'&&fs.existsSync(file))try{await run('launchctl',['bootout','gui/'+process.getuid(),file],{stdio:'ignore'});}catch{}
   fs.rmSync(file,{force:true});
 }

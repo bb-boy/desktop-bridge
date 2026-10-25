@@ -40,6 +40,10 @@ Google 登录启用后，每个经验证的 Google 用户标识对应独立账�
 
 0.2.1 安装时可选择 `--mode manual`（默认建议）或 `--mode background`；加 `--administrator` 才会请求系统管理员权限。管理员手动模式每次启动需授权，管理员后台模式在安装和更新服务时授权，之后由操作系统管理：Windows SYSTEM 计划任务、macOS root LaunchDaemon、Linux systemd 系统服务。普通后台模式仍然只是用户登录后自启。
 
+普通用户后台运行的跨平台行为：macOS 使用 `~/Library/LaunchAgents/de.desktopbridge.agent.plist`，安装时在登录的 GUI 会话注册 LaunchAgent；切换到手动模式会退出 Agent 并移除归属本安装目录的登录项。Linux 优先使用用户级 `systemd --user` 服务（`~/.config/systemd/user/desktop-bridge.service`），在当前用户会话中启用并启动；没有可用的用户级 systemd 时，回退到图形桌面环境的 `~/.config/autostart/desktop-bridge.desktop`。**纯终端 Linux 不能依赖图形桌面回退方式**，需要可用的用户级 systemd。Linux 用户服务通常只在用户会话中运行；如果需要用户退出登录后继续运行，可由管理员评估是否使用 `loginctl enable-linger <用户名>`，安装器不会自动开启 linger 或请求管理员权限。
+
+再次安装或切换模式不会清除设备 Token、配对和任务结果。macOS/Linux 会检查已存在自启文件是否属于当前安装目录；如果另一个安装占用了固定的服务/登录项名称，会拒绝覆盖或删除，避免影响其他实例。
+
 管理员服务使用受保护程序目录，不允许普通用户直接修改以系统权限执行的程序。Google 登录、账号隔离、ChatGPT 工具确认和 macOS TCC 授权仍独立生效。详细命令、卸载和风险参见 [管理员运行指南](../docs/admin-runtime.md)。
 
 前端管理页面包含登录、设备列表、连接状态统计、任务记录、配对和授权管理。新增 NES.css 2.3.0 像素风（MIT 授权、本地托管，无在线 CDN 依赖），以及桌面/平板/手机响应式布局、清晰的状态标签、统一交互反馈和可键盘操作的标签页。更新的是 `public/` 静态资源，Git 推送并不会自动改变现有线上页面。
