@@ -30,7 +30,17 @@ export function backgroundTaskScript(action,root,node){
     "$s=New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries;"+
     `Register-ScheduledTask -TaskName ${name} -Action $a -Trigger $t -Principal $p -Settings $s -Force|Out-Null;`;
   // Refresh the action on installation; ordinary start reuses the registered task.
-  if(action==='register')return preamble+register+migrateShortcut;
+  if(action==='register'){
+    // The normal upgrade path may run with a limited token while an existing
+    // task ACL disallows unregister/re-register. Reuse a matching user task.
+    const reuse=`if($task){`+
+      '$actions=@($task.Actions);$triggers=@($task.Triggers);'+
+      `$sameAction=$actions.Count -eq 1 -and $actions[0].Execute -ieq ${ps(node)} -and $actions[0].Arguments -eq ${ps(args)} -and $actions[0].WorkingDirectory -ieq ${ps(root)};`+
+      "$sameTask=$sameAction -and $task.Settings.Enabled -and $task.Principal.RunLevel -eq 'Limited' -and $task.Principal.LogonType -eq 'Interactive' -and $triggers.Count -eq 1 -and $triggers[0].CimClass.CimClassName -eq 'MSFT_TaskLogonTrigger';"+
+      `if($sameTask){${migrateShortcut}exit 0}`+
+      '};';
+    return preamble+reuse+register+migrateShortcut;
+  }
   return preamble+`if(-not $task){${register}}Start-ScheduledTask -TaskName ${name}`;
 }
 export async function windowsBackground(action,root,node){

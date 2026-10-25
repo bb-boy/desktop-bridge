@@ -52,7 +52,10 @@ export async function startBackground(root,node) {
 export async function setMode(root,node,mode) {
  if(!['manual','background'].includes(mode))throw new Error('Mode must be manual or background');
  await stopClient(root);
- await removeStartup(root);
+ // Reinstalling an existing Windows background client must reuse its task.
+ // Removing it first can fail with 0x80070005 under a limited user token.
+ // Manual mode still removes login startup; other platforms retain their refresh.
+ if(process.platform!=='win32'||mode==='manual')await removeStartup(root);
  const settings={mode,version:'0.2.7'};
  fs.writeFileSync(path.join(root,'client-settings.json.tmp'),JSON.stringify(settings,null,2),{mode:0o600});
  fs.renameSync(path.join(root,'client-settings.json.tmp'),path.join(root,'client-settings.json'));

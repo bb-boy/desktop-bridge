@@ -25,6 +25,38 @@ test('user tasks isolate installations and preserve literal Windows paths',()=>{
  assert.throws(()=>backgroundTaskScript('anything',root,'node'));
 });
 
+test('reinstall keeps an already-matching Windows user task without unregistering it',()=>{
+ const script=backgroundTaskScript('register','C:\\Users\\Test\\DesktopBridgeClient','C:\\Users\\Test\\node.exe');
+ assert.match(script,/\$sameTask=/);
+ assert.match(script,/if\(\$sameTask\)\{/);
+ assert.match(script,/\$task\.Settings\.Enabled/);
+ assert.match(script,/\$task\.Principal\.RunLevel -eq 'Limited'/);
+ assert.match(script,/\$triggers\[0\]\.CimClass\.CimClassName/);
+ assert.match(script,/exit 0\}/);
+ assert.doesNotMatch(script,/Stop-ScheduledTask|Unregister-ScheduledTask/);
+ assert.ok(script.indexOf('if($sameTask)')<script.indexOf('Register-ScheduledTask'));
+});
+
+test('matching scheduled task bypasses registration even when mutation is denied',
+ {skip:process.platform!=='win32',timeout:15000},async()=>{
+  const root='C:\\Test Data\\DesktopBridgeClient';
+  const node='C:\\Private Node\\node.exe';
+  const literal=s=>"'"+s.replace(/'/g,"''")+"'";
+  const args=`"${path.win32.join(root,'runner.mjs')}" "${root}"`;
+  const mock=`function Get-ScheduledTask { [CmdletBinding()] param([string]$TaskName) `+
+    `[pscustomobject]@{Principal=[pscustomobject]@{UserId=([Security.Principal.WindowsIdentity]::GetCurrent()).User.Value;RunLevel='Limited';LogonType='Interactive'};`+
+    `Actions=@([pscustomobject]@{Execute=${literal(node)};Arguments=${literal(args)};WorkingDirectory=${literal(root)}});`+
+    `Triggers=@([pscustomobject]@{CimClass=[pscustomobject]@{CimClassName='MSFT_TaskLogonTrigger'}});Settings=[pscustomobject]@{Enabled=$true}} };`+
+    `function Register-ScheduledTask { throw 'MUTATION_WAS_ATTEMPTED' };`;
+  const actual=backgroundTaskScript('register',root,node);
+  const encoded=Buffer.from(mock+actual,'utf16le').toString('base64');
+  const appData=fs.mkdtempSync(path.join(os.tmpdir(),'bridge-reuse-test-'));
+  try {
+    await execute('powershell.exe',['-NoProfile','-NonInteractive','-EncodedCommand',encoded],
+      {env:{...process.env,APPDATA:appData},timeout:10000});
+  } finally { fs.rmSync(appData,{recursive:true,force:true}); }
+ });
+
 test('Windows task survives its launching process and remains stoppable and removable', {skip:process.platform!=='win32',timeout:90000},async t=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),"bridge-task ' & %literal%-"));
  const originalAppData=process.env.APPDATA;
