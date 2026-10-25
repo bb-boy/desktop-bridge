@@ -89,8 +89,16 @@ test('Chromium screenshot viewer supports zoom, pan, fullscreen fallback and tas
  });
  t.after(async()=>{
   try{await devtools?.cmd('Browser.close');}catch{}
-  devtools?.ws.close();if(child?.exitCode===null)child.kill();
-  await new Promise(r=>server.close(r));fs.rmSync(temp,{recursive:true,force:true,maxRetries:10,retryDelay:100});
+  devtools?.ws.close();
+  // On Windows Chromium may still hold its user-data directory after CDP closes.
+  // Wait for the browser process to exit before attempting profile removal.
+  if(child?.exitCode===null){
+   const exited=once(child,'exit').catch(()=>{});
+   child.kill();
+   await Promise.race([exited,sleep(5000)]);
+  }
+  await new Promise(r=>server.close(r));
+  fs.rmSync(temp,{recursive:true,force:true,maxRetries:20,retryDelay:300});
  });
  server.listen(0,'127.0.0.1');await once(server,'listening');
  const probe=net.createServer();probe.listen(0,'127.0.0.1');await once(probe,'listening');
