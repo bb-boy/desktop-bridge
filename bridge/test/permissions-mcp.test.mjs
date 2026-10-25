@@ -34,8 +34,7 @@ test('authenticated MCP exposes ChatGPT web permission UI resource and persists 
  assert.equal(catalog.tools.find(t=>t.name==='start_process').annotations.destructiveHint,true);
  assert.equal(catalog.tools.find(t=>t.name==='read_file').annotations.readOnlyHint,true);
  const resources=await client.listResources();
- assert.equal(resources.resources.length,1);
- assert.equal(resources.resources[0].mimeType,'text/html;profile=mcp-app');
+ assert.ok(resources.resources.some(r=>r.uri==='ui://desktop-bridge/permissions-v1.html'&&r.mimeType==='text/html;profile=mcp-app'));
  const resource=await client.readResource({uri:'ui://desktop-bridge/permissions-v1.html'});
  assert.match(resource.contents[0].text,/Desktop Commander/);
  assert.match(resource.contents[0].text,/tools\/call/);

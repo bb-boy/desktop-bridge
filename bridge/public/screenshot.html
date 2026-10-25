@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Desktop Bridge · 桌面截图</title>
+<style>
+  :root {color-scheme:light dark; font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+  * {box-sizing:border-box}
+  body {margin:0; padding:12px; background:var(--app-background-color,Canvas); color:var(--app-text-color,CanvasText)}
+  main {margin:auto; width:100%; max-width:1100px}
+  header {display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:9px}
+  h2 {font-size:14px; font-weight:600; margin:0}
+  #details {font-size:12px; color:var(--app-secondary-text-color,GrayText); text-align:right}
+  figure {margin:0; border:1px solid #8885; border-radius:10px; overflow:hidden; background:transparent}
+  img {display:block; width:100%; max-width:100%; height:auto; aspect-ratio:auto}
+  button {font:inherit; color:inherit; background:Canvas; border:1px solid #8886; border-radius:7px; padding:6px 10px; cursor:pointer}
+  button:focus-visible {outline:3px solid Highlight; outline-offset:3px}
+  button:disabled {opacity:.45; cursor:default}
+  #open-viewer {display:block; width:100%; padding:0; border:0; border-radius:0; cursor:zoom-in; background:transparent}
+  #image-hint {margin:6px 0 0; font-size:12px; color:var(--app-secondary-text-color,GrayText)}
+  #image-viewer {padding:0; width:calc(100vw - 24px); height:calc(100vh - 24px); max-width:none; max-height:none; border:1px solid #8886; border-radius:12px; color:CanvasText; background:Canvas; overflow:hidden}
+  #image-viewer::backdrop {background:#0009}
+  .viewer-layout {display:flex; flex-direction:column; height:100%; min-height:0}
+  .viewer-toolbar {display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:10px; border-bottom:1px solid #8885}
+  #viewer-title {font-size:14px; margin:0 auto 0 0}
+  #zoom-level {min-width:45px; text-align:center; font-variant-numeric:tabular-nums}
+  #zoom-viewport {flex:1; min-height:0; overflow:auto; overscroll-behavior:contain; background:#8881; cursor:grab}
+  #zoom-viewport.dragging {cursor:grabbing; user-select:none}
+  #zoom-stage {position:relative; display:grid; place-items:center; width:max-content; min-width:100%; min-height:100%}
+  #zoom-image {max-width:none; flex:none; user-select:none; -webkit-user-drag:none}
+  .viewer-help {margin:0; padding:6px 10px; font-size:12px; color:GrayText}
+  #status {border:1px dashed #8885; border-radius:10px; padding:24px 12px; text-align:center; color:var(--app-secondary-text-color,GrayText)}
+  #status[data-error="true"] {color:#c44343}
+  [hidden] {display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <header><h2>Desktop Bridge · 桌面截图</h2><span id="details"></span></header>
+  <div id="status" role="status" aria-live="polite">正在接收截图…</div>
+  <figure id="image-frame" hidden><button id="open-viewer" type="button" aria-label="点击查看大图" aria-haspopup="dialog"><img id="screenshot" alt="远程电脑桌面截图"></button></figure>
+  <p id="image-hint" hidden>点击图片查看大图，可放大、缩小和拖动查看。</p>
+</main>
+<dialog id="image-viewer" aria-labelledby="viewer-title">
+  <div class="viewer-layout">
+    <div class="viewer-toolbar">
+      <h2 id="viewer-title">桌面截图</h2>
+      <button id="zoom-out" type="button" aria-label="缩小">−</button>
+      <output id="zoom-level" aria-live="polite">100%</output>
+      <button id="zoom-in" type="button" aria-label="放大">＋</button>
+      <button id="zoom-fit" type="button">适应窗口</button>
+      <button id="zoom-actual" type="button">原始大小</button>
+      <button id="viewer-close" type="button" aria-label="关闭大图">关闭</button>
+    </div>
+    <div id="zoom-viewport" tabindex="0" aria-label="截图查看区域，可使用方向键滚动">
+      <div id="zoom-stage"><img id="zoom-image" alt="远程电脑桌面截图大图" draggable="false"></div>
+    </div>
+    <p class="viewer-help">滚轮缩放 · 拖动查看 · Esc 关闭</p>
+  </div>
+</dialog>
+<script type="module">
+  const status=document.querySelector('#status');
+  const frame=document.querySelector('#image-frame');
+  const screenshot=document.querySelector('#screenshot');
+  const details=document.querySelector('#details');
+  const viewer=document.querySelector('#image-viewer');
+  const zoomImage=document.querySelector('#zoom-image');
+  const viewport=document.querySelector('#zoom-viewport');
+  let zoom=1;
+  let fitMode=true;
+  let displayMode=window.openai?.displayMode??'inline';
+  let ownsFullscreen=false;
+  let nextRequestId=0;
+  const pending=new Map();
+  let hasImage=false;
+  let recovering=false;
+  let callId=typeof window.openai?.widgetState?.desktopBridgeCallId==='string'?window.openai.widgetState.desktopBridgeCallId:'';
+  let ready=null;
+  let lastReportedHeight=0;
+  function resizeHost(){
+    if(displayMode==='fullscreen')return;
+    const height=Math.ceil(document.querySelector('main').getBoundingClientRect().height+24);
+    if(!Number.isFinite(height)||height<=0||height>6000||Math.abs(height-lastReportedHeight)<2)return;
+    lastReportedHeight=height;
+    window.parent.postMessage({jsonrpc:'2.0',method:'ui/notifications/size-changed',params:{height}},'*');
+    try{window.openai?.notifyIntrinsicHeight?.(height);}catch{}
+  }
+  if(typeof ResizeObserver!=='undefined')new ResizeObserver(resizeHost).observe(document.querySelector('main'));
+  window.addEventListener('resize',resizeHost);
+
+  function setZoom(value,fit=false){
+    if(!zoomImage.naturalWidth)return;
+    const previous=zoomImage.getBoundingClientRect(),box=viewport.getBoundingClientRect();
+    const x=previous.width?(box.left+viewport.clientWidth/2-previous.left)/previous.width:.5;
+    const y=previous.height?(box.top+viewport.clientHeight/2-previous.top)/previous.height:.5;
+    zoom=Math.max(.1,Math.min(4,value));
+    fitMode=fit;
+    zoomImage.style.width=zoomImage.naturalWidth*zoom+'px';
+    zoomImage.style.height=zoomImage.naturalHeight*zoom+'px';
+    viewport.scrollLeft=zoomImage.offsetLeft+x*zoomImage.naturalWidth*zoom-viewport.clientWidth/2;
+    viewport.scrollTop=zoomImage.offsetTop+y*zoomImage.naturalHeight*zoom-viewport.clientHeight/2;
+    document.querySelector('#zoom-level').textContent=Math.round(zoom*100)+'%';
+    document.querySelector('#zoom-in').disabled=zoom>=4;
+    document.querySelector('#zoom-out').disabled=zoom<=.1;
+  }
+  function fitImage(){
+    if(viewer.open&&zoomImage.naturalWidth)setZoom(Math.min(1,viewport.clientWidth/zoomImage.naturalWidth,viewport.clientHeight/zoomImage.naturalHeight),true);
+  }
+  async function requestMode(mode){
+    const response=typeof window.openai?.requestDisplayMode==='function'?
+      await window.openai.requestDisplayMode({mode}):await sendRequest('ui/request-display-mode',{mode},4000);
+    displayMode=response?.mode??window.openai?.displayMode??displayMode;
+    return displayMode;
+  }
+  document.querySelector('#open-viewer').addEventListener('click',()=>{
+    if(!hasImage||viewer.open)return;
+    fitMode=true;
+    zoomImage.onload=()=>{if(fitMode)fitImage();};
+    zoomImage.src=screenshot.src;
+    viewer.showModal();
+    if(zoomImage.complete)fitImage();
+    // The viewer opens immediately even if the host does not support fullscreen.
+    if(displayMode!=='fullscreen')void requestMode('fullscreen').then(mode=>{
+      if(mode==='fullscreen'){
+        if(viewer.open){ownsFullscreen=true;requestAnimationFrame(()=>{if(fitMode)fitImage();});}
+        else void requestMode('inline').catch(()=>{});
+      }
+    }).catch(()=>{});
+  });
+  document.querySelector('#viewer-close').addEventListener('click',()=>viewer.close());
+  viewer.addEventListener('close',()=>{
+    if(ownsFullscreen){ownsFullscreen=false;void requestMode('inline').then(resizeHost).catch(()=>{});}
+    zoomImage.removeAttribute('src');
+  });
+  document.querySelector('#zoom-in').addEventListener('click',()=>setZoom(zoom*1.25));
+  document.querySelector('#zoom-out').addEventListener('click',()=>setZoom(zoom/1.25));
+  document.querySelector('#zoom-fit').addEventListener('click',fitImage);
+  document.querySelector('#zoom-actual').addEventListener('click',()=>setZoom(1));
+  viewport.addEventListener('wheel',e=>{if(e.deltaY){e.preventDefault();setZoom(zoom*(e.deltaY<0?1.15:1/1.15));}},{passive:false});
+  viewer.addEventListener('keydown',e=>{
+    if(['+','=','-','0'].includes(e.key)){
+      e.preventDefault();e.key==='0'?fitImage():setZoom(zoom*(e.key==='-'?1/1.25:1.25));
+    }
+  });
+  let drag=null;
+  viewport.addEventListener('pointerdown',e=>{
+    if(e.pointerType!=='mouse'||e.button!==0)return;
+    drag={x:e.clientX,y:e.clientY,left:viewport.scrollLeft,top:viewport.scrollTop,id:e.pointerId};
+    viewport.setPointerCapture(e.pointerId);viewport.classList.add('dragging');e.preventDefault();
+  });
+  viewport.addEventListener('pointermove',e=>{
+    if(drag&&drag.id===e.pointerId){viewport.scrollLeft=drag.left+drag.x-e.clientX;viewport.scrollTop=drag.top+drag.y-e.clientY;}
+  });
+  for(const name of ['pointerup','pointercancel','lostpointercapture'])viewport.addEventListener(name,()=>{drag=null;viewport.classList.remove('dragging');});
+  if(typeof ResizeObserver!=='undefined')new ResizeObserver(()=>{if(fitMode)fitImage();}).observe(viewport);
+
+  function showError(message) {
+    if(hasImage)return;
+    frame.hidden=true;
+    screenshot.removeAttribute('src');
+    status.hidden=false;
+    status.dataset.error='true';
+    status.textContent=message;
+    details.textContent='';
+    resizeHost();
+  }
+  function saveCallId(id){
+    if(typeof id!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))return;
+    if(callId===id)return;
+    callId=id;
+    try{Promise.resolve(window.openai?.setWidgetState?.({desktopBridgeCallId:id})).catch(()=>{});}catch{}
+  }
+  function showSavedFile(){
+    if(hasImage)return;
+    status.hidden=false;
+    status.dataset.error='false';
+    status.textContent='截图已保存到远程电脑，本次调用未返回图片。';
+    resizeHost();
+  }
+  function validPicture(item){
+    return item?.type==='image' &&
+      ['image/png','image/jpeg','image/webp'].includes(item.mimeType) &&
+      typeof item.data==='string' && item.data.length>0 && item.data.length<=12*1024*1024 &&
+      /^[A-Za-z0-9+/]+={0,2}$/.test(item.data);
+  }
+  // ChatGPT retains the canonical MCP result envelope in widget metadata.
+  // Prefer it on remount rather than reissuing a potentially large tools/call.
+  function tryHostResult(){
+    if(hasImage)return true;
+    const bridge=window.openai;
+    const envelope=bridge?.toolResponseMetadata;
+    const candidates=[
+      envelope?.mcp_tool_result,
+      envelope?.call_tool_result?.result,
+      envelope?.call_tool_result,
+      envelope?.result,
+      envelope
+    ];
+    for(const candidate of candidates){
+      if(!candidate)continue;
+      let value=candidate;
+      if(typeof value==='string'){
+        if(value.length>12*1024*1024)continue;
+        try{value=JSON.parse(value);}catch{continue;}
+      }
+      if(!value||typeof value!=='object')continue;
+      const result=value.content?value:value.result;
+      const picture=result?.content?.find(validPicture);
+      if(!picture)continue;
+      saveCallId(result?.structuredContent?.desktopBridgeCallId??result?._meta?.desktopBridge?.callId);
+      renderPicture(picture,result.structuredContent??bridge?.toolOutput??{});
+      return true;
+    }
+    return false;
+  }
+  function renderPicture(item,meta={}){
+    hasImage=true;
+    screenshot.onload=()=>{
+      status.hidden=true;
+      frame.hidden=false;
+      document.querySelector('#image-hint').hidden=false;
+      resizeHost();
+    };
+    screenshot.onerror=()=>{
+      hasImage=false;
+      screenshot.removeAttribute('src');
+      showError('截图已返回，但图片无法显示。');
+    };
+    screenshot.src='data:'+item.mimeType+';base64,'+item.data;
+    const width=Number(meta.screenshot_width);
+    const height=Number(meta.screenshot_height);
+    details.textContent=Number.isFinite(width)&&Number.isFinite(height)&&width>0&&height>0?
+      width+' × '+height+' px':'';
+  }
+  async function recoverScreenshot(){
+    if(hasImage||recovering||!callId)return;
+    recovering=true;
+    status.hidden=false;
+    status.dataset.error='false';
+    status.textContent='正在恢复已保存的截图…';
+    const id=callId;
+    try{
+      await ready;
+      if(hasImage||tryHostResult())return;
+      // Reuse the completed task; do not invoke CUA capture again.
+      const response=await sendRequest('tools/call',{name:'get_call_result',arguments:{call_id:id}});
+      if(response?.isError)throw new Error('Cached task unavailable');
+      const raw=response?.content?.find(item=>item.type==='text')?.text;
+      if(typeof raw!=='string'||raw.length>12*1024*1024)throw new Error('Invalid cached screenshot');
+      const record=JSON.parse(raw);
+      if(record.id!==id||record.tool!=='cua_get_desktop_state'||record.status!=='completed')throw new Error('Wrong screenshot task');
+      const picture=record.result?.content?.find(validPicture);
+      if(!picture){
+        if(record.result?.structuredContent?.screenshot_file_path){
+          // Migrate IDs persisted by older widgets for file-only results.
+          if(!hasImage&&callId===id){
+            callId='';
+            try{Promise.resolve(window.openai?.setWidgetState?.({desktopBridgeCallId:null})).catch(()=>{});}catch{}
+            showSavedFile();
+          }
+          return;
+        }
+        throw new Error('No cached image');
+      }
+      if(!hasImage)renderPicture(picture,record.result.structuredContent??{});
+    }catch{
+      showError('无法恢复已保存的截图，请重新执行截图工具。');
+    }finally{
+      recovering=false;
+    }
+  }
+  function showResult(result){
+    if(result?.isError){
+      showError(result.content?.find(item=>item.type==='text')?.text||'截图工具执行失败');
+      return;
+    }
+    const picture=result?.content?.find(validPicture);
+    if(picture){
+      // Persist the identity of the picture, never that of a later file-only call.
+      // ChatGPT may deliver another result to this widget before remounting it.
+      if(!hasImage)saveCallId(result?.structuredContent?.desktopBridgeCallId??result?._meta?.desktopBridge?.callId);
+      if(!hasImage)renderPicture(picture,result.structuredContent??{});
+      return;
+    }
+    if(hasImage||tryHostResult())return; // Partial notifications must not erase an image.
+    const meta=result?.structuredContent??window.openai?.toolOutput??{};
+    // A screenshot saved to a device path has no inline bytes to restore.
+    // Retain an existing image ID if this is a remount; otherwise show success.
+    if(meta.desktopBridgeScreenshotAvailable===false||meta.screenshot_file_path){
+      if(callId){void recoverScreenshot();return;}
+      showSavedFile();
+      return;
+    }
+    if(!callId)saveCallId(meta.desktopBridgeCallId);
+    if(callId){
+      void recoverScreenshot();
+    }else{
+      showError('未收到可显示的截图图片，也没有可恢复的任务编号。');
+    }
+  }
+  function sendRequest(method,params,timeoutMs=30000) {
+    return new Promise((resolve,reject)=>{
+      const id=++nextRequestId;
+      const timer=setTimeout(()=>{pending.delete(id);reject(new Error('请求超时'));},timeoutMs);
+      pending.set(id,{resolve,reject,timer});
+      window.parent.postMessage({jsonrpc:'2.0',id,method,params},'*');
+    });
+  }
+  window.addEventListener('message',event=>{
+    if(event.source!==window.parent || event.data?.jsonrpc!=='2.0')return;
+    const message=event.data;
+    if(typeof message.id==='number' && pending.has(message.id)) {
+      const call=pending.get(message.id);
+      pending.delete(message.id);
+      clearTimeout(call.timer);
+      if(message.error)call.reject(new Error(message.error.message||'初始化失败'));
+      else call.resolve(message.result);
+    }
+    if(message.method==='ui/notifications/tool-result')showResult(message.params);
+    if(message.method==='ui/notifications/host-context-changed'){
+      displayMode=message.params?.displayMode??displayMode;
+    }
+  });
+  window.addEventListener('openai:set_globals',()=>{
+    displayMode=window.openai?.displayMode??displayMode;
+    if(!hasImage&&!tryHostResult())showResult({structuredContent:window.openai?.toolOutput});
+  });
+  ready=(async()=>{
+    try {
+      const initialized=await sendRequest('ui/initialize',{
+        appInfo:{name:'desktop-bridge-screenshot',version:'1.3.0'},
+        appCapabilities:{availableDisplayModes:['inline','fullscreen']},protocolVersion:'2026-01-26'
+      });
+      displayMode=initialized?.hostContext?.displayMode??displayMode;
+      window.parent.postMessage({jsonrpc:'2.0',method:'ui/notifications/initialized',params:{}},'*');
+      if(!tryHostResult()){
+        showResult({structuredContent:window.openai?.toolOutput});
+      }
+    } catch {
+      showError('截图界面初始化失败，请重新打开截图工具。');
+    }
+  })();
+</script>
+</body>
+</html>
