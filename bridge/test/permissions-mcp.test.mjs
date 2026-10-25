@@ -36,13 +36,15 @@ test('authenticated MCP exposes ChatGPT web permission UI resource and persists 
  assert.equal(catalog.tools.find(t=>t.name==='start_process').annotations.destructiveHint,true);
  assert.equal(catalog.tools.find(t=>t.name==='read_file').annotations.readOnlyHint,true);
  const resources=await client.listResources();
- assert.equal(resources.resources.length,3);
- assert.equal(catalog.tools.find(t=>t.name==='cua_get_desktop_state')._meta.ui.resourceUri,'ui://desktop-bridge/screenshot-v2.html');
+ assert.equal(resources.resources.length,4);
+ assert.equal(catalog.tools.find(t=>t.name==='cua_get_desktop_state')._meta.ui.resourceUri,'ui://desktop-bridge/screenshot-v3.html');
  assert.equal(resources.resources[0].mimeType,'text/html;profile=mcp-app');
  const resource=await client.readResource({uri:'ui://desktop-bridge/permissions-v1.html'});
  assert.match(resource.contents[0].text,/Desktop Commander/);
  assert.match(resource.contents[0].text,/tools\/call/);
- const screenshotResource=await client.readResource({uri:'ui://desktop-bridge/screenshot-v2.html'});
+ const screenshotResource=await client.readResource({uri:'ui://desktop-bridge/screenshot-v3.html'});
+ const previousScreenshotResource=await client.readResource({uri:'ui://desktop-bridge/screenshot-v2.html'});
+ assert.equal(previousScreenshotResource.contents[0].text,screenshotResource.contents[0].text);
  const legacyScreenshotResource=await client.readResource({uri:'ui://desktop-bridge/screenshot-v1.html'});
  assert.equal(legacyScreenshotResource.contents[0].text,screenshotResource.contents[0].text);
  assert.equal(screenshotResource.contents[0].mimeType,'text/html;profile=mcp-app');

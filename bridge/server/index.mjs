@@ -21,7 +21,8 @@ import { installerDownload } from './downloads.mjs';
 const root=path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const PERMISSION_UI_URI='ui://desktop-bridge/permissions-v1.html';
 const PERMISSION_UI_MIME='text/html;profile=mcp-app';
-const SCREENSHOT_UI_URI='ui://desktop-bridge/screenshot-v2.html';
+const SCREENSHOT_UI_URI='ui://desktop-bridge/screenshot-v3.html';
+const PREVIOUS_SCREENSHOT_UI_URI='ui://desktop-bridge/screenshot-v2.html';
 const LEGACY_SCREENSHOT_UI_URI='ui://desktop-bridge/screenshot-v1.html';
 const permissionsTool={
   name:'get_device_permissions',
@@ -81,13 +82,15 @@ export async function startServer(config,dependencies={}) {
     server.setRequestHandler(ListResourcesRequestSchema,async()=>({resources:[
       {uri:PERMISSION_UI_URI,name:'Desktop Bridge device permissions',mimeType:PERMISSION_UI_MIME,description:'Device permission controls inside ChatGPT web chat'},
       {uri:SCREENSHOT_UI_URI,name:'Desktop Bridge desktop screenshot',mimeType:PERMISSION_UI_MIME,description:'Show a screenshot from a paired computer in ChatGPT'},
-      {uri:LEGACY_SCREENSHOT_UI_URI,name:'Desktop Bridge desktop screenshot (legacy)',mimeType:PERMISSION_UI_MIME,description:'Compatible URL for previously displayed screenshots'}
+      {uri:LEGACY_SCREENSHOT_UI_URI,name:'Desktop Bridge desktop screenshot (legacy)',mimeType:PERMISSION_UI_MIME,description:'Compatible URL for previously displayed screenshots'},
+      {uri:PREVIOUS_SCREENSHOT_UI_URI,name:'Desktop Bridge desktop screenshot (previous)',mimeType:PERMISSION_UI_MIME,description:'Compatible URL for previous screenshot widgets'}
     ]}));
     server.setRequestHandler(ReadResourceRequestSchema,async(request)=>{
       const uiFiles={
         [PERMISSION_UI_URI]:'gui-permissions.html',
         [SCREENSHOT_UI_URI]:'screenshot.html',
-        [LEGACY_SCREENSHOT_UI_URI]:'screenshot.html'
+        [LEGACY_SCREENSHOT_UI_URI]:'screenshot.html',
+        [PREVIOUS_SCREENSHOT_UI_URI]:'screenshot.html'
       };
       const filename=uiFiles[request.params.uri];
       if(!filename)throw new Error('Unknown UI resource');

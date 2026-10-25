@@ -69,6 +69,37 @@
       typeof item.data==='string' && item.data.length>0 && item.data.length<=12*1024*1024 &&
       /^[A-Za-z0-9+/]+={0,2}$/.test(item.data);
   }
+  // ChatGPT retains the canonical MCP result envelope in widget metadata.
+  // Prefer it on remount rather than reissuing a potentially large tools/call.
+  function tryHostResult(){
+    if(hasImage)return true;
+    const bridge=window.openai;
+    const envelope=bridge?.toolResponseMetadata;
+    const candidates=[
+      envelope?.mcp_tool_result,
+      envelope?.call_tool_result?.result,
+      envelope?.call_tool_result,
+      envelope?.result,
+      envelope
+    ];
+    for(const candidate of candidates){
+      if(!candidate)continue;
+      let value=candidate;
+      if(typeof value==='string'){
+        if(value.length>12*1024*1024)continue;
+        try{value=JSON.parse(value);}catch{continue;}
+      }
+      if(!value||typeof value!=='object')continue;
+      const result=value.content?value:value.result;
+      const picture=result?.content?.find(validPicture);
+      if(!picture)continue;
+      saveCallId(result?.structuredContent?.desktopBridgeCallId??result?._meta?.desktopBridge?.callId??
+        bridge?.toolOutput?.desktopBridgeCallId);
+      renderPicture(picture,result.structuredContent??bridge?.toolOutput??{});
+      return true;
+    }
+    return false;
+  }
   function renderPicture(item,meta={}){
     hasImage=true;
     screenshot.onload=()=>{
@@ -96,7 +127,7 @@
     const id=callId;
     try{
       await ready;
-      if(hasImage)return;
+      if(hasImage||tryHostResult())return;
       // Reuse the completed task; do not invoke CUA capture again.
       const response=await sendRequest('tools/call',{name:'get_call_result',arguments:{call_id:id}});
       if(response?.isError)throw new Error('Cached task unavailable');
@@ -124,7 +155,8 @@
       if(!hasImage)renderPicture(picture,result.structuredContent??{});
       return;
     }
-    if(hasImage)return; // Partial notifications must not erase an image.
+    if(hasImage||tryHostResult())return; // Partial notifications must not erase an image.
+    saveCallId(window.openai?.toolOutput?.desktopBridgeCallId);
     if(callId){
       void recoverScreenshot();
     }else{
@@ -149,6 +181,9 @@
     }
     if(message.method==='ui/notifications/tool-result')showResult(message.params);
   });
+  window.addEventListener('openai:set_globals',()=>{
+    if(!hasImage)tryHostResult();
+  });
   ready=(async()=>{
     try {
       await sendRequest('ui/initialize',{
@@ -156,7 +191,10 @@
         appCapabilities:{},protocolVersion:'2026-01-26'
       });
       window.parent.postMessage({jsonrpc:'2.0',method:'ui/notifications/initialized',params:{}},'*');
-      if(callId&&!hasImage)void recoverScreenshot();
+      if(!tryHostResult()){
+        saveCallId(window.openai?.toolOutput?.desktopBridgeCallId);
+        if(callId&&!hasImage)void recoverScreenshot();
+      }
     } catch {
       showError('截图界面初始化失败，请重新打开截图工具。');
     }
