@@ -86,6 +86,8 @@ async function childRun(script,args){
 
 export async function main(argv=process.argv.slice(2)){
   const parsed=parse(argv);
+  if(process.env.DESKTOP_BRIDGE_REMOTE_AGENT==='1'&&['setup','update','repair','uninstall'].includes(parsed.command))
+    throw new Error('Self-maintenance would disconnect this remote MCP terminal. Run this command in a local terminal.');
   if(parsed.command==='help'){console.log(usage());return 0;}
   if(parsed.command==='version'){console.log(manifest.version);return 0;}
   if(Number(process.versions.node.split('.')[0])!==24)throw new Error('Desktop Bridge needs Node.js 24. Install Node.js 24 before using this CLI.');

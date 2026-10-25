@@ -11,6 +11,10 @@ import {elevationRequest} from './admin-elevate.mjs';
 import {dataRoot,run,acquireLock,releaseLock,stopClient,removeStartup} from './lifecycle.mjs';
 const source=path.dirname(fileURLToPath(import.meta.url));
 const options=parseInstallerOptions(process.argv.slice(2));
+// An in-band remote upgrade would terminate the same MCP process running it.
+// Stop before any filesystem, service or account modifications.
+if(process.env.DESKTOP_BRIDGE_REMOTE_AGENT==='1'&&!options.stop&&!options.uninstall)
+  throw new Error('Cannot upgrade Desktop Bridge from its own remote MCP terminal. Run desktop-bridge update --with-cua in a local Mac/Windows/Linux terminal.');
 const root=path.resolve(options.root??dataRoot());
 const previousSettings=fs.existsSync(path.join(root,'client-settings.json'))?JSON.parse(fs.readFileSync(path.join(root,'client-settings.json'),'utf8')):{};
 if(previousSettings.privilege==='administrator'&&(options.stop||options.uninstall))throw new Error('Administrator installation uses the installed control/administrator uninstall helper; user-mode cleanup would leave the protected service active.');

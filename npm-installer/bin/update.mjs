@@ -39,6 +39,8 @@ export async function performUpdate({
   root,packageRoot,packageName='@justlovepl/desktop-bridge',
   npmScript,execute=runProcess,print=message=>console.log(message),withCua=false
 }){
+  if(process.env.DESKTOP_BRIDGE_REMOTE_AGENT==='1')
+    throw new Error('Cannot update Desktop Bridge from its own remote MCP terminal; run this command locally.');
   const installed=path.join(root,'launch.json');
   if(!fs.existsSync(installed))throw new Error('Local client not installed. Run desktop-bridge setup before updating.');
   if(path.resolve(root)===path.resolve(packageRoot)||path.resolve(packageRoot).startsWith(path.resolve(root)+path.sep))

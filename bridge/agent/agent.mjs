@@ -111,7 +111,7 @@ const cuaConfig=config.cuaDriver??{};
 const client=new McpToolManager({
   Client,StdioClientTransport,log,
   backends:[
-    {id:'desktop',command:process.execPath,args:[config.mcpEntry],cwd:config.workingDirectory??directory,env:{...process.env}},
+    {id:'desktop',command:process.execPath,args:[config.mcpEntry],cwd:config.workingDirectory??directory,env:{...process.env,DESKTOP_BRIDGE_REMOTE_AGENT:'1'}},
     ...(cuaConfig.enabled===true?[{
       id:'cua',prefix:'cua_',command:cuaConfig.command||'cua-driver',
       args:Array.isArray(cuaConfig.args)?cuaConfig.args:['mcp'],
