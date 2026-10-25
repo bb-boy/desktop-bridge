@@ -8,12 +8,12 @@ import {once} from 'node:events';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {parseInstallerOptions,chooseMode,savedMode} from '../client/install-options.mjs';
-import {commandFor,startupContent,shellQuote,powershellQuote} from '../client/startup.mjs';
-import {livePid,sleep} from '../client/lifecycle.mjs';
+import {commandFor,startupContent,linuxSystemdUnitContent,shellQuote,powershellQuote} from '../client/startup.mjs';
+import {livePid,sleep,startupIsOwned,ensureOwnedStartup,linuxSystemdUnitFile} from '../client/lifecycle.mjs';
 import {runtimeReady,ensureRuntime,capture} from '../client/environment.mjs';
 const client=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../client');
 function directory(t){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'bridge-mode-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));return dir;}
-function spawnClient(args,{env,...options}={}){const p=spawn(process.execPath,args,{stdio:['ignore','pipe','pipe'],env:{...process.env,...env},...options});let output='';p.stdout.on('data',chunk=>output+=chunk);p.stderr.on('data',chunk=>output+=chunk);p.output=()=>output;return p;}
+function spawnClient(args,{env,...options}={}){const childEnv={...process.env,...env};delete childEnv.NODE_TEST_CONTEXT;const p=spawn(process.execPath,args,{stdio:['ignore','pipe','pipe'],env:childEnv,...options});let output='';p.stdout.on('data',chunk=>output+=chunk);p.stderr.on('data',chunk=>output+=chunk);p.output=()=>output;return p;}
 async function waitFor(condition,timeout=15000){const deadline=Date.now()+timeout;while(Date.now()<deadline){try{if(condition())return;}catch{}await sleep(25);}throw new Error('Timed out');}
 async function success(p){const [code]=await once(p,'exit');assert.equal(code,0,p.output());return p.output();}
 function pidAlive(pid){try{process.kill(pid,0);return true;}catch{return false;}}
@@ -27,6 +27,8 @@ async function fixture(t){
  fs.writeFileSync(agent,`import fs from 'node:fs';import{spawn}from'node:child_process';fs.appendFileSync('starts.txt','1');fs.writeFileSync('agent.lock',String(process.pid));const grandchild=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'});fs.writeFileSync('grandchild.pid',String(grandchild.pid));const timer=setInterval(()=>fs.writeFileSync('heartbeat.json',JSON.stringify({pid:process.pid,time:Date.now(),connected:true,localToolsAvailable:true})),50);process.on('message',m=>{if(m.type==='stop'){clearInterval(timer);fs.rmSync('agent.lock',{force:true});process.exit(0);}});`);
  fs.writeFileSync(path.join(root,'launch.json'),JSON.stringify({node:process.execPath,agent,config:path.join(root,'agent-config.json')}));
  const bin=path.join(dir,'bin');fs.mkdirSync(bin);fs.writeFileSync(path.join(bin,'launchctl'),'#!/bin/sh\nexit 0\n',{mode:0o700});
+ // A controlled systemctl keeps Linux tests away from the host's real user units.
+ fs.writeFileSync(path.join(bin,'systemctl'),'#!/bin/sh\nexit 1\n',{mode:0o700});
  const env={HOME:path.join(dir,'home'),APPDATA:path.join(dir,'appdata'),LOCALAPPDATA:path.join(dir,'localdata'),XDG_CONFIG_HOME:path.join(dir,'config'),PATH:bin+path.delimiter+process.env.PATH};
  const invoke=(...args)=>spawnClient([path.join(root,'control.mjs'),...args],{env});
  // Stop the fixture before removing its PID files, including after an assertion fails.
@@ -78,10 +80,78 @@ test('switching background/manual persists selection, removes login startup and 
  assert.equal(fs.readFileSync(path.join(f.root,'dependencies-sentinel'),'utf8'),'unchanged');assert.equal(fs.existsSync(path.join(f.root,'node_modules')),false);
 });
 
+test('Unix startup files reject foreign installations before changing startup',async t=>{
+ const dir=directory(t),root=path.join(dir,'client A & percent%'),other=path.join(dir,'client B');
+ for(const kind of ['darwin','linux']){
+  const file=path.join(dir,kind==='darwin'?'desktop.plist':'desktop.desktop');
+  fs.writeFileSync(file,startupContent('/private node',root,kind));
+  assert.equal(startupIsOwned(file,root,kind),true);
+  assert.equal(startupIsOwned(file,other,kind),false);
+  assert.throws(()=>ensureOwnedStartup(file,other,kind),/belongs to another installation/);
+ }
+ const unit=path.join(dir,'desktop-bridge.service');
+ fs.writeFileSync(unit,linuxSystemdUnitContent('/private node',root));
+ assert.equal(startupIsOwned(unit,root,'systemd'),true);
+ assert.equal(startupIsOwned(unit,other,'systemd'),false);
+ assert.throws(()=>ensureOwnedStartup(unit,other,'systemd'),/belongs to another installation/);
+ assert.match(fs.readFileSync(unit,'utf8'),/ExecStart=.*runner\.mjs/);
+ assert.match(fs.readFileSync(unit,'utf8'),/Restart=on-failure/);
+ const special=linuxSystemdUnitContent('/node path/node','/tmp/space & 100%');
+ assert.match(special,/WorkingDirectory=\/.*\\x20/);
+ assert.doesNotMatch(special,/WorkingDirectory="/,'systemd 249 treats quoted WorkingDirectory as nonabsolute');
+ assert.match(special,/%%/,'systemd must escape percent specifiers');
+});
+
+test('foreign Unix login startup is never overwritten when switching modes',
+ {skip:process.platform==='win32'},async t=>{
+ const f=await fixture(t);
+ const file=process.platform==='darwin'
+  ?path.join(f.env.HOME,'Library','LaunchAgents','de.desktopbridge.agent.plist')
+  :path.join(f.env.XDG_CONFIG_HOME,'autostart','desktop-bridge.desktop');
+ fs.mkdirSync(path.dirname(file),{recursive:true});
+ const foreign=startupContent(process.execPath,path.join(path.dirname(f.root),'foreign-client'),process.platform);
+ fs.writeFileSync(file,foreign);
+ const command=f.invoke('mode','background'),[exitCode]=await once(command,'exit');
+ assert.notEqual(exitCode,0);
+ assert.equal(fs.readFileSync(file,'utf8'),foreign);
+});
+
+test('Linux systemd user backend enables, starts and removes only its own unit',
+ {skip:process.platform!=='linux'},async t=>{
+ const f=await fixture(t),bin=path.dirname(f.env.PATH.split(path.delimiter)[0]+'/dummy');
+ const unit=linuxSystemdUnitFile(f.env,f.env.HOME);
+ const log=path.join(path.dirname(f.root),'systemctl.log');
+ const script=`#!/bin/sh
+[ "$1" = '--user' ] || exit 7
+shift
+printf '%s\n' "$*" >> "$BRIDGE_TEST_SYSTEMCTL_LOG"
+case "$1" in
+ show-environment|daemon-reload|disable) exit 0;;
+ enable|start)
+   "$BRIDGE_TEST_NODE" "$BRIDGE_TEST_ROOT/runner.mjs" "$BRIDGE_TEST_ROOT" </dev/null >/dev/null 2>&1 &
+   exit 0;;
+esac
+exit 6
+`;
+ fs.writeFileSync(path.join(bin,'systemctl'),script,{mode:0o700});
+ Object.assign(f.env,{BRIDGE_TEST_SYSTEMCTL_LOG:log,BRIDGE_TEST_NODE:process.execPath,BRIDGE_TEST_ROOT:f.root});
+ await success(f.invoke('mode','background'));
+ await waitFor(()=>livePid(path.join(f.root,'runner-lock','pid')));
+ assert.equal(fs.existsSync(unit),true);
+ assert.equal(startupIsOwned(unit,f.root,'systemd'),true);
+ assert.equal(fs.existsSync(path.join(f.env.XDG_CONFIG_HOME,'autostart','desktop-bridge.desktop')),false);
+ const calls=fs.readFileSync(log,'utf8');
+ assert.match(calls,/enable --now desktop-bridge\.service/);
+ assert.match(calls,/start desktop-bridge\.service|enable --now desktop-bridge\.service/);
+ await success(f.invoke('mode','manual'));
+ assert.equal(fs.existsSync(unit),false);
+ assert.match(fs.readFileSync(log,'utf8'),/disable --now desktop-bridge\.service/);
+});
+
 test('generated commands preserve literal paths with spaces, apostrophes and shell metacharacters',async t=>{
  const dir=directory(t),root=path.join(dir,"client ' $(echo injected) $HOME `false` &");fs.mkdirSync(root);fs.writeFileSync(path.join(root,'control.mjs'),"console.log(JSON.stringify(process.argv.slice(2)));");
  if(process.platform!=='win32') {
-   const command=commandFor(process.execPath,root,'mode manual');assert.equal(await capture('/bin/sh',['-c',command]),'["mode","manual"]');
+   const command=commandFor(process.execPath,root,'mode manual');const childEnv={...process.env};delete childEnv.NODE_TEST_CONTEXT;assert.equal(await capture('/bin/sh',['-c',command],{env:childEnv}),'["mode","manual"]');
  }
  assert.equal(shellQuote("a'b"),"'a'\\''b'");assert.equal(powershellQuote("a'b"),"'a''b'");
  const windows=commandFor('C:\\Program Files\\node.exe',"C:\\a'b\\%TEMP% & $x",'start','win32');assert.match(windows,/^& 'C:\\Program Files\\node.exe'/);assert.ok(windows.includes("a''b"));assert.ok(windows.includes('%TEMP% & $x'));

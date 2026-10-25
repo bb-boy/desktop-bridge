@@ -1,11 +1,25 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {spawn} from 'node:child_process';
-import {run,startupFile,removeStartup,stopClient,livePid,sleep} from './lifecycle.mjs';
+import {run,startupFile,removeStartup,stopClient,livePid,sleep,linuxSystemdUnitFile,startupRootId,ensureOwnedStartup} from './lifecycle.mjs';
 export const shellQuote=value=>"'"+String(value).replace(/'/g,"'\\''")+"'";
 export const powershellQuote=value=>"'"+String(value).replace(/'/g,"''")+"'";
 const xml=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
 const desktopQuote=s=>'"'+String(s).replace(/(["\\`$])/g,'\\$1').replace(/%/g,'%%')+'"';
+// systemd's percent-specifiers remain active inside quotes; escape them even
+// when paths are quoted. Shell expansion must not occur in a unit file.
+const systemdQuote=value=>'"'+String(value).replace(/\\/g,'\\\\').replace(/"/g,'\\"').replace(/%/g,'%%')+'"';
+// systemd 249 treats quotes on WorkingDirectory as part of its value.
+// A directory property takes an unquoted absolute path with C-style escapes.
+const systemdDirectory=value=>String(value).replace(/[\\ 	"%]/g,c=>({
+ '\\':String.raw`\x5c`, ' ':String.raw`\x20`, '\t':String.raw`\x09`, '"':String.raw`\x22`, '%':'%%'
+}[c]));
+export function linuxSystemdUnitContent(node,root) {
+ return `[Unit]\nDescription=Desktop Bridge (user session)\nAfter=network-online.target\nWants=network-online.target\n\n[Service]\nType=simple\n# DesktopBridge-Root: ${startupRootId(root)}\nExecStart=${[node,path.join(root,'runner.mjs'),root].map(systemdQuote).join(' ')}\nWorkingDirectory=${systemdDirectory(root)}\nRestart=on-failure\nRestartSec=10\n\n[Install]\nWantedBy=default.target\n`;
+}
+async function userSystemdAvailable(){
+ try{await run('systemctl',['--user','show-environment'],{stdio:'ignore'});return true;}catch{return false;}
+}
 export function commandFor(node,root,action,platform=process.platform) {
  const argv=[node,path.join(root,'control.mjs'),...action.split(' ')];
  return platform==='win32'?'& '+argv.map(powershellQuote).join(' '):argv.map(shellQuote).join(' ');
@@ -15,17 +29,34 @@ export function startupContent(node,root,platform=process.platform) {
  if(platform==='linux')return `[Desktop Entry]\nType=Application\nName=Desktop Bridge\nExec=${[node,path.join(root,'runner.mjs'),root].map(desktopQuote).join(' ')}\nTerminal=false\nX-GNOME-Autostart-enabled=true\n`;
  throw new Error('Use the Windows startup shortcut helper.');
 }
-export async function registerStartup(node,root) {
- const file=startupFile(root);fs.mkdirSync(path.dirname(file),{recursive:true});
+export async function registerStartup(node,root,{start=true}={}) {
+ const file=startupFile(root);
  if(process.platform==='win32'){
   const {windowsBackground}=await import('./windows-background.mjs');
   await windowsBackground('register',root,node);
- }else{
-  fs.writeFileSync(file,startupContent(node,root));
-  if(process.platform==='darwin'){
-   try{await run('launchctl',['bootout','gui/'+process.getuid(),file],{stdio:'ignore'});}catch{}
-   try{await run('launchctl',['bootstrap','gui/'+process.getuid(),file],{stdio:'ignore'});}catch{console.log('登录自启设置已保存，下次登录图形界面时生效。');}
+  return;
+ }
+ ensureOwnedStartup(file,root,process.platform);
+ if(process.platform==='linux'){
+  const unit=linuxSystemdUnitFile();
+  ensureOwnedStartup(unit,root,'systemd');
+  if(await userSystemdAvailable()){
+   fs.mkdirSync(path.dirname(unit),{recursive:true,mode:0o700});
+   fs.writeFileSync(unit,linuxSystemdUnitContent(node,root),{mode:0o600});
+   await run('systemctl',['--user','daemon-reload'],{stdio:'ignore'});
+   await run('systemctl',['--user','enable',...(start?['--now']:[]),'desktop-bridge.service'],{stdio:'ignore'});
+   // The old GUI autostart must not launch a second instance at login.
+   fs.rmSync(file,{force:true});
+   return;
   }
+  if(fs.existsSync(unit))throw new Error('Existing systemd user service is unavailable; refusing to overwrite the selected startup backend.');
+  console.log('用户级 systemd 不可用；使用图形桌面登录自启。纯终端 Linux 请启用 systemd --user。');
+ }
+ fs.mkdirSync(path.dirname(file),{recursive:true,mode:0o700});
+ fs.writeFileSync(file,startupContent(node,root),{mode:0o600});
+ if(process.platform==='darwin'){
+  try{await run('launchctl',['bootout','gui/'+process.getuid(),file],{stdio:'ignore'});}catch{}
+  try{await run('launchctl',['bootstrap','gui/'+process.getuid(),file],{stdio:'ignore'});}catch{console.log('登录自启设置已保存，下次登录图形界面时生效。');}
  }
 }
 export function writeInstructions(root,node,mode,privilege='standard') {
@@ -46,6 +77,15 @@ export async function startBackground(root,node) {
   }
   throw new Error('后台任务尚未启动。当前用户需已登录 Windows；请检查任务计划程序后重试。');
  }
+ if(process.platform==='linux'&&fs.existsSync(linuxSystemdUnitFile())){
+  const unit=linuxSystemdUnitFile();ensureOwnedStartup(unit,root,'systemd');
+  await run('systemctl',['--user','start','desktop-bridge.service'],{stdio:'ignore'});
+  for(let i=0;i<60;i++){
+   if(livePid(path.join(root,'runner-lock','pid')))return;
+   await sleep(250);
+  }
+  throw new Error('systemd --user 未能启动 Agent。请检查 systemctl --user status desktop-bridge.service。');
+ }
  const child=spawn(node,[path.join(root,'runner.mjs'),root],{detached:true,stdio:'ignore'});
  await new Promise((resolve,reject)=>{child.once('spawn',resolve);child.once('error',reject);});child.unref();
 }
@@ -61,9 +101,14 @@ export async function setMode(root,node,mode) {
  fs.renameSync(path.join(root,'client-settings.json.tmp'),path.join(root,'client-settings.json'));
  writeInstructions(root,node,mode);
  if(mode==='background'){
-   await registerStartup(node,root);
    let auth={};try{auth=JSON.parse(fs.readFileSync(path.join(root,'auth-status.json'),'utf8'));}catch{}
-   if(auth.authStatus!=='re_pair_required')await startBackground(root,node);
+   const canStart=auth.authStatus!=='re_pair_required';
+   // A LaunchAgent/systemd service starts during registration. Clear the
+   // maintenance flag *before* that start, or it immediately exits and leaves
+   // a detached (unmanaged) fallback runner until the next login.
+   if(canStart)fs.rmSync(path.join(root,'maintenance.flag'),{force:true});
+   await registerStartup(node,root,{start:canStart});
+   if(canStart)await startBackground(root,node);
    else console.log('启动模式已保存，但授权已撤销。请先运行 RePair.cmd 重新配对。');
  }
 }
