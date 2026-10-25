@@ -4,7 +4,7 @@ import {createInterface} from 'node:readline/promises';
 import {startupFile,startupIsOwned,linuxSystemdUnitFile} from './lifecycle.mjs';
 export function parseInstallerOptions(args) {
  const options={};
- const switches={'--repair':'repair','--no-browser':'noBrowser','--no-start':'noStart','--stop':'stop','--uninstall':'uninstall','--purge':'purge','--administrator':'administrator'};
+ const switches={'--repair':'repair','--no-browser':'noBrowser','--no-start':'noStart','--stop':'stop','--uninstall':'uninstall','--purge':'purge','--administrator':'administrator','--with-cua':'withCua'};
  for(let i=0;i<args.length;i++){
   const flag=args[i];
   if(flag==='--root'||flag==='--mode'){

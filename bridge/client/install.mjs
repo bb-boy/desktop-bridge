@@ -4,6 +4,7 @@ import os from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {execFileSync} from 'node:child_process';
 import {ensureRuntime,prepareDependencies,verifyLocalTools} from './environment.mjs';
+import {ensureCuaDriver} from './cua-driver.mjs';
 import {parseInstallerOptions,chooseMode,savedMode} from './install-options.mjs';
 import {setMode,commandFor,writeInstructions} from './startup.mjs';
 import {elevationRequest} from './admin-elevate.mjs';
@@ -33,6 +34,13 @@ if(options.uninstall&&!fs.existsSync(path.join(root,'.desktop-bridge-client'))){
  let legacy;try{legacy=JSON.parse(fs.readFileSync(path.join(root,'agent-config.json'),'utf8'));}catch{}
  if(!legacy?.mcpEntry||!legacy?.runtimeDir)throw new Error('This directory is not a recognized client installation.');
 }
+// Preflight Cua installation while the previous Agent is still running. An
+// installer or permission failure must not strand a working Desktop Bridge.
+const oldConfigFile=path.join(root,'agent-config.json');
+const oldConfig=fs.existsSync(oldConfigFile)?JSON.parse(fs.readFileSync(oldConfigFile,'utf8')):{};
+const needsCua=!options.uninstall&&!options.stop&&(options.withCua||oldConfig.cuaDriver?.enabled===true);
+if(adminRequested&&options.withCua)throw new Error('Cua requires a standard desktop user session, not an administrator service.');
+const cuaSettings=needsCua&&!adminRequested?await ensureCuaDriver({root,existingCommand:oldConfig.cuaDriver?.command}):null;
 await stopClient(root);
 if(options.stop){console.log('Client stopped. Use your installed Start shortcut or control.mjs start to resume.');process.exit(0);}
 if(options.uninstall){
@@ -45,7 +53,7 @@ if(options.uninstall){
 fs.writeFileSync(path.join(root,'.desktop-bridge-client'),'desktop-bridge-client\n',{mode:0o600});
 if(process.versions.node.split('.')[0]!=='24')throw new Error('Use Install.cmd, Install.command or Install.sh to prepare the supported Node 24 runtime.');
 const {node,npm}=await ensureRuntime(root,source);
-const release=path.join(root,'releases','0.2.7'),configPath=path.join(root,'agent-config.json');
+const release=path.join(root,'releases','0.2.8'),configPath=path.join(root,'agent-config.json');
 fs.mkdirSync(release,{recursive:true,mode:0o700});
 for(const file of ['package.json','package-lock.json'])fs.copyFileSync(path.join(source,file),path.join(release,file));
 const agentSource=fs.existsSync(path.join(source,'agent'))?path.join(source,'agent'):path.join(source,'..','agent');
@@ -61,6 +69,7 @@ catch{
 }
 let config=JSON.parse(fs.readFileSync(fs.existsSync(configPath)?configPath:path.join(source,'connection.json'),'utf8').replace(/^\uFEFF/,''));
 config={...config,runtimeDir:release,mcpEntry:path.join(release,'node_modules','@wonderwhy-er','desktop-commander','dist','index.js'),defaultShell:process.platform==='win32'?'powershell.exe':process.platform==='darwin'?'/bin/zsh':'/bin/bash'};
+if(cuaSettings)config.cuaDriver=cuaSettings;
 fs.writeFileSync(configPath,JSON.stringify(config,null,2),{mode:0o600});
 fs.rmSync(path.join(root,'maintenance.flag'),{force:true});
 const pairArgs=[path.join(release,'agent','agent.mjs'),configPath,'--setup-only'];
@@ -74,7 +83,7 @@ if(adminRequested){
   const helper=path.join(root,'admin-elevate.mjs');
   const request=elevationRequest('install',{source:root,mode});
   await run(request.command,request.args);
-  fs.writeFileSync(path.join(root,'client-settings.json'),JSON.stringify({mode,privilege:'administrator',version:'0.2.7'},null,2),{mode:0o600});
+  fs.writeFileSync(path.join(root,'client-settings.json'),JSON.stringify({mode,privilege:'administrator',version:'0.2.8'},null,2),{mode:0o600});
   writeInstructions(root,node,mode,'administrator');
 }
 console.log(adminRequested?'管理员运行已授权并配置：'+mode+'。':mode==='manual'?'安装和配对完成：手动模式。使用时运行启动命令，保持窗口，按 Ctrl+C 结束；没有后台实例或登录自启。':'安装和配对完成：后台模式。客户端现在后台运行，登录系统后自动启动。');

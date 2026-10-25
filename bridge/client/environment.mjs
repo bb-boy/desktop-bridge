@@ -87,7 +87,7 @@ export async function verifyLocalTools({node,release,workingDirectory}){
 export async function verifyLocalToolsInProcess({node,release,workingDirectory}) {
  console.log('正在验证本地工具可以实际执行……');
  const {Client,StdioClientTransport,entry}=await probeModules(release);
- const client=new Client({name:'desktop-bridge-install-check',version:'0.2.7'},{capabilities:{}});
+ const client=new Client({name:'desktop-bridge-install-check',version:'0.2.8'},{capabilities:{}});
  const transport=new StdioClientTransport({command:node,args:[entry],cwd:workingDirectory,stderr:'pipe'});
  try{
   const connecting=client.connect(transport,{timeout:30000});transport.stderr?.on('data',()=>{});await connecting;

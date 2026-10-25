@@ -42,13 +42,15 @@ export function parse(argv){
   }else if(command==='uninstall'){
     if(remainder.some(x=>x!=='--purge')||remainder.filter(x=>x==='--purge').length>1)throw new Error('Usage: desktop-bridge uninstall [--purge]');
   }else if(command==='repair'||command==='update'){
-    if(remainder.length)throw new Error('Usage: desktop-bridge '+command+' [--root directory]');
+    if(command==='update'&&remainder.length===1&&remainder[0]==='--with-cua'){
+      // Explicit opt-in to new remote desktop control capabilities.
+    }else if(remainder.length)throw new Error('Usage: desktop-bridge '+command+' [--with-cua] [--root directory]');
   }else{
     for(let i=0;i<remainder.length;i++){
       const a=remainder[i];
       if(a==='--mode'){
         if(!['manual','background'].includes(remainder[++i]))throw new Error('Use --mode manual or --mode background');
-      }else if(!['--administrator','--no-browser','--no-start'].includes(a))throw new Error('Unknown setup option: '+a);
+      }else if(!['--administrator','--no-browser','--no-start','--with-cua'].includes(a))throw new Error('Unknown setup option: '+a);
     }
   }
   if(command==='setup'&&!remainder.includes('--mode')&&!remainder.includes('--no-start'))remainder.push('--mode','background');
@@ -58,13 +60,13 @@ export function parse(argv){
 function usage(){
   return 'Desktop Bridge '+manifest.version+'\n\n'+
     'Usage: desktop-bridge <command> [options]\n\n'+
-    '  setup [--mode manual|background] [--administrator]  Install and pair (default: background)\n'+
+    '  setup [--mode manual|background] [--with-cua]    Install and pair (default: background)\n'+
     '  start | stop | restart                           Manage local agent\n'+
     '  status                                           Show local connection status\n'+
     '  pair                                             Re-pair in your browser\n'+
     '  mode manual|background                           Change startup mode\n'+
     '  repair                                           Repair (re-pairs in browser)\n'+
-    '  update                                           Update npm CLI and installed Agent\n'+
+    '  update [--with-cua]                              Update CLI/Agent; optionally install and enable Cua Driver\n'+
     '  uninstall [--purge]                              Remove local agent\n'+
     '  version | help                                   Show CLI info\n\n'+
     'All commands except help/version accept --root <directory>.\n'+
@@ -91,7 +93,7 @@ export async function main(argv=process.argv.slice(2)){
   const rootArgs=parsed.root?['--root',root]:[];
   if(parsed.command==='setup')return childRun(installer,[...parsed.args,...rootArgs]);
   if(!fs.existsSync(path.join(root,'launch.json')))throw new Error('Client is not installed at '+root+'. Run desktop-bridge setup first.');
-  if(parsed.command==='update')return performUpdate({root,packageRoot,packageName:manifest.name});
+  if(parsed.command==='update')return performUpdate({root,packageRoot,packageName:manifest.name,withCua:parsed.args.includes('--with-cua')});
   if(parsed.command==='repair'){
     console.log('Repair also requires browser re-pairing approval.');
     const {savedMode}=await import('../dist/client/install-options.mjs');

@@ -2,7 +2,7 @@
 
 Independent npm distribution for the Desktop Bridge **local device client**. It does not publish the upstream Desktop Commander package or cloud relay.
 
-Version 0.2.7 adds Windows Task Scheduler background management. npm remains the installation, upgrade and control entry point. **Version 0.2.7 is now publicly available on npm.**
+Version 0.2.8 adds checksum-pinned Cua Driver installation and validation across Windows, macOS and Linux. The existing published version is 0.2.7 until this candidate passes device testing and is released.
 
 Requires Node.js 24 and npm. Native installers for computers without Node remain available at <https://mcp.ilovestudy.de/start.html>. The public 新手指引 page keeps the native-installer and npm routes side by side; users only need one.
 
@@ -35,7 +35,11 @@ Update the npm CLI and then apply the local client release:
 
 ```sh
 desktop-bridge update
+# First-time Cua Driver opt-in: updates npm CLI, Agent and verified Cua Driver in one operation
+desktop-bridge update --with-cua
 ```
+
+The first Cua opt-in downloads the upstream Cua Driver 0.38.0 installer for Windows/macOS/Linux from its versioned GitHub release, verifies its embedded SHA-256, runs the official installer with a pinned release version, verifies the resulting binary and MCP tool catalog, then writes `cuaDriver` into the Agent config. Future updates automatically preserve and validate Cua when already enabled. No Desktop Bridge device tokens are sent to the Cua installer. Before installing, ensure you trust the Cua desktop-control capabilities; macOS may still require local Screen Recording and Accessibility approvals. Installation is deliberately **opt-in**; regular upgrades keep Cua disabled if it was not enabled before.
 
 `npm update` alone does not replace an already running agent. `desktop-bridge update` upgrades the CLI and Agent while explicitly passing the existing saved mode, with credential, mode, and task journal protection. It refuses to install a CLI older than the current version. `repair` also preserves the saved mode, but deliberately requires browser re-pairing approval. A revoked device always requires explicit new pairing.
 
