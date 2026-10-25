@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { WebSocketServer,WebSocket } from 'ws';
 import { hash,opaque } from './security.mjs';
 import bundledCatalog from './desktop-commander-tools.json' with { type: 'json' };
-export const bridgeToolNames=new Set(['list_devices','list_calls','get_call_result','who_am_i','ping','shutdown']);
+import { annotateTool,isReadOnlyTool,riskForTool,toolSource } from './tool-risk.mjs';
+export const bridgeToolNames=new Set(['list_devices','list_calls','get_call_result','who_am_i','ping','shutdown','get_device_permissions','set_device_permissions']);
 export class Broker {
   constructor(httpServer,config,store) {
     this.config=config;this.store=store;this.connections=new Map();this.pending=new Map();this.closing=false;
@@ -133,9 +134,25 @@ export class Broker {
     const catalog=new Map(bundledCatalog.tools.map(tool=>[tool.name,tool]));
     for(const device of this.store.devices(owner))for(const tool of this.store.tools(device.id,owner))if(!catalog.has(tool.name)&&!bridgeToolNames.has(tool.name))catalog.set(tool.name,tool);
     return [...catalog.values()].map(tool=>({
-      ...tool,description:tool.description+'\nRuns on your paired computer. Check list_devices.toolsAvailable. Every sent call has a task ID; use get_call_result after interruption before retrying.',
+      ...annotateTool(tool),description:tool.description+'\nRuns on your paired computer. Check list_devices.toolsAvailable. Every sent call has a task ID; use get_call_result after interruption before retrying.',
       inputSchema:{...tool.inputSchema,properties:{...tool.inputSchema.properties,device_id:{type:'string',description:'Device ID from list_devices. Optional with one device.'}}}
     }));
+  }
+  devicePermissions(args={},owner='owner') {
+    if(!args||typeof args!=='object'||Array.isArray(args)||Object.keys(args).some(k=>k!=='device_id'))throw new Error('Only device_id is accepted');
+    const deviceId=args.device_id??(this.store.devices(owner).length===1?this.store.devices(owner)[0].id:null);
+    if(typeof deviceId!=='string')throw new Error('Choose a device');
+    const policy=this.store.devicePolicy(owner,deviceId);
+    const devices=this.store.devices(owner).map(d=>({id:d.id,name:d.name,policy_mode:this.store.devicePolicy(owner,d.id).mode}));
+    const catalog=this.store.tools(deviceId,owner).map(t=>({name:t.name,source:toolSource(t.name),annotations:riskForTool(t.name)}));
+    catalog.push({name:'shutdown',source:'desktop',annotations:riskForTool('shutdown')});
+    return {...policy,devices,tools:catalog};
+  }
+  setDevicePermissions(args,owner='owner') {
+    if(!args||typeof args!=='object'||Array.isArray(args)||Object.keys(args).some(k=>!['device_id','mode','allowed_tools'].includes(k)))throw new Error('Invalid permission arguments');
+    if(typeof args.device_id!=='string'||typeof args.mode!=='string')throw new Error('Device and mode required');
+    this.store.saveDevicePolicy(owner,args.device_id,args.mode,args.allowed_tools??[]);
+    return this.devicePermissions({device_id:args.device_id},owner);
   }
   recover(id,owner) {
     const call=this.store.call(id,owner);
@@ -184,6 +201,9 @@ export class Broker {
     if(this.closing)throw new Error('Relay is stopping; no command was sent.');
     if(!args||typeof args!=='object'||Array.isArray(args))throw new Error('Tool arguments must be an object');
     const {device,conn}=this.connection(args,owner),deviceId=device.id;
+    const policy=this.store.devicePolicy(owner,deviceId);
+    if(policy.mode==='read_only'&&!isReadOnlyTool(name))throw new Error('Device permission denied: read-only mode');
+    if(policy.mode==='custom'&&!policy.allowed_tools.includes(name))throw new Error('Device permission denied: tool is disabled');
     if(name!=='shutdown'&&!this.devices(owner).find(d=>d.id===deviceId).toolsAvailable)throw new Error('网络已连接，但本地工具尚未通过健康检查；没有发送命令。请更新或检查客户端。');
     if(name==='shutdown') {
       if(!conn.canShutdown)throw new Error('Update the desktop client to enable remote shutdown; no command was sent.');

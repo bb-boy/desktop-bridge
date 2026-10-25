@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { pairDevice,saveConfig } from './pair.mjs';
+import { McpToolManager } from './mcp-manager.mjs';
 
 const configPath=process.env.BRIDGE_AGENT_CONFIG??process.argv[2];
 if(!configPath) throw new Error('Usage: node agent.mjs path/to/agent-config.json');
@@ -106,8 +107,18 @@ const requireRuntime=createRequire(path.join(config.runtimeDir,'package.json'));
 const {Client}=await import(pathToFileURL(requireRuntime.resolve('@modelcontextprotocol/sdk/client/index.js')));
 const {StdioClientTransport}=await import(pathToFileURL(requireRuntime.resolve('@modelcontextprotocol/sdk/client/stdio.js')));
 const WebSocket=requireRuntime('ws');
-const client=new Client({name:'personal-desktop-bridge-agent',version:'0.2.7'},{capabilities:{}});
-const transport=new StdioClientTransport({command:process.execPath,args:[config.mcpEntry],cwd:config.workingDirectory??directory,env:{...process.env},stderr:'pipe'});
+const cuaConfig=config.cuaDriver??{};
+const client=new McpToolManager({
+  Client,StdioClientTransport,log,
+  backends:[
+    {id:'desktop',command:process.execPath,args:[config.mcpEntry],cwd:config.workingDirectory??directory,env:{...process.env}},
+    ...(cuaConfig.enabled===true?[{
+      id:'cua',prefix:'cua_',command:cuaConfig.command||'cua-driver',
+      args:Array.isArray(cuaConfig.args)?cuaConfig.args:['mcp'],
+      cwd:config.workingDirectory??directory,env:{...process.env}
+    }]:[])
+  ]
+});
 let ws,retryTimer,stopping=false,attempt=0,localHealthy=false,checkingHealth=false,healthFailures=0,remoteStopping=false;
 const heartbeatPath=path.join(directory,'heartbeat.json');
 function writeHeartbeat(){try{fs.writeFileSync(heartbeatPath,JSON.stringify({pid:process.pid,time:Date.now(),connected:ws?.readyState===1,localToolsAvailable:localHealthy}),{mode:0o600});}catch{}}
@@ -192,12 +203,9 @@ process.on('uncaughtException',error=>{log('fatal',{type:error.name});void shutd
 process.on('unhandledRejection',error=>{log('fatal_rejection',{type:error?.name});void shutdown(1);});
 client.onclose=()=>{if(!stopping){log('local_mcp_closed');void shutdown(1);}};
 client.onerror=error=>log('local_mcp_error',{type:error.name});
-try{await client.connect(transport,{timeout:30000});}catch(error){log('local_mcp_start_failed',{message:String(error.message).slice(0,300)});await shutdown(1);}
-// Drain stderr to prevent a full pipe from blocking the local MCP process.
-transport.stderr?.on('data',()=>{});
-let tools=[],cursor;
-do {const page=await client.listTools(cursor?{cursor}:{});tools.push(...page.tools);cursor=page.nextCursor;}while(cursor);
-log('local_mcp_ready',{toolCount:tools.length,pid:process.pid,childPid:transport.pid});
+try{await client.start();}catch(error){log('local_mcp_start_failed',{message:String(error.message).slice(0,300)});await shutdown(1);}
+const tools=client.listTools().tools;
+log('local_mcp_ready',{toolCount:tools.length,pid:process.pid,childPid:client.connections.get('desktop')?.transport.pid});
 function recover(id,socket) {
   const entry=journal[id];
   if(entry?.status==='completed')send(socket,{type:'result',id,result:entry.result});

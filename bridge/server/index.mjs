@@ -6,7 +6,8 @@ import express from 'express';
 import { rateLimit } from 'express-rate-limit';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { ListToolsRequestSchema, CallToolRequestSchema, ListResourcesRequestSchema, ReadResourceRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { riskForTool,annotateTool } from './tool-risk.mjs';
 import { requireBearerAuth } from '@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js';
 import { openStore } from './store.mjs';
 import { installOAuth } from './oauth.mjs';
@@ -18,6 +19,25 @@ import { installAdmin } from './admin.mjs';
 import { installerDownload } from './downloads.mjs';
 
 const root=path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const PERMISSION_UI_URI='ui://desktop-bridge/permissions-v1.html';
+const PERMISSION_UI_MIME='text/html;profile=mcp-app';
+const permissionsTool={
+  name:'get_device_permissions',
+  description:'Open a ChatGPT web permission panel to view and select Desktop Commander and Cua Driver permissions for your paired devices. All devices default to full access at the Desktop Bridge layer. This setting does not override ChatGPT or Windows security.',
+  inputSchema:{type:'object',properties:{device_id:{type:'string',description:'Optional paired device ID'}},additionalProperties:false},
+  annotations:riskForTool('get_device_permissions'),
+  _meta:{ui:{resourceUri:PERMISSION_UI_URI}}
+};
+const setPermissionsTool={
+  name:'set_device_permissions',
+  description:'Save Desktop Bridge tool restrictions for a device owned by your account. Accepts full (default), read_only, or custom allowlist. This changes device authorization; it cannot bypass Cua or Windows permissions.',
+  inputSchema:{type:'object',properties:{
+    device_id:{type:'string'},mode:{type:'string',enum:['full','read_only','custom']},
+    allowed_tools:{type:'array',items:{type:'string'},maxItems:128}
+  },required:['device_id','mode'],additionalProperties:false},
+  annotations:riskForTool('set_device_permissions'),
+  _meta:{ui:{visibility:['app']}}
+};
 export async function startServer(config,dependencies={}) {
   if(!config.baseUrl || !config.ownerPasswordHash || !Array.isArray(config.devices??[])) throw new Error('Missing server configuration');
   const base=new URL(config.baseUrl);
@@ -50,14 +70,27 @@ export async function startServer(config,dependencies={}) {
     if(req.method!=='POST') {res.set('Allow','POST'); return res.status(405).json({error:'Use Streamable HTTP POST'});}
     if(req.get('origin') && req.get('origin')!==base.origin && !['https://chatgpt.com','https://chat.openai.com'].includes(req.get('origin'))) return res.status(403).json({error:'Origin not allowed'});
     const owner=req.auth.extra.ownerId;
-    const server=new Server({name:'personal-desktop-bridge',version:'0.2.6'},{capabilities:{tools:{}},instructions:'Use list_devices to identify available computers. The standard tool catalog is available before pairing; visibility does not mean a device is ready. Tools execute on the chosen computer. Check toolsAvailable separately from networkConnected. Use list_calls and get_call_result to recover results after interruptions. Never retry a side effect until its outcome is known.'});
+    const server=new Server({name:'personal-desktop-bridge',version:'0.2.6'},{capabilities:{tools:{},resources:{}},instructions:'Use list_devices to identify available computers. The standard tool catalog is available before pairing; visibility does not mean a device is ready. Tools execute on the chosen computer. Check toolsAvailable separately from networkConnected. Use list_calls and get_call_result to recover results after interruptions. Never retry a side effect until its outcome is known.'});
     server.setRequestHandler(ListToolsRequestSchema,async()=>({tools:[{
-      name:'list_devices',description:'List your configured computers and their current connection status. Use before operating on a computer.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}
-    },{name:'list_calls',description:'List your last 100 task IDs and states. Use after a timeout or disconnect.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true}},{name:'get_call_result',description:'Retrieve a task status and saved result by call_id. Never repeats the operation.',inputSchema:{type:'object',properties:{call_id:{type:'string'}},required:['call_id'],additionalProperties:false},annotations:{readOnlyHint:true}},...remoteTools,...broker.tools(owner)]}));
+      name:'list_devices',description:'List your configured computers and their current connection status. Use before operating on a computer.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:riskForTool('list_devices')
+    },{name:'list_calls',description:'List your last 100 task IDs and states. Use after a timeout or disconnect.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:riskForTool('list_calls')},{name:'get_call_result',description:'Retrieve a task status and saved result by call_id. Never repeats the operation.',inputSchema:{type:'object',properties:{call_id:{type:'string'}},required:['call_id'],additionalProperties:false},annotations:riskForTool('get_call_result')},...remoteTools.map(annotateTool),permissionsTool,setPermissionsTool,...broker.tools(owner)]}));
+    server.setRequestHandler(ListResourcesRequestSchema,async()=>({resources:[{uri:PERMISSION_UI_URI,name:'Desktop Bridge device permissions',mimeType:PERMISSION_UI_MIME,description:'Device permission controls inside ChatGPT web chat'}]}));
+    server.setRequestHandler(ReadResourceRequestSchema,async(request)=>{
+      if(request.params.uri!==PERMISSION_UI_URI)throw new Error('Unknown UI resource');
+      return {contents:[{uri:PERMISSION_UI_URI,mimeType:PERMISSION_UI_MIME,text:fs.readFileSync(path.join(root,'public','gui-permissions.html'),'utf8')}]};
+    });
     server.setRequestHandler(CallToolRequestSchema,async(request)=>{
       await provider.verifyAccessToken(req.auth.token);
       store.recordToolCall(owner);
       if(request.params.name==='list_devices') return {content:[{type:'text',text:JSON.stringify(broker.devices(owner))}]};
+      if(request.params.name==='get_device_permissions'){
+        try {const result=broker.devicePermissions(request.params.arguments??{},owner);return {content:[{type:'text',text:'Device permission settings loaded.'}],structuredContent:result};}
+        catch(e){return {isError:true,content:[{type:'text',text:e.message}]};}
+      }
+      if(request.params.name==='set_device_permissions'){
+        try {const result=broker.setDevicePermissions(request.params.arguments??{},owner);return {content:[{type:'text',text:'Device permissions saved.'}],structuredContent:result};}
+        catch(e){return {isError:true,content:[{type:'text',text:e.message}]};}
+      }
       try {
         if(request.params.name==='who_am_i')return {content:[{type:'text',text:JSON.stringify(accountInfo(store,broker,owner))}]};
         if(request.params.name==='ping')return {content:[{type:'text',text:JSON.stringify(await broker.ping(validateDeviceArgs(request.params.arguments),owner))}]};
