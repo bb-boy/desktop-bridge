@@ -21,7 +21,8 @@ import { installerDownload } from './downloads.mjs';
 const root=path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const PERMISSION_UI_URI='ui://desktop-bridge/permissions-v1.html';
 const PERMISSION_UI_MIME='text/html;profile=mcp-app';
-const SCREENSHOT_UI_URI='ui://desktop-bridge/screenshot-v1.html';
+const SCREENSHOT_UI_URI='ui://desktop-bridge/screenshot-v2.html';
+const LEGACY_SCREENSHOT_UI_URI='ui://desktop-bridge/screenshot-v1.html';
 const permissionsTool={
   name:'get_device_permissions',
   description:'Open a ChatGPT web permission panel to view and select Desktop Commander and Cua Driver permissions for your paired devices. All devices default to full access at the Desktop Bridge layer. This setting does not override ChatGPT or Windows security.',
@@ -79,12 +80,14 @@ export async function startServer(config,dependencies={}) {
     }:tool)]}));
     server.setRequestHandler(ListResourcesRequestSchema,async()=>({resources:[
       {uri:PERMISSION_UI_URI,name:'Desktop Bridge device permissions',mimeType:PERMISSION_UI_MIME,description:'Device permission controls inside ChatGPT web chat'},
-      {uri:SCREENSHOT_UI_URI,name:'Desktop Bridge desktop screenshot',mimeType:PERMISSION_UI_MIME,description:'Show a screenshot from a paired computer in ChatGPT'}
+      {uri:SCREENSHOT_UI_URI,name:'Desktop Bridge desktop screenshot',mimeType:PERMISSION_UI_MIME,description:'Show a screenshot from a paired computer in ChatGPT'},
+      {uri:LEGACY_SCREENSHOT_UI_URI,name:'Desktop Bridge desktop screenshot (legacy)',mimeType:PERMISSION_UI_MIME,description:'Compatible URL for previously displayed screenshots'}
     ]}));
     server.setRequestHandler(ReadResourceRequestSchema,async(request)=>{
       const uiFiles={
         [PERMISSION_UI_URI]:'gui-permissions.html',
-        [SCREENSHOT_UI_URI]:'screenshot.html'
+        [SCREENSHOT_UI_URI]:'screenshot.html',
+        [LEGACY_SCREENSHOT_UI_URI]:'screenshot.html'
       };
       const filename=uiFiles[request.params.uri];
       if(!filename)throw new Error('Unknown UI resource');
@@ -108,7 +111,14 @@ export async function startServer(config,dependencies={}) {
         if(request.params.name==='shutdown')validateDeviceArgs(request.params.arguments);
         if(request.params.name==='list_calls')return {content:[{type:'text',text:JSON.stringify(store.recentCalls(owner))}]};
         if(request.params.name==='get_call_result'){const call=broker.recover(String(request.params.arguments?.call_id??''),owner);if(!call)throw new Error('Task not found');return {content:[{type:'text',text:JSON.stringify(call)}]};}
-        return await broker.call(request.params.name,request.params.arguments,owner);
+        const result=await broker.call(request.params.name,request.params.arguments,owner);
+        // The host may omit image content when restoring a widget. Expose only the
+        // owner-scoped task ID so the UI can recover the saved result without recapturing.
+        if(request.params.name==='cua_get_desktop_state'&&!result.isError){
+          const callId=result?._meta?.desktopBridge?.callId;
+          if(typeof callId==='string')return {...result,structuredContent:{...(result.structuredContent??{}),desktopBridgeCallId:callId}};
+        }
+        return result;
       }
       catch(e) {return {isError:true,content:[{type:'text',text:e.message}]};}
     });

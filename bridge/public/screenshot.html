@@ -12,8 +12,8 @@
   header {display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:9px}
   h2 {font-size:14px; font-weight:600; margin:0}
   #details {font-size:12px; color:var(--app-secondary-text-color,GrayText); text-align:right}
-  figure {margin:0; border:1px solid #8885; border-radius:10px; overflow:hidden; background:#17191d}
-  img {width:100%; height:auto; display:block; max-height:72vh; object-fit:contain}
+  figure {margin:0; border:1px solid #8885; border-radius:10px; overflow:hidden; background:transparent}
+  img {display:block; width:100%; max-width:100%; height:auto; aspect-ratio:auto}
   #status {border:1px dashed #8885; border-radius:10px; padding:24px 12px; text-align:center; color:var(--app-secondary-text-color,GrayText)}
   #status[data-error="true"] {color:#c44343}
   [hidden] {display:none!important}
@@ -32,37 +32,104 @@
   const details=document.querySelector('#details');
   let nextRequestId=0;
   const pending=new Map();
+  let hasImage=false;
+  let recovering=false;
+  let callId=typeof window.openai?.widgetState?.desktopBridgeCallId==='string'?window.openai.widgetState.desktopBridgeCallId:'';
+  let ready=null;
+  let lastReportedHeight=0;
+  function resizeHost(){
+    const height=Math.ceil(document.querySelector('main').getBoundingClientRect().height+24);
+    if(!Number.isFinite(height)||height<=0||height>6000||Math.abs(height-lastReportedHeight)<2)return;
+    lastReportedHeight=height;
+    window.parent.postMessage({jsonrpc:'2.0',method:'ui/notifications/size-changed',params:{height}},'*');
+    try{window.openai?.notifyIntrinsicHeight?.(height);}catch{}
+  }
+  if(typeof ResizeObserver!=='undefined')new ResizeObserver(resizeHost).observe(document.querySelector('main'));
+  window.addEventListener('resize',resizeHost);
 
   function showError(message) {
+    if(hasImage)return;
     frame.hidden=true;
     screenshot.removeAttribute('src');
     status.hidden=false;
     status.dataset.error='true';
     status.textContent=message;
     details.textContent='';
+    resizeHost();
   }
-  function showResult(result) {
-    if(result?.isError) {
-      const error=result.content?.find(item=>item.type==='text');
-      showError(error?.text || '截图工具执行失败');
-      return;
-    }
-    const picture=result?.content?.find(item=>item.type==='image' && typeof item.data==='string');
-    const mime=picture?.mimeType;
-    // 仅接受图像 MIME 和 Base64；绝不将工具文本注入 HTML。
-    if(!picture || !['image/png','image/jpeg','image/webp'].includes(mime) ||
-       !/^[A-Za-z0-9+/]+={0,2}$/.test(picture.data) || picture.data.length>12*1024*1024) {
-      showError('未收到可显示的截图图片。请检查 MCP 工具结果是否包含 image 内容。');
-      return;
-    }
-    screenshot.onload=()=>{status.hidden=true;frame.hidden=false;};
-    screenshot.onerror=()=>showError('截图已返回，但图片无法显示。');
-    screenshot.src='data:'+mime+';base64,'+picture.data;
-    const meta=result.structuredContent??{};
+  function saveCallId(id){
+    if(typeof id!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))return;
+    if(callId===id)return;
+    callId=id;
+    try{window.openai?.setWidgetState?.({desktopBridgeCallId:id});}catch{}
+  }
+  function validPicture(item){
+    return item?.type==='image' &&
+      ['image/png','image/jpeg','image/webp'].includes(item.mimeType) &&
+      typeof item.data==='string' && item.data.length>0 && item.data.length<=12*1024*1024 &&
+      /^[A-Za-z0-9+/]+={0,2}$/.test(item.data);
+  }
+  function renderPicture(item,meta={}){
+    hasImage=true;
+    screenshot.onload=()=>{
+      status.hidden=true;
+      frame.hidden=false;
+      resizeHost();
+    };
+    screenshot.onerror=()=>{
+      hasImage=false;
+      screenshot.removeAttribute('src');
+      showError('截图已返回，但图片无法显示。');
+    };
+    screenshot.src='data:'+item.mimeType+';base64,'+item.data;
     const width=Number(meta.screenshot_width);
     const height=Number(meta.screenshot_height);
     details.textContent=Number.isFinite(width)&&Number.isFinite(height)&&width>0&&height>0?
       width+' × '+height+' px':'';
+  }
+  async function recoverScreenshot(){
+    if(hasImage||recovering||!callId)return;
+    recovering=true;
+    status.hidden=false;
+    status.dataset.error='false';
+    status.textContent='正在恢复已保存的截图…';
+    const id=callId;
+    try{
+      await ready;
+      if(hasImage)return;
+      // Reuse the completed task; do not invoke CUA capture again.
+      const response=await sendRequest('tools/call',{name:'get_call_result',arguments:{call_id:id}});
+      if(response?.isError)throw new Error('Cached task unavailable');
+      const raw=response?.content?.find(item=>item.type==='text')?.text;
+      if(typeof raw!=='string'||raw.length>12*1024*1024)throw new Error('Invalid cached screenshot');
+      const record=JSON.parse(raw);
+      if(record.id!==id||record.tool!=='cua_get_desktop_state'||record.status!=='completed')throw new Error('Wrong screenshot task');
+      const picture=record.result?.content?.find(validPicture);
+      if(!picture)throw new Error('No cached image');
+      if(!hasImage)renderPicture(picture,record.result.structuredContent??{});
+    }catch{
+      showError('无法恢复已保存的截图，请重新执行截图工具。');
+    }finally{
+      recovering=false;
+    }
+  }
+  function showResult(result){
+    if(result?.isError){
+      showError(result.content?.find(item=>item.type==='text')?.text||'截图工具执行失败');
+      return;
+    }
+    saveCallId(result?.structuredContent?.desktopBridgeCallId??result?._meta?.desktopBridge?.callId);
+    const picture=result?.content?.find(validPicture);
+    if(picture){
+      if(!hasImage)renderPicture(picture,result.structuredContent??{});
+      return;
+    }
+    if(hasImage)return; // Partial notifications must not erase an image.
+    if(callId){
+      void recoverScreenshot();
+    }else{
+      showError('未收到可显示的截图图片，也没有可恢复的任务编号。');
+    }
   }
   function sendRequest(method,params) {
     return new Promise((resolve,reject)=>{
@@ -82,13 +149,14 @@
     }
     if(message.method==='ui/notifications/tool-result')showResult(message.params);
   });
-  (async()=>{
+  ready=(async()=>{
     try {
       await sendRequest('ui/initialize',{
-        appInfo:{name:'desktop-bridge-screenshot',version:'1.0.0'},
+        appInfo:{name:'desktop-bridge-screenshot',version:'1.1.0'},
         appCapabilities:{},protocolVersion:'2026-01-26'
       });
       window.parent.postMessage({jsonrpc:'2.0',method:'ui/notifications/initialized',params:{}},'*');
+      if(callId&&!hasImage)void recoverScreenshot();
     } catch {
       showError('截图界面初始化失败，请重新打开截图工具。');
     }
