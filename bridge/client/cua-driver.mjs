@@ -39,8 +39,19 @@ async function verifiedInstaller(root,platform,{fetchImpl=fetch}={}){
   try{
     const response=await fetchImpl(RELEASE+meta.file,{signal:AbortSignal.timeout(120000)});
     if(!response.ok)throw new Error('Cua installer download HTTP '+response.status);
-    const bytes=Buffer.from(await response.arrayBuffer());
-    if(bytes.length<1024||bytes.length>2*1024*1024)throw new Error('Unexpected Cua installer size');
+    const max=2*1024*1024;
+    if(Number(response.headers?.get?.('content-length')??0)>max)throw new Error('Unexpected Cua installer size');
+    let bytes;
+    if(response.body?.getReader){
+      const reader=response.body.getReader(),chunks=[];let total=0;
+      try{
+        for(;;){const {done,value}=await reader.read();if(done)break;
+          total+=value.byteLength;if(total>max)throw new Error('Unexpected Cua installer size');
+          chunks.push(Buffer.from(value));}
+      }finally{reader.releaseLock();}
+      bytes=Buffer.concat(chunks);
+    }else bytes=Buffer.from(await response.arrayBuffer());
+    if(bytes.length<1024||bytes.length>max)throw new Error('Unexpected Cua installer size');
     const hash=createHash('sha256').update(bytes).digest('hex');
     if(hash!==meta.sha256)throw new Error('Cua installer SHA-256 verification failed; will not execute');
     fs.writeFileSync(file,bytes,{mode:0o600});
