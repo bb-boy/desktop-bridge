@@ -21,6 +21,7 @@ import { installerDownload } from './downloads.mjs';
 const root=path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const PERMISSION_UI_URI='ui://desktop-bridge/permissions-v1.html';
 const PERMISSION_UI_MIME='text/html;profile=mcp-app';
+const SCREENSHOT_UI_URI='ui://desktop-bridge/screenshot-v1.html';
 const permissionsTool={
   name:'get_device_permissions',
   description:'Open a ChatGPT web permission panel to view and select Desktop Commander and Cua Driver permissions for your paired devices. All devices default to full access at the Desktop Bridge layer. This setting does not override ChatGPT or Windows security.',
@@ -73,11 +74,21 @@ export async function startServer(config,dependencies={}) {
     const server=new Server({name:'personal-desktop-bridge',version:'0.2.6'},{capabilities:{tools:{},resources:{}},instructions:'Use list_devices to identify available computers. The standard tool catalog is available before pairing; visibility does not mean a device is ready. Tools execute on the chosen computer. Check toolsAvailable separately from networkConnected. Use list_calls and get_call_result to recover results after interruptions. Never retry a side effect until its outcome is known.'});
     server.setRequestHandler(ListToolsRequestSchema,async()=>({tools:[{
       name:'list_devices',description:'List your configured computers and their current connection status. Use before operating on a computer.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:riskForTool('list_devices')
-    },{name:'list_calls',description:'List your last 100 task IDs and states. Use after a timeout or disconnect.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:riskForTool('list_calls')},{name:'get_call_result',description:'Retrieve a task status and saved result by call_id. Never repeats the operation.',inputSchema:{type:'object',properties:{call_id:{type:'string'}},required:['call_id'],additionalProperties:false},annotations:riskForTool('get_call_result')},...remoteTools.map(annotateTool),permissionsTool,setPermissionsTool,...broker.tools(owner)]}));
-    server.setRequestHandler(ListResourcesRequestSchema,async()=>({resources:[{uri:PERMISSION_UI_URI,name:'Desktop Bridge device permissions',mimeType:PERMISSION_UI_MIME,description:'Device permission controls inside ChatGPT web chat'}]}));
+    },{name:'list_calls',description:'List your last 100 task IDs and states. Use after a timeout or disconnect.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:riskForTool('list_calls')},{name:'get_call_result',description:'Retrieve a task status and saved result by call_id. Never repeats the operation.',inputSchema:{type:'object',properties:{call_id:{type:'string'}},required:['call_id'],additionalProperties:false},annotations:riskForTool('get_call_result')},...remoteTools.map(annotateTool),permissionsTool,setPermissionsTool,...broker.tools(owner).map(tool=>tool.name==='cua_get_desktop_state'?{
+      ...tool,_meta:{...(tool._meta??{}),ui:{...(tool._meta?.ui??{}),resourceUri:SCREENSHOT_UI_URI}}
+    }:tool)]}));
+    server.setRequestHandler(ListResourcesRequestSchema,async()=>({resources:[
+      {uri:PERMISSION_UI_URI,name:'Desktop Bridge device permissions',mimeType:PERMISSION_UI_MIME,description:'Device permission controls inside ChatGPT web chat'},
+      {uri:SCREENSHOT_UI_URI,name:'Desktop Bridge desktop screenshot',mimeType:PERMISSION_UI_MIME,description:'Show a screenshot from a paired computer in ChatGPT'}
+    ]}));
     server.setRequestHandler(ReadResourceRequestSchema,async(request)=>{
-      if(request.params.uri!==PERMISSION_UI_URI)throw new Error('Unknown UI resource');
-      return {contents:[{uri:PERMISSION_UI_URI,mimeType:PERMISSION_UI_MIME,text:fs.readFileSync(path.join(root,'public','gui-permissions.html'),'utf8')}]};
+      const uiFiles={
+        [PERMISSION_UI_URI]:'gui-permissions.html',
+        [SCREENSHOT_UI_URI]:'screenshot.html'
+      };
+      const filename=uiFiles[request.params.uri];
+      if(!filename)throw new Error('Unknown UI resource');
+      return {contents:[{uri:request.params.uri,mimeType:PERMISSION_UI_MIME,text:fs.readFileSync(path.join(root,'public',filename),'utf8')}]};
     });
     server.setRequestHandler(CallToolRequestSchema,async(request)=>{
       await provider.verifyAccessToken(req.auth.token);

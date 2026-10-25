@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Desktop Bridge · 桌面截图</title>
+<style>
+  :root {color-scheme:light dark; font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+  * {box-sizing:border-box}
+  body {margin:0; padding:12px; background:var(--app-background-color,Canvas); color:var(--app-text-color,CanvasText)}
+  main {margin:auto; width:100%; max-width:1100px}
+  header {display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:9px}
+  h2 {font-size:14px; font-weight:600; margin:0}
+  #details {font-size:12px; color:var(--app-secondary-text-color,GrayText); text-align:right}
+  figure {margin:0; border:1px solid #8885; border-radius:10px; overflow:hidden; background:#17191d}
+  img {width:100%; height:auto; display:block; max-height:72vh; object-fit:contain}
+  #status {border:1px dashed #8885; border-radius:10px; padding:24px 12px; text-align:center; color:var(--app-secondary-text-color,GrayText)}
+  #status[data-error="true"] {color:#c44343}
+  [hidden] {display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <header><h2>Desktop Bridge · 桌面截图</h2><span id="details"></span></header>
+  <div id="status" role="status" aria-live="polite">正在接收截图…</div>
+  <figure id="image-frame" hidden><img id="screenshot" alt="远程电脑桌面截图"></figure>
+</main>
+<script type="module">
+  const status=document.querySelector('#status');
+  const frame=document.querySelector('#image-frame');
+  const screenshot=document.querySelector('#screenshot');
+  const details=document.querySelector('#details');
+  let nextRequestId=0;
+  const pending=new Map();
+
+  function showError(message) {
+    frame.hidden=true;
+    screenshot.removeAttribute('src');
+    status.hidden=false;
+    status.dataset.error='true';
+    status.textContent=message;
+    details.textContent='';
+  }
+  function showResult(result) {
+    if(result?.isError) {
+      const error=result.content?.find(item=>item.type==='text');
+      showError(error?.text || '截图工具执行失败');
+      return;
+    }
+    const picture=result?.content?.find(item=>item.type==='image' && typeof item.data==='string');
+    const mime=picture?.mimeType;
+    // 仅接受图像 MIME 和 Base64；绝不将工具文本注入 HTML。
+    if(!picture || !['image/png','image/jpeg','image/webp'].includes(mime) ||
+       !/^[A-Za-z0-9+/]+={0,2}$/.test(picture.data) || picture.data.length>12*1024*1024) {
+      showError('未收到可显示的截图图片。请检查 MCP 工具结果是否包含 image 内容。');
+      return;
+    }
+    screenshot.onload=()=>{status.hidden=true;frame.hidden=false;};
+    screenshot.onerror=()=>showError('截图已返回，但图片无法显示。');
+    screenshot.src='data:'+mime+';base64,'+picture.data;
+    const meta=result.structuredContent??{};
+    const width=Number(meta.screenshot_width);
+    const height=Number(meta.screenshot_height);
+    details.textContent=Number.isFinite(width)&&Number.isFinite(height)&&width>0&&height>0?
+      width+' × '+height+' px':'';
+  }
+  function sendRequest(method,params) {
+    return new Promise((resolve,reject)=>{
+      const id=++nextRequestId;
+      pending.set(id,{resolve,reject});
+      window.parent.postMessage({jsonrpc:'2.0',id,method,params},'*');
+    });
+  }
+  window.addEventListener('message',event=>{
+    if(event.source!==window.parent || event.data?.jsonrpc!=='2.0')return;
+    const message=event.data;
+    if(typeof message.id==='number' && pending.has(message.id)) {
+      const call=pending.get(message.id);
+      pending.delete(message.id);
+      if(message.error)call.reject(new Error(message.error.message||'初始化失败'));
+      else call.resolve(message.result);
+    }
+    if(message.method==='ui/notifications/tool-result')showResult(message.params);
+  });
+  (async()=>{
+    try {
+      await sendRequest('ui/initialize',{
+        appInfo:{name:'desktop-bridge-screenshot',version:'1.0.0'},
+        appCapabilities:{},protocolVersion:'2026-01-26'
+      });
+      window.parent.postMessage({jsonrpc:'2.0',method:'ui/notifications/initialized',params:{}},'*');
+    } catch {
+      showError('截图界面初始化失败，请重新打开截图工具。');
+    }
+  })();
+</script>
+</body>
+</html>

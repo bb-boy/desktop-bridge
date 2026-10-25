@@ -15,6 +15,8 @@ test('authenticated MCP exposes ChatGPT web permission UI resource and persists 
    ownerPasswordHash:await passwordHash('test-password'),
    devices:[{id:'p111',name:'Windows P111',tokenHash:hash(opaque())}]};
  const server=await startServer(config);
+ // A paired device advertises CUA tools dynamically; simulate that catalog in this offline test.
+ server.store.saveTools('p111',[{name:'cua_get_desktop_state',description:'Capture Windows desktop',inputSchema:{type:'object',properties:{}}}]);
  const token=opaque();
  server.store.saveGrant(hash(token),'access','perm-test',{clientId:'perm-test',ownerId:'owner',family:opaque(),scopes:['desktop']},Date.now()+90000);
  const origin='http://127.0.0.1:'+server.httpServer.address().port;
@@ -34,11 +36,16 @@ test('authenticated MCP exposes ChatGPT web permission UI resource and persists 
  assert.equal(catalog.tools.find(t=>t.name==='start_process').annotations.destructiveHint,true);
  assert.equal(catalog.tools.find(t=>t.name==='read_file').annotations.readOnlyHint,true);
  const resources=await client.listResources();
- assert.equal(resources.resources.length,1);
+ assert.equal(resources.resources.length,2);
+ assert.equal(catalog.tools.find(t=>t.name==='cua_get_desktop_state')._meta.ui.resourceUri,'ui://desktop-bridge/screenshot-v1.html');
  assert.equal(resources.resources[0].mimeType,'text/html;profile=mcp-app');
  const resource=await client.readResource({uri:'ui://desktop-bridge/permissions-v1.html'});
  assert.match(resource.contents[0].text,/Desktop Commander/);
  assert.match(resource.contents[0].text,/tools\/call/);
+ const screenshotResource=await client.readResource({uri:'ui://desktop-bridge/screenshot-v1.html'});
+ assert.equal(screenshotResource.contents[0].mimeType,'text/html;profile=mcp-app');
+ assert.match(screenshotResource.contents[0].text,/ui\/notifications\/tool-result/);
+ assert.match(screenshotResource.contents[0].text,/picture\.data/);
  const initial=await client.callTool({name:'get_device_permissions',arguments:{device_id:'p111'}});
  assert.equal(initial.structuredContent.mode,'full');
  assert.equal(initial.structuredContent.devices[0].name,'Windows P111');
