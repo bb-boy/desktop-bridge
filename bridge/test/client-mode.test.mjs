@@ -96,7 +96,7 @@ test('Unix startup files reject foreign installations before changing startup',a
  assert.throws(()=>ensureOwnedStartup(unit,other,'systemd'),/belongs to another installation/);
  assert.match(fs.readFileSync(unit,'utf8'),/ExecStart=.*runner\.mjs/);
  assert.match(fs.readFileSync(unit,'utf8'),/Restart=on-failure/);
- const special=linuxSystemdUnitContent('/node path/node',path.join(dir,'space & 100%'));
+ const special=linuxSystemdUnitContent('/node path/node','/tmp/space & 100%');
  assert.match(special,/WorkingDirectory=\/.*\\x20/);
  assert.doesNotMatch(special,/WorkingDirectory="/,'systemd 249 treats quoted WorkingDirectory as nonabsolute');
  assert.match(special,/%%/,'systemd must escape percent specifiers');
