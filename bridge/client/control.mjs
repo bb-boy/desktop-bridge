@@ -26,7 +26,7 @@ if(settings.privilege==='administrator'&&process.env.BRIDGE_ADMIN_CONTEXT!=='1')
  const request=elevationRequest(action,{mode:value});
  await run(request.command,request.args);
  if(action==='mode'){
-   fs.writeFileSync(path.join(root,'client-settings.json'),JSON.stringify({mode:value,privilege:'administrator',version:'0.2.7'},null,2),{mode:0o600});
+   fs.writeFileSync(path.join(root,'client-settings.json'),JSON.stringify({mode:value,privilege:'administrator',version:'0.2.8'},null,2),{mode:0o600});
    writeInstructions(root,launch.node,value,'administrator');
  }
  process.exit(0);
@@ -36,7 +36,8 @@ if(action==='status'){
  const running=livePid(path.join(root,'runner-lock','pid'));
  let agentPid;try{agentPid=Number(fs.readFileSync(path.join(root,'agent.lock'),'utf8'));}catch{}
  const fresh=running&&heartbeat&&heartbeat.pid===agentPid&&Date.now()-heartbeat.time<90000&&livePid(path.join(root,'agent.lock'));
- console.log(JSON.stringify({mode:savedMode(root),running,networkConnected:!!(fresh&&heartbeat.connected),localToolsAvailable:!!(fresh&&heartbeat.localToolsAvailable),authStatus:needsPair?'re_pair_required':'ok',...(needsPair?{message:'设备授权已撤销，必须重新配对。',rePairCommand:pairHelp}: {})},null,2));
+ let enabledCua=false;try{enabledCua=JSON.parse(fs.readFileSync(launch.config,'utf8')).cuaDriver?.enabled===true;}catch{}
+ console.log(JSON.stringify({mode:savedMode(root),running,networkConnected:!!(fresh&&heartbeat.connected),localToolsAvailable:!!(fresh&&heartbeat.localToolsAvailable),cuaEnabled:enabledCua,cuaToolsAvailable:!!(fresh&&heartbeat.cuaToolsAvailable),authStatus:needsPair?'re_pair_required':'ok',...(needsPair?{message:'设备授权已撤销，必须重新配对。',rePairCommand:pairHelp}: {})},null,2));
  process.exit(0);
 }
 const lock=path.join(root,'install-lock');if(!acquireLock(lock))throw new Error('Another client maintenance operation is running.');

@@ -45,6 +45,7 @@ try{
     // Replace outbound I/O, network downloads and OS startup registration.
     // Real install.mjs and real option parsing are exercised unchanged.
     put(path.join(source,'environment.mjs'),
+      "export async function capture(){throw new Error('unexpected Cua check in non-Cua smoke');}\n"+
       "export async function ensureRuntime(){return {node:process.execPath,npm:'mock-npm'};}\n"+
       "export async function prepareDependencies(){return {installed:false};}\n"+
       "export async function verifyLocalTools(){return 31;}\n");
@@ -52,6 +53,8 @@ try{
       "import fs from 'node:fs';import path from 'node:path';\n"+
       "export function dataRoot(){throw new Error('test must pass --root');}\n"+
       "export function startupFile(root){return path.join(root,'mock-startup');}\n"+
+      "export function startupIsOwned(){return false;}\n"+
+      "export function linuxSystemdUnitFile(){return 'mock-systemd';}\n"+
       "export async function run(command,args){\n"+
       " if(args[0]?.endsWith('agent.mjs')){\n"+
       "  const cfg=JSON.parse(fs.readFileSync(args[1],'utf8'));\n"+

@@ -60,7 +60,7 @@ export async function registerStartup(node,root,{start=true}={}) {
  }
 }
 export function writeInstructions(root,node,mode,privilege='standard') {
- const contents=`Desktop Bridge 0.2.7 使用说明\n\n权限：${privilege==='administrator'?'管理员（操作将由系统提示授权；后台使用受保护系统服务）':'当前用户'}\n当前模式：${mode==='manual'?'手动 manual':'后台 background'}\n${mode==='manual'?'使用时运行启动命令，保持窗口，按 Ctrl+C 或关闭窗口结束。客户端与本地工具进程会一起停止。未设置登录自启。':'客户端现在后台运行，登录系统后自动启动。这是当前用户登录后自启，不是登录前的系统服务。'}\n\n${process.platform==='win32'?'请将以下命令复制到 PowerShell。':'请将以下命令复制到终端。'}\n\n启动：\n${commandFor(node,root,'start')}\n\n停止：\n${commandFor(node,root,'stop')}\n\n状态：\n${commandFor(node,root,'status')}\n\n切换为手动模式（停止后台实例，移除登录自启）：\n${commandFor(node,root,'mode manual')}\n\n切换为后台模式（现在启动，登录系统后自动启动）：\n${commandFor(node,root,'mode background')}\n\n本目录中的快捷入口：${process.platform==='win32'?'Start.cmd / Stop.cmd':process.platform==='darwin'?'Start.command / Stop.command':'start.sh / stop.sh'}。\n启动、停止和切换模式使用已安装的私有环境，不会重新安装依赖。\n\n重新配对（旧 Token 失效时）：\n${commandFor(node,root,'pair')}\n${process.platform==='win32'?'或双击 RePair.cmd。':'在终端执行上述命令。'}\n配对必须由用户在网页重新确认。\n如果出现 authStatus=re_pair_required，请先重新配对。\n\n请保留本目录，其中保存设备凭据、日志与可恢复的任务结果。停止不会删除这些数据。\n`;
+ const contents=`Desktop Bridge 0.2.8 使用说明\n\n权限：${privilege==='administrator'?'管理员（操作将由系统提示授权；后台使用受保护系统服务）':'当前用户'}\n当前模式：${mode==='manual'?'手动 manual':'后台 background'}\n${mode==='manual'?'使用时运行启动命令，保持窗口，按 Ctrl+C 或关闭窗口结束。客户端与本地工具进程会一起停止。未设置登录自启。':'客户端现在后台运行，登录系统后自动启动。这是当前用户登录后自启，不是登录前的系统服务。'}\n\n${process.platform==='win32'?'请将以下命令复制到 PowerShell。':'请将以下命令复制到终端。'}\n\n启动：\n${commandFor(node,root,'start')}\n\n停止：\n${commandFor(node,root,'stop')}\n\n状态：\n${commandFor(node,root,'status')}\n\n切换为手动模式（停止后台实例，移除登录自启）：\n${commandFor(node,root,'mode manual')}\n\n切换为后台模式（现在启动，登录系统后自动启动）：\n${commandFor(node,root,'mode background')}\n\n本目录中的快捷入口：${process.platform==='win32'?'Start.cmd / Stop.cmd':process.platform==='darwin'?'Start.command / Stop.command':'start.sh / stop.sh'}。\n启动、停止和切换模式使用已安装的私有环境，不会重新安装依赖。\n\n重新配对（旧 Token 失效时）：\n${commandFor(node,root,'pair')}\n${process.platform==='win32'?'或双击 RePair.cmd。':'在终端执行上述命令。'}\n配对必须由用户在网页重新确认。\n如果出现 authStatus=re_pair_required，请先重新配对。\n\n请保留本目录，其中保存设备凭据、日志与可恢复的任务结果。停止不会删除这些数据。\n`;
  fs.writeFileSync(path.join(root,'START-HERE.txt'),contents+(privilege==='administrator'?'\n管理员模式下，普通用户不能修改后台程序文件。系统隐私、Google 登录与 ChatGPT 工具确认仍需分别授权。\n':''),{mode:0o600});
 }
 export async function startBackground(root,node) {
@@ -96,7 +96,7 @@ export async function setMode(root,node,mode) {
  // Removing it first can fail with 0x80070005 under a limited user token.
  // Manual mode still removes login startup; other platforms retain their refresh.
  if(process.platform!=='win32'||mode==='manual')await removeStartup(root);
- const settings={mode,version:'0.2.7'};
+ const settings={mode,version:'0.2.8'};
  fs.writeFileSync(path.join(root,'client-settings.json.tmp'),JSON.stringify(settings,null,2),{mode:0o600});
  fs.renameSync(path.join(root,'client-settings.json.tmp'),path.join(root,'client-settings.json'));
  writeInstructions(root,node,mode);

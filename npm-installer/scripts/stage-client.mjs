@@ -13,7 +13,7 @@ const clientFiles=[
   'Start.cmd','Start.command','Stop.cmd','Stop.command',
   'Uninstall.cmd','Uninstall.command','Uninstall.sh',
   'admin-elevate.mjs','admin-runtime.mjs','admin-service.mjs',
-  'connection.json','control.mjs','control.ps1','environment-probe.mjs',
+  'connection.json','cua-driver.mjs','control.mjs','control.ps1','environment-probe.mjs',
   'environment.mjs','install-options.mjs','install.mjs','install.ps1',
   'launch.sh','lifecycle.mjs','node-runtime.json','package-lock.json',
   'package.json','runner.mjs','start.sh','startup.mjs','windows-background.mjs','stop.sh','uninstall.ps1'

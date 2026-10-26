@@ -111,7 +111,7 @@ const cuaConfig=config.cuaDriver??{};
 const client=new McpToolManager({
   Client,StdioClientTransport,log,
   backends:[
-    {id:'desktop',command:process.execPath,args:[config.mcpEntry],cwd:config.workingDirectory??directory,env:{...process.env}},
+    {id:'desktop',command:process.execPath,args:[config.mcpEntry],cwd:config.workingDirectory??directory,env:{...process.env,DESKTOP_BRIDGE_REMOTE_AGENT:'1'}},
     ...(cuaConfig.enabled===true?[{
       id:'cua',prefix:'cua_',command:cuaConfig.command||'cua-driver',
       args:Array.isArray(cuaConfig.args)?cuaConfig.args:['mcp'],
@@ -119,9 +119,9 @@ const client=new McpToolManager({
     }]:[])
   ]
 });
-let ws,retryTimer,stopping=false,attempt=0,localHealthy=false,checkingHealth=false,healthFailures=0,remoteStopping=false;
+let ws,retryTimer,stopping=false,attempt=0,localHealthy=false,checkingHealth=false,healthFailures=0,remoteStopping=false,cuaToolsAvailable=false;
 const heartbeatPath=path.join(directory,'heartbeat.json');
-function writeHeartbeat(){try{fs.writeFileSync(heartbeatPath,JSON.stringify({pid:process.pid,time:Date.now(),connected:ws?.readyState===1,localToolsAvailable:localHealthy}),{mode:0o600});}catch{}}
+function writeHeartbeat(){try{fs.writeFileSync(heartbeatPath,JSON.stringify({pid:process.pid,time:Date.now(),connected:ws?.readyState===1,localToolsAvailable:localHealthy,cuaToolsAvailable}),{mode:0o600});}catch{}}
 writeHeartbeat();
 const processHeartbeat=setInterval(writeHeartbeat,15000);processHeartbeat.unref();
 const journalPath=path.join(directory,'journal.json');
@@ -205,6 +205,8 @@ client.onclose=()=>{if(!stopping){log('local_mcp_closed');void shutdown(1);}};
 client.onerror=error=>log('local_mcp_error',{type:error.name});
 try{await client.start();}catch(error){log('local_mcp_start_failed',{message:String(error.message).slice(0,300)});await shutdown(1);}
 const tools=client.listTools().tools;
+cuaToolsAvailable=tools.some(tool=>tool.name.startsWith('cua_'));
+writeHeartbeat();
 log('local_mcp_ready',{toolCount:tools.length,pid:process.pid,childPid:client.connections.get('desktop')?.transport.pid});
 function recover(id,socket) {
   const entry=journal[id];
@@ -229,7 +231,7 @@ function connect() {
   let lastSeen=Date.now(),welcomed=false;
   const heartbeat=setInterval(()=>{if(Date.now()-lastSeen>65000)socket.terminate();},15000);
   socket.on('ping',()=>lastSeen=Date.now());
-  socket.on('open',()=>{send(socket,{type:'hello',protocol:2,deviceId:config.deviceId,tools,capabilities:{shutdown:true},version:'0.2.7',platform:process.platform});});
+  socket.on('open',()=>{send(socket,{type:'hello',protocol:2,deviceId:config.deviceId,tools,capabilities:{shutdown:true},version:'0.2.8',platform:process.platform});});
   socket.on('message',data=>{
     lastSeen=Date.now();
     try {

@@ -113,6 +113,7 @@ test('Chromium screenshot viewer supports zoom, pan, fullscreen fallback and tas
  const rendered=`(()=>{const d=document.querySelector('iframe')?.contentDocument;const i=d?.querySelector('#screenshot');return !!(i?.naturalWidth&&!d.querySelector('#image-frame').hidden&&d.querySelector('#status').hidden)})()`;
  await devtools.evaluate('mount(imageResult)');await wait(()=>devtools.evaluate(rendered));
  assert.equal(await devtools.evaluate('state.desktopBridgeCallId'),imageId);
+ assert.equal(await devtools.evaluate('document.querySelector("iframe").contentDocument.querySelector("#image-hint")'),null,'screenshot preview should have no explanatory hint');
  await devtools.evaluate('recovered=[]');
  // Exercise the real image viewer with a desktop-sized, locally generated image.
  await devtools.evaluate(`(()=>{

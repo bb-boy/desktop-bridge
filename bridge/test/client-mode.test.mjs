@@ -58,7 +58,7 @@ test('manual start is foreground; stopping preserves credentials and results wit
  const f=await fixture(t),foreground=f.invoke('start');const finished=success(foreground);
  await waitFor(()=>fs.existsSync(path.join(f.root,'heartbeat.json')));assert.equal(foreground.exitCode,null);assert.match(foreground.output(),/Ctrl\+C/);
  const grandchild=Number(fs.readFileSync(path.join(f.root,'grandchild.pid')));assert.ok(pidAlive(grandchild));
- const status=JSON.parse(await success(f.invoke('status')));assert.deepEqual(status,{mode:'manual',running:true,networkConnected:true,localToolsAvailable:true,authStatus:'ok'});
+ const status=JSON.parse(await success(f.invoke('status')));assert.deepEqual(status,{mode:'manual',running:true,networkConnected:true,localToolsAvailable:true,cuaEnabled:false,cuaToolsAvailable:false,authStatus:'ok'});
  await success(f.invoke('stop'));await finished;await waitFor(()=>!pidAlive(grandchild));
  assert.equal(fs.readFileSync(path.join(f.root,'agent-config.json'),'utf8'),'{}');assert.equal(fs.readFileSync(path.join(f.root,'journal.json'),'utf8'),'saved-results');assert.equal(fs.readFileSync(path.join(f.root,'dependencies-sentinel'),'utf8'),'unchanged');
  assert.equal(fs.existsSync(path.join(f.root,'node_modules')),false);

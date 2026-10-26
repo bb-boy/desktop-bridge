@@ -37,8 +37,10 @@ function getIdentity(config){
 
 export async function performUpdate({
   root,packageRoot,packageName='@justlovepl/desktop-bridge',
-  npmScript,execute=runProcess,print=message=>console.log(message)
+  npmScript,execute=runProcess,print=message=>console.log(message),withCua=false
 }){
+  if(process.env.DESKTOP_BRIDGE_REMOTE_AGENT==='1')
+    throw new Error('Cannot update Desktop Bridge from its own remote MCP terminal; run this command locally.');
   const installed=path.join(root,'launch.json');
   if(!fs.existsSync(installed))throw new Error('Local client not installed. Run desktop-bridge setup before updating.');
   if(path.resolve(root)===path.resolve(packageRoot)||path.resolve(packageRoot).startsWith(path.resolve(root)+path.sep))
@@ -73,7 +75,7 @@ export async function performUpdate({
   // The new package's installer reuses an existing approved device token.
   // --no-browser means routine upgrades must not open an unsolicited login tab.
   const installStatus=await execute(process.execPath,[
-    newEntry,'setup','--mode',previousMode,'--no-browser','--root',root
+    newEntry,'setup','--mode',previousMode,'--no-browser',...(withCua?['--with-cua']:[]),'--root',root
   ]);
   if(installStatus!==0)throw new Error('Agent update failed; do not manually erase device data. Check status and retry or repair.');
   const updatedConfig=readJson(configFile);
