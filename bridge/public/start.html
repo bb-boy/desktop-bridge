@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f7f8f5">
-  <meta name="description" content="在 ChatGPT 网页端手动添加 Desktop Bridge MCP 服务器，通过 OAuth 授权并绑定自己的电脑。">
+  <meta name="description" content="四步连接 ChatGPT 和自己的电脑；支持 Desktop Commander 文件操作，以及可选的 Cua Driver 桌面控制。">
   <title>Desktop Bridge · 新手指引</title>
   <link rel="stylesheet" href="/style.css">
 </head>
@@ -12,48 +12,54 @@
   <a class="skip-link" href="#main">跳转到主要内容</a>
   <header class="site-header"><div class="header-inner">
     <a class="brand" href="/start.html"><span class="brand-mark" aria-hidden="true">DB</span><span class="brand-name">Desktop <strong>Bridge</strong></span></a>
-    <span class="version">v0.2.6</span>
+    <span class="version">客户端 v0.2.8</span>
     <a class="header-link header-action header-device" href="/">设备管理</a>
   </div></header>
   <main class="workspace start-workspace" id="main">
-    <div class="intro"><h1>新手指引<span class="title-dot">.</span></h1></div>
+    <div class="intro"><h1>新手指引<span class="title-dot">.</span></h1><p class="guide-lead">连接 ChatGPT → 安装电脑端 → 绑定电脑 → 开始使用。基础文件和终端工具来自 Desktop Commander；需要截图、点击和窗口操作时，可选择安装 Cua Driver。</p></div>
     <ol class="setup-steps">
       <li class="setup-step">
         <span class="step-number" aria-hidden="true">1</span>
-        <div><h2>手动添加 MCP 连接</h2>
-          <p>当前通过手动配置连接。打开 ChatGPT 网页端「插件」页，选择「添加 → 添加自定义 MCP 服务器」，填写以下内容：</p>
+        <div><h2>连接 ChatGPT</h2>
+          <p>打开 ChatGPT 网页端「插件」，选择「添加 → 添加自定义 MCP 服务器」，手动创建连接：</p>
           <p>名称：<strong>Desktop Bridge</strong><br>服务器地址：<code>https://mcp.ilovestudy.de/mcp</code><br>认证方式：<strong>OAuth</strong></p>
-          <div class="actions"><a class="button" href="https://chatgpt.com/plugins" target="_blank" rel="noopener noreferrer">打开 ChatGPT 网页端插件页 ↗</a></div>
+          <div class="actions"><a class="button" href="https://chatgpt.com/plugins" target="_blank" rel="noopener noreferrer">打开 ChatGPT 插件页 ↗</a></div>
+          <p>按提示使用自己的账号登录 Desktop Bridge 并授权。以后绑定电脑时，请使用<strong>同一个 Desktop Bridge 账号</strong>，否则看不到自己的设备。</p>
         </div>
       </li>
-      <li class="setup-step">
-        <span class="step-number" aria-hidden="true">2</span>
-        <div><h2>登录并授权</h2><p>创建连接后，按提示使用自己的 Google 账号登录并确认授权。首次登录会创建独立账号。授权完成后，继续安装电脑端客户端并确认设备绑定。</p></div>
-      </li>
       <li class="setup-step" id="installation-options">
-        <span class="step-number" aria-hidden="true">3</span>
-        <div><h2>安装电脑端（两种方式任选一种）</h2>
-          <p>以下两种方式都能安装并配对 Desktop Bridge。安装时使用第 2 步的同一个账号，在配对网页核对电脑名称并确认绑定。</p>
+        <span class="step-number" aria-hidden="true">2</span>
+        <div><h2>安装电脑端（任选一种方式）</h2>
+          <p>安装后即可使用 Desktop Commander 的文件、终端等工具。<strong>Cua Driver 是可选的桌面控制组件</strong>，需要明确启用；不会因为连接了 MCP 就自动获得屏幕控制权限。</p>
           <div class="install-methods" aria-label="选择电脑端安装方式">
             <section class="install-method" aria-labelledby="native-title">
               <h3 id="native-title">方式一：图形安装器</h3>
-              <p>不需要预先安装 Node.js。下载对应系统的安装器，按提示选择手动或后台运行，保持安装窗口打开直到完成。</p>
+              <p>适合不熟悉命令行的用户。无需预装 Node.js，安装器会准备 Desktop Bridge 和 Desktop Commander。按提示选择手动运行或登录后后台运行。</p>
               <div class="installer-links"><a class="button" href="/downloads/DesktopBridge-Windows.cmd" download>Windows 安装器</a><a class="button secondary" href="/downloads/DesktopBridge-macOS.pkg" download>Mac 安装器</a><a class="button secondary" href="/downloads/DesktopBridge-Linux.sh" download>Linux 安装器</a></div>
+              <p><strong>注意：</strong>当前图形安装器不会自动启用 Cua Driver。若需要控制鼠标、窗口和桌面，推荐下面的 npm 方式；已有图形安装的设备也可在安装 npm CLI 后启用 CUA，无需重新配对。</p>
             </section>
             <section class="install-method" aria-labelledby="npm-title">
-              <h3 id="npm-title">方式二：npm 命令行</h3>
-              <p>适合已经安装 <strong>Node.js 24 和 npm</strong> 的用户；当前 npm 公开版本为 <strong>0.2.7</strong>。在电脑终端依次执行：</p>
+              <h3 id="npm-title">方式二：npm 命令行（支持一并安装 CUA）</h3>
+              <p>适合已安装 <strong>Node.js 24 和 npm</strong> 的用户。使用客户端 <strong>v0.2.8</strong>，首次安装并启用 Cua Driver 0.38.0：</p>
               <pre class="install-command"><code>npm install -g @justlovepl/desktop-bridge
-desktop-bridge setup
+desktop-bridge setup --with-cua
 desktop-bridge status</code></pre>
-              <p><code>npm install</code> 仅安装 CLI；<code>setup</code> 才会安装客户端并引导配对。默认后台模式。首次安装要使用手动模式，可将第二条替换为 <code>desktop-bridge setup --mode manual</code>。</p>
+              <p><code>npm install</code> 只安装命令行入口，<code>setup --with-cua</code> 才会安装、配置和检查 Desktop Bridge、Desktop Commander 以及 Cua Driver，并打开网页登录配对。<strong>CUA 为显式选择，不是默认安装。</strong></p>
+              <p>如果只想使用文件、终端等基础功能，把第二条改为 <code>desktop-bridge setup</code>。默认是后台模式；希望手动运行，可使用 <code>desktop-bridge setup --mode manual --with-cua</code>。</p>
+              <details class="npm-commands"><summary>已安装客户端，现在想开启 CUA？</summary>
+                <p>先在电脑的<strong>本地终端</strong>安装或更新 npm CLI，再运行升级命令。已绑定的设备可保留配对凭据与运行模式，无需重新绑定：</p>
+                <pre class="install-command"><code>npm install -g @justlovepl/desktop-bridge
+desktop-bridge update --with-cua
+desktop-bridge status</code></pre>
+                <p>不要通过 Desktop Bridge 自己提供的远程终端更新自身，以免中断当前连接。若设备已被解绑，必须先重新配对。</p>
+              </details>
               <details class="npm-commands" id="npm-path-help"><summary>Mac 安装成功却提示 command not found？</summary><p>如果 npm 全局安装成功，但 zsh 仍找不到 desktop-bridge，可先在终端执行：</p><pre class="install-command"><code>export PATH="$(npm prefix -g)/bin:$PATH"
 rehash
 desktop-bridge --version</code></pre><p>确认可以正常显示版本号后，执行以下命令使新终端也生效：</p><pre class="install-command"><code>echo 'export PATH="$(npm prefix -g)/bin:$PATH"' &gt;&gt; ~/.zshrc
 source ~/.zshrc</code></pre><p>仍找不到时，检查安装目录和命令链接：</p><pre class="install-command"><code>npm prefix -g
 npm root -g
 ls -l "$(npm prefix -g)/bin/desktop-bridge"</code></pre><p>如果链接不存在，需要进一步检查 npm 安装情况，而不只是修改 PATH。</p></details>
-                <details class="npm-commands"><summary>更多命令：启动、停止、切换模式与升级</summary>
+              <details class="npm-commands"><summary>更多命令：启动、停止、切换模式与升级</summary>
                 <pre class="install-command"><code>desktop-bridge start
 desktop-bridge stop
 desktop-bridge restart
@@ -61,27 +67,45 @@ desktop-bridge mode manual
 desktop-bridge mode background
 desktop-bridge update
 desktop-bridge pair</code></pre>
-                <p><code>update</code> 更新 CLI 与已安装的 Agent，保留配对和模式；<code>pair</code> 需要本人再次确认设备绑定。</p>
+                <p><code>update</code> 更新 CLI 与已安装的 Agent，并保留配对和模式；已经启用的 CUA 会随升级保留。<code>pair</code> 需要本人重新在网页确认设备绑定。</p>
               </details>
             </section>
           </div>
-          <p class="method-note">两种方式只选一种，无需重复安装。配对码有效期为 10 分钟，完成网页确认后再关闭安装窗口。</p>
+          <p class="method-note">两种方式不需要重复安装。安装成功后保持电脑联网；后台模式需要当前用户登录系统。安装了 CUA 后，仍可能需要系统单独授权屏幕录制、辅助功能等权限。</p>
+        </div>
+      </li>
+      <li class="setup-step">
+        <span class="step-number" aria-hidden="true">3</span>
+        <div><h2>绑定电脑并检查权限</h2>
+          <p>安装器会打开 Desktop Bridge 的配对网页。请使用第 1 步<strong>同一个 Desktop Bridge 账号</strong>登录，核对设备名称，并在 <strong>10 分钟</strong>内确认配对。等安装窗口提示完成后，再关闭它。</p>
+          <p>如果启用了 Cua Driver，macOS 可能需要到「系统设置 → 隐私与安全性」允许屏幕录制和辅助功能；Windows 的系统提权确认仍须在电脑上操作。安装 CUA 不会跳过操作系统或 ChatGPT 的权限确认。</p>
+          <div class="actions"><a class="button secondary" href="/">进入设备管理</a></div>
         </div>
       </li>
       <li class="setup-step">
         <span class="step-number" aria-hidden="true">4</span>
-        <div><h2>回到 ChatGPT 网页端使用</h2><p>在 ChatGPT 网页端新对话中输入 @，选择你刚创建的 Desktop Bridge 连接，再发送：</p><blockquote class="setup-prompt">在桌面创建一个测试文件</blockquote><p>确认桌面成功创建测试文件后，就可以让 ChatGPT 网页端查看文件或执行任务。以后保持电脑开机、联网、客户端运行即可。</p></div>
+        <div><h2>开始在 ChatGPT 中使用</h2>
+          <p>回到 ChatGPT 网页端，开始新对话，输入 <code>@</code> 并选择 Desktop Bridge 连接。先检查设备：</p>
+          <blockquote class="setup-prompt">列出我的电脑，并检查哪些设备在线、工具可用</blockquote>
+          <p>接着测试文件操作：</p>
+          <blockquote class="setup-prompt">在我的桌面创建一个测试文件</blockquote>
+          <p>如果已启用 CUA 并完成系统授权，还可以试试：</p>
+          <blockquote class="setup-prompt">显示我当前电脑的桌面截图</blockquote>
+          <p>保持电脑联网、客户端运行；如果提示设备离线或工具不可用，请到设备管理页面查看状态。桌面操作可能仍会触发 ChatGPT 或系统确认。</p>
+        </div>
       </li>
     </ol>
     <details class="setup-help"><summary>安装说明与常见问题</summary>
-      <section><h2>为什么授权后还要安装电脑端客户端？</h2><p>MCP 连接负责让 ChatGPT 网页端访问服务，电脑端客户端负责接收并执行任务。首次可以使用图形安装器或 npm，随后由本人确认设备绑定。</p></section>
-      <section><h2>每个人都要用自己的账号吗？</h2><p>是。每个人都在自己的 ChatGPT 网页端中添加 MCP 服务器，并在 OAuth 授权和电脑配对时使用自己的同一个 Google 账号。</p></section>
-      <section><h2>系统阻止安装怎么办？</h2><p>当前是测试分发版。Windows 安装器未签名，Mac 安装包未签名、公证，系统可能阻止打开。请保留完整提示并联系提供此页面的人；安装器不会自动关闭系统防护。</p></section>
-      <section><h2>npm 命令找不到怎么办？</h2><p>先确认 Node.js 主版本是 24，系统有 npm，并且已经重新打开终端。执行 <code>node -v</code> 和 <code>npm -v</code> 检查环境。</p></section>
-      <section><h2>Linux 可以直接双击吗？</h2><p>Linux 文件管理器的行为不同。桌面支持时选择「在终端中运行」；否则需要通过 shell 运行下载的自解包脚本。</p></section>
-      <section><h2>GPT 看不到我的电脑</h2><p>先确认安装窗口已显示完成，配对网页与 GPT 登录的是同一个账号，电脑保持联网，再让 GPT 检查设备。如果已绑定但离线，启动原有客户端，无需反复安装。</p></section>
-      <section><h2>配对码过期怎么办？</h2><p>配对码有效期为 10 分钟。尚未绑定时，重新运行图形安装器的配对流程，或使用 <code>desktop-bridge pair</code> 重新配对。已完成绑定后，请在设备管理页检查设备状态，旧配对码不能用于检查连接是否正常。</p></section>
-      <section><h2>找不到「添加自定义 MCP 服务器」怎么办？</h2><p>请先确认当前账号或工作空间允许创建自定义 MCP 连接。若由组织管理，请联系管理员检查相关权限。</p></section>
+      <section><h2>Desktop Commander 与 Cua Driver 有什么区别？</h2><p>Desktop Commander 提供读取与编辑文件、执行终端命令等能力。Cua Driver 增加截图、窗口、鼠标键盘等图形界面操作，需要通过 <code>--with-cua</code> 显式安装并启用。两者的权限和系统限制不完全相同。</p></section>
+      <section><h2>装了图形安装器后，能补装 CUA 吗？</h2><p>可以。安装 Node.js 24 与 npm CLI 后，在电脑<strong>本地终端</strong>执行 <code>desktop-bridge update --with-cua</code>，已配对的标准客户端会保留绑定和启动模式。不要重复创建另一份设备配置。</p></section>
+      <section><h2>为什么授权后还要安装电脑端？</h2><p>MCP 连接负责让 ChatGPT 访问 Desktop Bridge 服务，电脑端客户端负责在你的电脑上执行获授权的操作。两者都完成才可以使用远程设备工具。</p></section>
+      <section><h2>是否必须使用同一个账号？</h2><p>是。在 ChatGPT 添加 MCP 连接时的 Desktop Bridge OAuth 授权，以及电脑端配对网页登录，必须属于同一个 Desktop Bridge 账号。不同账号的设备相互隔离。</p></section>
+      <section><h2>系统阻止安装或 CUA 无法操作桌面怎么办？</h2><p>当前图形安装器是测试分发版：Windows 安装器未签名，Mac 安装包未签名、公证，系统可能阻止打开。不要为安装关闭系统安全防护。CUA 还需要系统允许的图形会话及必要的辅助功能/录屏权限；Mac 的授权弹窗必须在电脑上操作。</p></section>
+      <section><h2>npm 命令找不到怎么办？</h2><p>先确认使用 Node.js 24 且已安装 npm，重新打开终端，执行 <code>node -v</code>、<code>npm -v</code> 和 <code>desktop-bridge --version</code>；Mac 的 PATH 解决步骤见上方折叠说明。</p></section>
+      <section><h2>Linux 可以直接双击安装脚本吗？</h2><p>不一定。桌面支持时选择「在终端中运行」；否则需要通过 shell 执行下载的自解包脚本。CUA 图形操作也需要可用的桌面会话。</p></section>
+      <section><h2>ChatGPT 看不到我的电脑</h2><p>先确认配对已经完成、设备管理页中设备在线且工具可用、当前连接属于同一个账号。若只是离线，启动已安装的客户端即可，不必反复安装。如果新工具尚未出现在 ChatGPT，刷新连接工具列表或重新开启对话。</p></section>
+      <section><h2>配对码过期或设备解绑了怎么办？</h2><p>配对码有效期为 10 分钟，过期后在客户端重新发起配对（npm 用户可执行 <code>desktop-bridge pair</code>）。设备解绑后，原凭据立即失效，必须重新配对；普通网络断开时不要盲目删除凭据。</p></section>
+      <section><h2>找不到「添加自定义 MCP 服务器」怎么办？</h2><p>请确认 ChatGPT 账号或工作空间允许创建自定义 MCP 连接。若由组织管理，请联系管理员检查相关权限。</p></section>
     </details>
   </main>
 </body>
