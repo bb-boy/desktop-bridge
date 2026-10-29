@@ -1,6 +1,6 @@
 # 在 GPT 中安装并连接电脑
 
-对外统一入口：https://mcp.ilovestudy.de/start.html 。每个使用者在自己的 ChatGPT 中手动添加 MCP 服务器，使用自己的 Google 账号授权并绑定电脑。
+对外统一入口：https://mcp.ilovestudy.de/start.html 。建议按照「连接 ChatGPT → 安装电脑端 → 绑定电脑 → 开始使用」四步完成。Desktop Commander 提供文件、终端等工具；Cua Driver 是显式启用的可选图形桌面控制组件。每个使用者使用自己的账号授权并绑定电脑。
 
 ## 1. 手动添加 MCP 服务器并授权
 
@@ -16,7 +16,7 @@
 
 ## 2. 两种安装方式任选其一：图形安装器或 npm
 
-两种教程同时列在 [新手指引](https://mcp.ilovestudy.de/start.html#installation-options)，只需选择其中一种。
+两种教程同时列在 [新手指引](https://mcp.ilovestudy.de/start.html#installation-options)，只需选择其中一种安装客户端。图形安装器默认提供 Desktop Bridge + Desktop Commander；需要 Cua Driver 的新用户可选择 npm 的 `--with-cua` 安装。
 
 ### 图形安装器：下载并打开对应系统的安装器
 
@@ -38,27 +38,31 @@ Mac 和 Windows 的独立入口不需要用户解压 ZIP、安装 Node.js 或输
 
 **运行权限与启动方式是两个独立概念：** 普通安装器只提供启动方式的选择，不提供管理员模式选项。系统本身的安装确认（例如 macOS PKG 授权）不代表客户端会以管理员权限长期运行。受保护系统服务的专用管理员部署入口保持独立，不通过普通安装器自动启用。
 
-安装器会自动识别处理器、下载并校验官方 Node.js，安装固定版本的 Desktop Commander 和依赖，再打开配对网页。已有私有运行环境会复用；依赖损坏时按原安装器流程修复。
+安装器会自动识别处理器、下载并校验官方 Node.js，安装固定版本的 Desktop Commander 和依赖，再打开配对网页。已有私有运行环境会复用；依赖损坏时按原安装器流程修复。**当前图形安装器不会自动启用 Cua Driver**；已经通过图形安装的用户，若后续需要 CUA，可安装 npm CLI 后运行 `desktop-bridge update --with-cua`，不必重新绑定。
 
 ### npm 命令行：已有 Node.js 24 的用户
 
 ```sh
 npm install -g @justlovepl/desktop-bridge
-desktop-bridge setup
+desktop-bridge setup --with-cua
 desktop-bridge status
 ```
 
 **macOS / zsh：安装成功后提示 `command not found`**。先运行 `export PATH="$(npm prefix -g)/bin:$PATH"`、`rehash`、`desktop-bridge --version` 临时验证；成功后通过 `echo 'export PATH="$(npm prefix -g)/bin:$PATH"' >> ~/.zshrc` 和 `source ~/.zshrc` 持久化。如果仍失败，请检查 `npm prefix -g`、`npm root -g`、`ls -l "$(npm prefix -g)/bin/desktop-bridge"` 是否有安装链接。
 
-公开 npm Registry 已发布 0.2.7；`setup` 默认选择自动后台模式。首次连接仍需本人在网页确认配对；同一系统用户之前用原生安装器装好的客户端可继续使用原安装目录与设备配对。Windows 后台运行由当前用户的计划任务管理，退出终端或断开 SSH 后继续运行，登录 Windows 后自动启动。普通后台模式需要该用户已登录，不代表未登录时运行的管理员系统服务。
+本教程按 Desktop Bridge npm CLI **v0.2.8** 编写。`setup --with-cua` 会在完成 Desktop Bridge 和 Desktop Commander 安装时额外安装、校验并启用 Cua Driver 0.38.0；普通 `setup` 则不主动开启 CUA。`setup` 默认选择自动后台模式。首次连接仍需本人在网页确认配对；同一系统用户之前用原生安装器装好的客户端可继续使用原安装目录与设备配对。Windows 后台运行由当前用户的计划任务管理，退出终端或断开 SSH 后继续运行，登录 Windows 后自动启动。普通后台模式需要该用户已登录，不代表未登录时运行的管理员系统服务。
 
-日常使用 `desktop-bridge start`、`stop`、`restart`、`status`；升级使用 `desktop-bridge update`。仅运行 `npm update -g` 会更新命令行工具，升级正在使用的 Agent 应运行 `desktop-bridge update`。更新保留原配对、任务记录与已选模式。
+日常使用 `desktop-bridge start`、`stop`、`restart`、`status`；升级使用 `desktop-bridge update`。已经绑定、现在要启用 Cua Driver 时，在本地终端运行 `desktop-bridge update --with-cua`（若原先仅使用图形安装器，先执行 `npm install -g @justlovepl/desktop-bridge`）。仅运行 `npm update -g` 会更新命令行工具，升级正在使用的 Agent 应运行 `desktop-bridge update`。更新保留原配对、任务记录与已选模式。不要通过 Desktop Bridge 自身的远程终端执行自我升级。
 
 需要手动运行时使用 `desktop-bridge mode manual`，再执行 `desktop-bridge start` 并保持窗口；恢复自动后台使用 `desktop-bridge mode background`。npm 只安装命令行入口，首次启用客户端需要显式执行 `setup`。
 
 ## 3. 登录并确认绑定
 
-在配对网页登录与 MCP 授权时**同一个 Desktop Bridge 账号**，在 10 分钟内核对电脑名称并确认绑定。保持安装窗口打开，直到显示安装和配对完成。然后回到 ChatGPT 网页端，在新对话中输入 @，选择刚创建的 Desktop Bridge 连接，说「在桌面创建一个测试文件」。测试文件成功出现在电脑桌面说明远程文件操作正常。只有 `toolsAvailable` 为真才表示设备可执行任务。
+在配对网页登录与 MCP 授权时使用**同一个 Desktop Bridge 账号**，在 10 分钟内核对电脑名称并确认绑定。保持安装窗口打开，直到显示安装和配对完成。只有 `toolsAvailable` 为真才表示设备可执行任务。启用 Cua Driver 后，macOS 可能需要在系统设置中单独允许屏幕录制、辅助功能；Windows UAC 仍须在本机确认。系统授权与 ChatGPT 的确认不会被安装器跳过。
+
+## 4. 回到 ChatGPT 开始使用
+
+在 ChatGPT 网页端新对话中输入 `@`，选择 Desktop Bridge 连接，先说「列出我的电脑，并检查在线与工具状态」，再说「在桌面创建一个测试文件」。测试文件成功出现在电脑桌面说明远程文件操作正常。启用了 CUA 且本机权限允许时，可继续测试「显示我当前电脑的桌面截图」。
 
 原账号已有设备时，应先登录原账号，再显式绑定 Google。新 Google 用户会获得独立空间，不能自动看到原 `owner` 的设备。
 
