@@ -37,9 +37,9 @@
 
 Google 身份服务需先配置自己的 Google OAuth 网页客户端，见 [配置 Google 登录](docs/google-oauth.md)。插件 ZIP 不包含 Google 客户端密钥、用户密码、设备令牌、数据库或安装后的依赖。
 
-## npm 安装与后台管理 · 客户端 0.2.7
+## npm 安装与后台管理 · 客户端 0.2.8
 
-npm Registry 已公开发布 `@justlovepl/desktop-bridge@0.2.7`。与图形安装器是并列的客户端安装方式，无需重复安装。
+npm 客户端 `@justlovepl/desktop-bridge@0.2.8` 支持可选的 Cua Driver 0.38.0。与图形安装器是并列的客户端安装方式，无需重复安装。图形安装器默认只启用 Desktop Bridge 与 Desktop Commander；需要图形桌面操作建议使用 npm 的 `--with-cua` 选项。
 
 已有 Node.js 24 时，可通过 npm 安装并管理客户端：
 
@@ -48,6 +48,8 @@ npm install -g @justlovepl/desktop-bridge
 desktop-bridge setup
 desktop-bridge status
 ```
+
+首次需要同时启用 Cua Driver 时，使用 `desktop-bridge setup --with-cua` 代替普通 `setup`；已经配对的设备可以运行 `desktop-bridge update --with-cua`，保留配对信息。CUA 需要本机图形权限授权，不能远程绕过系统确认。
 
 `setup` 默认自动后台；使用 `desktop-bridge mode manual` 切换手动模式，`mode background` 恢复后台。`start`、`stop`、`restart` 管理进程，`update` 同时升级 npm 命令行与本地 Agent，并保留配对、任务记录和已选模式。Windows 后台模式通过当前用户的计划任务运行，关闭终端或断开 SSH 后继续运行，登录后自启。首次配对仍需本人网页登录确认。完整命令及原生安装迁移说明见 [npm 客户端说明](npm-installer/README.md)。
 
