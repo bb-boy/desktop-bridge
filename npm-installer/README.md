@@ -2,7 +2,9 @@
 
 Independent npm distribution for the Desktop Bridge **local device client**. It does not publish the upstream Desktop Commander package or cloud relay.
 
-Version 0.2.8 supports opt-in, checksum-pinned Cua Driver 0.38.0 installation and validation on Windows, macOS and Linux. The driver is not silently installed by regular setup or update.
+Version 0.2.9 supports opt-in, checksum-pinned Cua Driver 0.38.0 installation and validation on Windows, macOS and Linux. The driver is not silently installed by regular setup or update.
+
+Version 0.2.9 also sends large Agent results as serialized 16 KiB WebSocket fragments so ping/pong control frames can pass between fragments. Result recovery keeps the existing execution journal and never re-executes a saved command. The separate Windows/macOS screenshot viewer and protected image endpoint are relay-side code in `bridge/`; this npm package contains only the local client.
 
 Requires Node.js 24 and npm. Native installers for computers without Node remain available at <https://mcp.ilovestudy.de/start.html>. The public 新手指引 page keeps the native-installer and npm routes side by side; users only need one local client. The current native installers set up Desktop Commander without opting in to Cua Driver; use `setup --with-cua` on a new npm installation, or `update --with-cua` on an existing paired installation.
 

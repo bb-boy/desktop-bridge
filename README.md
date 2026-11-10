@@ -37,9 +37,9 @@
 
 Google 身份服务需先配置自己的 Google OAuth 网页客户端，见 [配置 Google 登录](docs/google-oauth.md)。插件 ZIP 不包含 Google 客户端密钥、用户密码、设备令牌、数据库或安装后的依赖。
 
-## npm 安装与后台管理 · 客户端 0.2.8
+## npm 安装与后台管理 · 客户端 0.2.9
 
-npm 客户端 `@justlovepl/desktop-bridge@0.2.8` 支持可选的 Cua Driver 0.38.0。与图形安装器是并列的客户端安装方式，无需重复安装。图形安装器默认只启用 Desktop Bridge 与 Desktop Commander；需要图形桌面操作建议使用 npm 的 `--with-cua` 选项。
+npm 客户端 `@justlovepl/desktop-bridge@0.2.9` 支持可选的 Cua Driver 0.38.0。与图形安装器是并列的客户端安装方式，无需重复安装。图形安装器默认只启用 Desktop Bridge 与 Desktop Commander；需要图形桌面操作建议使用 npm 的 `--with-cua` 选项。
 
 已有 Node.js 24 时，可通过 npm 安装并管理客户端：
 

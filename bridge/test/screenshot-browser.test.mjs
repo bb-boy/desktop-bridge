@@ -39,12 +39,14 @@ const imageId='11111111-1111-4111-8111-111111111111';
 const fileId='22222222-2222-4222-8222-222222222222';
 // Actual decodable 1px PNG; the regression concerns task identity, not image size.
 const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=';
-const image={content:[{type:'image',mimeType:'image/png',data:png}],structuredContent:{desktopBridgeCallId:imageId,screenshot_width:1,screenshot_height:1}};
+const image={content:[{type:'text',text:'Screenshot captured'}],_meta:{desktopBridge:{screenshot:{url:'',token:'t'.repeat(43),expiresAt:Date.now()+300000}}},structuredContent:{desktopBridgeCallId:imageId,desktopBridgeScreenshotAvailable:true,screenshot_width:1,screenshot_height:1}};
 const file={content:[{type:'text',text:'Screenshot saved'}],structuredContent:{desktopBridgeCallId:fileId,screenshot_file_path:'C:\\Temp\\screen.png',screenshot_width:1,screenshot_height:1}};
 
 const fixture=`<!doctype html><script>
-window.state=null;window.recovered=[];window.current=null;window.initialized=0;window.modes=[];window.denyMode=false;
+window.state=null;window.recovered=[];window.current=null;window.initialized=0;window.modes=[];window.denyMode=false;window.legacyRecovery=false;
 window.imageResult=${JSON.stringify(image)};window.fileResult=${JSON.stringify(file)};
+window.imageResult._meta.desktopBridge.screenshot.url=location.origin+'/api/screenshots/'+${JSON.stringify(imageId)};
+window.originalImage={type:'image',mimeType:'image/png',data:${JSON.stringify(png)}};
 window.mount=(result)=>{
  window.current=result;document.querySelector('iframe')?.remove();
  const f=document.createElement('iframe');f.style='width:760px;height:600px;border:0';f.src='/ui';document.body.append(f);
@@ -68,7 +70,11 @@ window.addEventListener('message',e=>{
   window.recovered.push(m.params.arguments.call_id);
   const id=m.params.arguments.call_id;
   const r=id===${JSON.stringify(imageId)}?window.imageResult:window.fileResult;
-  result={content:[{type:'text',text:JSON.stringify({id,tool:'cua_get_desktop_state',status:'completed',result:r})}]};
+  const images=id===${JSON.stringify(imageId)}?[window.originalImage]:[];
+  const original={...r,content:[...images,...r.content.filter(item=>item.type!=='image')]};delete original._meta;
+  const content=original.content.map(item=>item.type==='image'?{type:item.type,mimeType:item.mimeType,dataOmitted:true}:item);
+  const record={id,tool:'cua_get_desktop_state',status:'completed',result:window.legacyRecovery?original:{...original,content}};
+  result={content:[{type:'text',text:JSON.stringify(record)}],...(window.legacyRecovery?{}:{_meta:{desktopBridge:{screenshot:r._meta?.desktopBridge?.screenshot}}})};
  }
  e.source.postMessage({jsonrpc:'2.0',id:m.id,result},'*');
  if(m.method==='ui/initialize')window.deliver(window.current);
@@ -84,21 +90,17 @@ test('Chromium screenshot viewer supports zoom, pan, fullscreen fallback and tas
  const bootstrap=`<script>window.openai={widgetState:parent.state,toolOutput:parent.current?.structuredContent,
  setWidgetState:s=>{parent.state=JSON.parse(JSON.stringify(s))}};<\/script>`;
  const server=http.createServer((req,res)=>{
+  if(req.url.startsWith('/api/screenshots/')){
+   if(req.headers.authorization!=='Bearer '+'t'.repeat(43)){res.writeHead(404);return res.end();}
+   res.writeHead(200,{'content-type':'image/png'});return res.end(Buffer.from(png,'base64'));
+  }
   res.writeHead(200,{'content-type':'text/html;charset=utf-8'});
-  res.end(req.url==='/ui'?component.replace('<script type="module">',bootstrap+'<script type="module">'):fixture);
+  res.end(req.url==='/ui'?component.replaceAll('__DESKTOP_BRIDGE_IMAGE_ORIGIN__','http://127.0.0.1:'+server.address().port).replace('<script type="module">',bootstrap+'<script type="module">'):fixture);
  });
  t.after(async()=>{
   try{await devtools?.cmd('Browser.close');}catch{}
-  devtools?.ws.close();
-  // On Windows Chromium may still hold its user-data directory after CDP closes.
-  // Wait for the browser process to exit before attempting profile removal.
-  if(child?.exitCode===null){
-   const exited=once(child,'exit').catch(()=>{});
-   child.kill();
-   await Promise.race([exited,sleep(5000)]);
-  }
-  await new Promise(r=>server.close(r));
-  fs.rmSync(temp,{recursive:true,force:true,maxRetries:20,retryDelay:300});
+  devtools?.ws.close();if(child?.exitCode===null)child.kill();
+  await new Promise(r=>server.close(r));fs.rmSync(temp,{recursive:true,force:true,maxRetries:10,retryDelay:100});
  });
  server.listen(0,'127.0.0.1');await once(server,'listening');
  const probe=net.createServer();probe.listen(0,'127.0.0.1');await once(probe,'listening');
@@ -113,14 +115,14 @@ test('Chromium screenshot viewer supports zoom, pan, fullscreen fallback and tas
  const rendered=`(()=>{const d=document.querySelector('iframe')?.contentDocument;const i=d?.querySelector('#screenshot');return !!(i?.naturalWidth&&!d.querySelector('#image-frame').hidden&&d.querySelector('#status').hidden)})()`;
  await devtools.evaluate('mount(imageResult)');await wait(()=>devtools.evaluate(rendered));
  assert.equal(await devtools.evaluate('state.desktopBridgeCallId'),imageId);
- assert.equal(await devtools.evaluate('document.querySelector("iframe").contentDocument.querySelector("#image-hint")'),null,'screenshot preview should have no explanatory hint');
+ assert.deepEqual(await devtools.evaluate('recovered'),[],'initial image notification must not race an unnecessary recovery call');
  await devtools.evaluate('recovered=[]');
  // Exercise the real image viewer with a desktop-sized, locally generated image.
  await devtools.evaluate(`(()=>{
   const c=document.createElement('canvas');c.width=1600;c.height=900;
   const g=c.getContext('2d');g.fillStyle='#e8eef6';g.fillRect(0,0,1600,900);
   g.fillStyle='#203652';g.font='48px sans-serif';g.fillText('Desktop Bridge screenshot viewer',80,130);
-  imageResult.content[0].data=c.toDataURL('image/png').split(',')[1];
+  originalImage.data=c.toDataURL('image/png').split(',')[1];
   document.querySelector('iframe').contentDocument.querySelector('#screenshot').src=c.toDataURL('image/png');
  })()`);
  await wait(()=>devtools.evaluate('document.querySelector("iframe").contentDocument.querySelector("#screenshot").naturalWidth===1600'));
@@ -203,4 +205,18 @@ test('Chromium screenshot viewer supports zoom, pan, fullscreen fallback and tas
  await wait(()=>devtools.evaluate('state.desktopBridgeCallId===null'));
  assert.equal(await devtools.evaluate('document.querySelector("iframe").contentDocument.querySelector("#status").dataset.error'),'false');
  assert.equal(await devtools.evaluate('recovered.at(-1)'),fileId);
+ // A refreshed widget can still restore results from an older relay while upgrading.
+ await devtools.evaluate('legacyRecovery=true;state={desktopBridgeCallId:imageResult.structuredContent.desktopBridgeCallId};mount(fileResult)');
+ await wait(()=>devtools.evaluate(rendered));
+ assert.equal(await devtools.evaluate('state.desktopBridgeCallId'),imageId);
+ // Standard native image input remains supported for explicit model vision mode.
+ await devtools.evaluate('legacyRecovery=false;state=null;mount({...imageResult,_meta:{desktopBridge:{screenshot:{...imageResult._meta.desktopBridge.screenshot,expiresAt:Date.now()-1000}}}})');
+ await wait(()=>devtools.evaluate(rendered));
+ assert.equal(await devtools.evaluate('state.desktopBridgeCallId'),imageId,'expired image access must renew the saved task, not recapture');
+ await devtools.evaluate('state=null;mount({...imageResult,_meta:{desktopBridge:{screenshot:{...imageResult._meta.desktopBridge.screenshot,token:"x".repeat(43)}}}})');
+ await wait(()=>devtools.evaluate(rendered));
+ assert.equal(await devtools.evaluate('state.desktopBridgeCallId'),imageId,'a rejected capability must renew once through the authenticated MCP tool');
+ await devtools.evaluate('state=null;mount({...imageResult,_meta:undefined,content:[originalImage]})');
+ await wait(()=>devtools.evaluate(rendered));
+ assert.equal(await devtools.evaluate('state.desktopBridgeCallId'),imageId);
 });

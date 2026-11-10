@@ -62,6 +62,8 @@
   const frame=document.querySelector('#image-frame');
   const screenshot=document.querySelector('#screenshot');
   const details=document.querySelector('#details');
+  const imageOrigin='__DESKTOP_BRIDGE_IMAGE_ORIGIN__';
+  let imageRetries=0;
   const viewer=document.querySelector('#image-viewer');
   const zoomImage=document.querySelector('#zoom-image');
   const viewport=document.querySelector('#zoom-viewport');
@@ -73,6 +75,7 @@
   const pending=new Map();
   let hasImage=false;
   let recovering=false;
+  let recoveryTimer=null;
   let callId=typeof window.openai?.widgetState?.desktopBridgeCallId==='string'?window.openai.widgetState.desktopBridgeCallId:'';
   let ready=null;
   let lastReportedHeight=0;
@@ -182,6 +185,19 @@
       typeof item.data==='string' && item.data.length>0 && item.data.length<=12*1024*1024 &&
       /^[A-Za-z0-9+/]+={0,2}$/.test(item.data);
   }
+  function findPicture(result){
+    const delivery=result?._meta?.desktopBridge?.screenshot??result?.meta?.desktopBridge?.screenshot??result?.desktopBridge?.screenshot;
+    if(delivery&&typeof delivery.url==='string'&&/^[A-Za-z0-9_-]{43}$/.test(delivery.token??'')&&delivery.expiresAt>Date.now()+3000){
+      try{
+        const url=new URL(delivery.url);
+        if(url.origin===imageOrigin&&url.pathname.startsWith('/api/screenshots/')&&!url.search&&!url.hash)return {type:'protected-image',...delivery};
+      }catch{}
+    }
+    return result?.content?.find(validPicture)??
+      result?._meta?.desktopBridge?.images?.find(validPicture)??
+      result?.meta?.desktopBridge?.images?.find(validPicture)??
+      result?.desktopBridge?.images?.find(validPicture);
+  }
   // ChatGPT retains the canonical MCP result envelope in widget metadata.
   // Prefer it on remount rather than reissuing a potentially large tools/call.
   function tryHostResult(){
@@ -204,7 +220,10 @@
       }
       if(!value||typeof value!=='object')continue;
       const result=value.content?value:value.result;
-      const picture=result?.content?.find(validPicture);
+      if(!callId&&(result?._meta?.desktopBridge?.screenshot||result?.meta?.desktopBridge?.screenshot||value?.desktopBridge?.screenshot)){
+        saveCallId(result?.structuredContent?.desktopBridgeCallId??result?._meta?.desktopBridge?.callId??result?.meta?.desktopBridge?.callId??value?.desktopBridge?.callId);
+      }
+      const picture=findPicture(result)??findPicture(value);
       if(!picture)continue;
       saveCallId(result?.structuredContent?.desktopBridgeCallId??result?._meta?.desktopBridge?.callId);
       renderPicture(picture,result.structuredContent??bridge?.toolOutput??{});
@@ -212,7 +231,8 @@
     }
     return false;
   }
-  function renderPicture(item,meta={}){
+  async function renderPicture(item,meta={}){
+    clearTimeout(recoveryTimer);recoveryTimer=null;
     hasImage=true;
     screenshot.onload=()=>{
       status.hidden=true;
@@ -224,7 +244,22 @@
       screenshot.removeAttribute('src');
       showError('截图已返回，但图片无法显示。');
     };
-    screenshot.src='data:'+item.mimeType+';base64,'+item.data;
+    try{
+      if(item.type==='protected-image'){
+        const response=await fetch(item.url,{headers:{authorization:'Bearer '+item.token},credentials:'omit',signal:AbortSignal.timeout(15000)});
+        if(!response.ok)throw new Error('Screenshot fetch failed');
+        const blob=await response.blob();
+        if(blob.size>10*1024*1024||!['image/png','image/jpeg','image/webp'].includes(blob.type))throw new Error('Invalid screenshot image');
+        screenshot.src=await new Promise((resolve,reject)=>{
+          const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('Image decode failed'));reader.readAsDataURL(blob);
+        });
+      }else screenshot.src='data:'+item.mimeType+';base64,'+item.data;
+    }catch{
+      hasImage=false;
+      if(callId&&imageRetries++<1)scheduleRecovery();
+      else showError('截图读取失败，请重新打开截图组件。');
+      return;
+    }
     const width=Number(meta.screenshot_width);
     const height=Number(meta.screenshot_height);
     details.textContent=Number.isFinite(width)&&Number.isFinite(height)&&width>0&&height>0?
@@ -241,13 +276,15 @@
       await ready;
       if(hasImage||tryHostResult())return;
       // Reuse the completed task; do not invoke CUA capture again.
-      const response=await sendRequest('tools/call',{name:'get_call_result',arguments:{call_id:id}});
+      const response=await sendRequest('tools/call',{name:'get_call_result',arguments:{call_id:id,image_delivery:'ui'}});
       if(response?.isError)throw new Error('Cached task unavailable');
       const raw=response?.content?.find(item=>item.type==='text')?.text;
       if(typeof raw!=='string'||raw.length>12*1024*1024)throw new Error('Invalid cached screenshot');
       const record=JSON.parse(raw);
       if(record.id!==id||record.tool!=='cua_get_desktop_state'||record.status!=='completed')throw new Error('Wrong screenshot task');
-      const picture=record.result?.content?.find(validPicture);
+      // Restored images arrive as native MCP blocks, never Base64 inside text.
+      // Retain the old parser for previously deployed servers and cached results.
+      const picture=findPicture(response)??record.result?.content?.find(validPicture);
       if(!picture){
         if(record.result?.structuredContent?.screenshot_file_path){
           // Migrate IDs persisted by older widgets for file-only results.
@@ -267,12 +304,18 @@
       recovering=false;
     }
   }
+  function scheduleRecovery(){
+    if(hasImage||recovering||recoveryTimer||!callId)return;
+    // Initialization may expose the small toolOutput before the full tool-result
+    // notification arrives. Give that notification a chance to deliver its image.
+    recoveryTimer=setTimeout(()=>{recoveryTimer=null;void recoverScreenshot();},500);
+  }
   function showResult(result){
     if(result?.isError){
       showError(result.content?.find(item=>item.type==='text')?.text||'截图工具执行失败');
       return;
     }
-    const picture=result?.content?.find(validPicture);
+    const picture=findPicture(result);
     if(picture){
       // Persist the identity of the picture, never that of a later file-only call.
       // ChatGPT may deliver another result to this widget before remounting it.
@@ -285,13 +328,13 @@
     // A screenshot saved to a device path has no inline bytes to restore.
     // Retain an existing image ID if this is a remount; otherwise show success.
     if(meta.desktopBridgeScreenshotAvailable===false||meta.screenshot_file_path){
-      if(callId){void recoverScreenshot();return;}
+      if(callId){scheduleRecovery();return;}
       showSavedFile();
       return;
     }
     if(!callId)saveCallId(meta.desktopBridgeCallId);
     if(callId){
-      void recoverScreenshot();
+      scheduleRecovery();
     }else{
       showError('未收到可显示的截图图片，也没有可恢复的任务编号。');
     }
@@ -326,7 +369,7 @@
   ready=(async()=>{
     try {
       const initialized=await sendRequest('ui/initialize',{
-        appInfo:{name:'desktop-bridge-screenshot',version:'1.3.0'},
+        appInfo:{name:'desktop-bridge-screenshot',version:'1.6.0'},
         appCapabilities:{availableDisplayModes:['inline','fullscreen']},protocolVersion:'2026-01-26'
       });
       displayMode=initialized?.hostContext?.displayMode??displayMode;

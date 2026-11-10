@@ -167,8 +167,8 @@ test('compact cards show pulsing green when connected and still red when disconn
 
 test('onboarding instructions target ChatGPT web and desktop file creation',()=>{
   const guide=fs.readFileSync(path.join(publicDir,'start.html'),'utf8');
-  assert.match(guide,/打开 ChatGPT 网页端「插件」页/);
-  assert.match(guide,/回到 ChatGPT 网页端使用/);
-  assert.match(guide,/在桌面创建一个测试文件/);
+  assert.match(guide,/href="https:\/\/chatgpt\.com\/plugins"/);
+  assert.match(guide,/<code>@<\/code> 并选择 Desktop Bridge/);
+  assert.match(guide,/在(?:我的)?桌面创建一个测试文件/);
   assert.doesNotMatch(guide,/列出我的电脑，检查它是否可用/);
 });
