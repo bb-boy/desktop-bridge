@@ -7,6 +7,7 @@ import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 
 const source=path.resolve(import.meta.dirname,'..');
+const expectedVersion=JSON.parse(fs.readFileSync(path.join(source,'package.json'),'utf8')).version;
 const first=fs.readdirSync(source).filter(n=>n.endsWith('.tgz')&&n.includes('desktop-bridge'));
 assert.equal(first.length,1,'Expected one source tarball');
 const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'desktop-bridge-upgrade-'));
@@ -39,7 +40,7 @@ try{
   const frozen=['agent-config.json','client-settings.json','journal.json','.desktop-bridge-client'].map(n=>[n,fs.readFileSync(path.join(data,n))]);
 
   // Simulate the previous 0.2.6 npm release from this package's staged files.
-  // The second installation uses the ACTUAL new 0.2.8 tarball.
+  // The second installation uses the actual release tarball under test.
   const currentTarball=path.join(source,first[0]);
   const unpack=path.join(tmp,'previous');
   fs.mkdirSync(unpack);
@@ -47,7 +48,7 @@ try{
   const previousPackage=path.join(unpack,'package');
   const previousManifest=path.join(previousPackage,'package.json');
   const metadata=JSON.parse(fs.readFileSync(previousManifest,'utf8'));
-  assert.equal(metadata.version,'0.2.8','Expected the real 0.2.8 npm release under test');
+  assert.equal(metadata.version,expectedVersion,'Expected the actual npm release under test');
   metadata.version='0.2.6';
   jwrite(previousManifest,metadata);
   const previousTarballs=path.join(tmp,'previous-tarball');
@@ -64,11 +65,11 @@ try{
   for(const [n,bytes] of frozen)assert.deepEqual(fs.readFileSync(path.join(data,n)),bytes,'npm install modified '+n);
 
   npm(['install','--prefix',prefix,'--ignore-scripts','--no-audit','--no-fund','--no-save',currentTarball]);
-  assert.equal(JSON.parse(fs.readFileSync(path.join(installed,'package.json'))).version,'0.2.8');
-  assert.equal(run(process.execPath,[cli,'--version']),'0.2.8');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(installed,'package.json'))).version,expectedVersion);
+  assert.equal(run(process.execPath,[cli,'--version']),expectedVersion);
   for(const [n,bytes] of frozen)assert.deepEqual(fs.readFileSync(path.join(data,n)),bytes,'npm replacement modified '+n);
   assert.ok(!fs.existsSync(path.join(data,'maintenance.flag')),'npm update unexpectedly stopped agent');
-  console.log('Offline npm v0.2.6 -> actual v0.2.8 package replacement passed; token, device ID, mode and journal unchanged.');
+  console.log('Offline npm v0.2.6 -> actual v'+expectedVersion+' package replacement passed; token, device ID, mode and journal unchanged.');
 }finally{
   fs.rmSync(tmp,{recursive:true,force:true,maxRetries:3,retryDelay:100});
 }

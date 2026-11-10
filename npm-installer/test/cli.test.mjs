@@ -46,5 +46,5 @@ test('help and version do not install or start an agent',()=>{
   assert.match(help.stdout,/setup \[/);
   const version=spawnSync(process.execPath,[bin,'--version'],{encoding:'utf8'});
   assert.equal(version.status,0);
-  assert.match(version.stdout,/^0\.2\.8/);
+  assert.equal(version.stdout.trim(),JSON.parse(requireManifest()).version);
 });

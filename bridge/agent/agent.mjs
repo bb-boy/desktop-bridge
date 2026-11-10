@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { pairDevice,saveConfig } from './pair.mjs';
 import { McpToolManager } from './mcp-manager.mjs';
+import { sendJson } from './send-json.mjs';
 
 const configPath=process.env.BRIDGE_AGENT_CONFIG??process.argv[2];
 if(!configPath) throw new Error('Usage: node agent.mjs path/to/agent-config.json');
@@ -165,7 +166,7 @@ async function execute(message,socket) {
       await new Promise(resolve=>{
         const timer=setTimeout(resolve,1000);
         if(socket.readyState!==WebSocket.OPEN){clearTimeout(timer);return resolve();}
-        socket.send(JSON.stringify({type:'result',id:message.id,result}),()=>{clearTimeout(timer);resolve();});
+        send(socket,{type:'result',id:message.id,result}).then(()=>{clearTimeout(timer);resolve();});
       });
       await shutdown();return;
     }
@@ -187,7 +188,7 @@ async function execute(message,socket) {
     log('call_failed',{id:message.id});
   } finally {running.delete(message.id);}
 }
-function send(socket,message) {if(socket?.readyState===WebSocket.OPEN)socket.send(JSON.stringify(message));}
+function send(socket,message) {return sendJson(socket,message,{log});}
 async function shutdown(code=0) {
   if(stopping)return;stopping=true;clearTimeout(retryTimer);
   clearInterval(processHeartbeat);clearInterval(maintenanceWatch);
@@ -231,7 +232,7 @@ function connect() {
   let lastSeen=Date.now(),welcomed=false;
   const heartbeat=setInterval(()=>{if(Date.now()-lastSeen>65000)socket.terminate();},15000);
   socket.on('ping',()=>lastSeen=Date.now());
-  socket.on('open',()=>{send(socket,{type:'hello',protocol:2,deviceId:config.deviceId,tools,capabilities:{shutdown:true},version:'0.2.8',platform:process.platform});});
+  socket.on('open',()=>{send(socket,{type:'hello',protocol:2,deviceId:config.deviceId,tools,capabilities:{shutdown:true},version:'0.2.9',platform:process.platform});});
   socket.on('message',data=>{
     lastSeen=Date.now();
     try {
@@ -262,11 +263,11 @@ function connect() {
     }).catch(()=>{}); // Preserve credentials if status cannot be verified.
   });
   socket.on('error',error=>log('connection_error',{message:String(error.message).slice(0,240)}));
-  socket.on('close',(code)=>{
+  socket.on('close',(code,reason)=>{
     clearInterval(heartbeat);
     if(stopping)return;
     const delay=Math.min(60000,1000*2**Math.min(attempt++,6))+Math.floor(Math.random()*1000);
-    log('disconnected',{code,retryInMs:delay});
+    log('disconnected',{code,reason:reason.toString().slice(0,160),bufferedAmount:socket.bufferedAmount,retryInMs:delay});
     retryTimer=setTimeout(connect,delay);
   });
 }

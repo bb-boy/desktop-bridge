@@ -17,11 +17,16 @@ import { createSessions, installManagement } from './management.mjs';
 import { installGoogle } from './google.mjs';
 import { installAdmin } from './admin.mjs';
 import { installerDownload } from './downloads.mjs';
+import { savedCallResult,deliverImages,resultDiagnostics } from './call-results.mjs';
+import { issueScreenshot,installScreenshotDelivery } from './screenshot-delivery.mjs';
 
 const root=path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const PERMISSION_UI_URI='ui://desktop-bridge/permissions-v1.html';
 const PERMISSION_UI_MIME='text/html;profile=mcp-app';
-const SCREENSHOT_UI_URI='ui://desktop-bridge/screenshot-v5.html';
+const SCREENSHOT_UI_URI='ui://desktop-bridge/screenshot-v8.html';
+const V7_SCREENSHOT_UI_URI='ui://desktop-bridge/screenshot-v7.html';
+const V6_SCREENSHOT_UI_URI='ui://desktop-bridge/screenshot-v6.html';
+const V5_SCREENSHOT_UI_URI='ui://desktop-bridge/screenshot-v5.html';
 const V4_SCREENSHOT_UI_URI='ui://desktop-bridge/screenshot-v4.html';
 const V3_SCREENSHOT_UI_URI='ui://desktop-bridge/screenshot-v3.html';
 const PREVIOUS_SCREENSHOT_UI_URI='ui://desktop-bridge/screenshot-v2.html';
@@ -69,6 +74,7 @@ export async function startServer(config,dependencies={}) {
   installAdmin(app,store,broker,sessions);
   const auth=requireBearerAuth({verifier:provider,requiredScopes:['desktop'],expectedResource:new URL('/mcp',base),resourceMetadataUrl:new URL('/.well-known/oauth-protected-resource/mcp',base).href});
   app.get('/healthz',(_req,res)=>res.json({status:'ok',version:'0.2.6'}));
+  installScreenshotDelivery(app,store);
   app.get('/api/devices',auth,(req,res)=>res.json({devices:broker.devices(req.auth.extra.ownerId)}));
   app.use('/mcp',rateLimit({windowMs:60000,limit:240,standardHeaders:'draft-8',legacyHeaders:false}));
   app.all('/mcp',auth,async(req,res)=>{
@@ -78,12 +84,17 @@ export async function startServer(config,dependencies={}) {
     const server=new Server({name:'personal-desktop-bridge',version:'0.2.6'},{capabilities:{tools:{},resources:{}},instructions:'Use list_devices to identify available computers. The standard tool catalog is available before pairing; visibility does not mean a device is ready. Tools execute on the chosen computer. Check toolsAvailable separately from networkConnected. Use list_calls and get_call_result to recover results after interruptions. Never retry a side effect until its outcome is known.'});
     server.setRequestHandler(ListToolsRequestSchema,async()=>({tools:[{
       name:'list_devices',description:'List your configured computers and their current connection status. Use before operating on a computer.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:riskForTool('list_devices')
-    },{name:'list_calls',description:'List your last 100 task IDs and states. Use after a timeout or disconnect.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:riskForTool('list_calls')},{name:'get_call_result',description:'Retrieve a task status and saved result by call_id. Never repeats the operation.',inputSchema:{type:'object',properties:{call_id:{type:'string'}},required:['call_id'],additionalProperties:false},annotations:riskForTool('get_call_result')},...remoteTools.map(annotateTool),permissionsTool,setPermissionsTool,...broker.tools(owner).map(tool=>tool.name==='cua_get_desktop_state'?{
-      ...tool,_meta:{...(tool._meta??{}),ui:{...(tool._meta?.ui??{}),resourceUri:SCREENSHOT_UI_URI}}
+    },{name:'list_calls',description:'List your last 100 task IDs and states. Use after a timeout or disconnect.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:riskForTool('list_calls')},{name:'get_call_result',description:'Retrieve a task status and saved result by call_id. Never repeats the operation. Set image_delivery="ui" when only restoring the screenshot viewer; model returns native images for visual inspection.',inputSchema:{type:'object',properties:{call_id:{type:'string'},image_delivery:{type:'string',enum:['ui','model'],default:'model'}},required:['call_id'],additionalProperties:false},annotations:riskForTool('get_call_result')},...remoteTools.map(annotateTool),permissionsTool,setPermissionsTool,...broker.tools(owner).map(tool=>tool.name==='cua_get_desktop_state'?{
+      ...tool,description:tool.description+'\nBy default the screenshot is displayed privately in the viewer; the model receives dimensions and a task ID. Set image_delivery="model" if you must visually inspect the screen or choose desktop action coordinates. Do not describe unseen screen contents in ui mode.',
+      inputSchema:{...tool.inputSchema,properties:{...tool.inputSchema.properties,image_delivery:{type:'string',enum:['ui','model'],default:'ui',description:'ui displays the screenshot to the user without including image data in model tool output; model returns a native image for visual analysis and coordinate selection.'}}},
+      _meta:{...(tool._meta??{}),ui:{...(tool._meta?.ui??{}),resourceUri:SCREENSHOT_UI_URI}}
     }:tool)]}));
     server.setRequestHandler(ListResourcesRequestSchema,async()=>({resources:[
       {uri:PERMISSION_UI_URI,name:'Desktop Bridge device permissions',mimeType:PERMISSION_UI_MIME,description:'Device permission controls inside ChatGPT web chat'},
       {uri:SCREENSHOT_UI_URI,name:'Desktop Bridge desktop screenshot',mimeType:PERMISSION_UI_MIME,description:'Show a screenshot from a paired computer in ChatGPT'},
+      {uri:V7_SCREENSHOT_UI_URI,name:'Desktop Bridge desktop screenshot (v7)',mimeType:PERMISSION_UI_MIME,description:'Compatible URL for previous screenshot widgets'},
+      {uri:V6_SCREENSHOT_UI_URI,name:'Desktop Bridge desktop screenshot (v6)',mimeType:PERMISSION_UI_MIME,description:'Compatible URL for previous screenshot widgets'},
+      {uri:V5_SCREENSHOT_UI_URI,name:'Desktop Bridge desktop screenshot (v5)',mimeType:PERMISSION_UI_MIME,description:'Compatible URL for previous screenshot widgets'},
       {uri:V4_SCREENSHOT_UI_URI,name:'Desktop Bridge desktop screenshot (v4)',mimeType:PERMISSION_UI_MIME,description:'Compatible URL for previous screenshot widgets'},
       {uri:V3_SCREENSHOT_UI_URI,name:'Desktop Bridge desktop screenshot (v3)',mimeType:PERMISSION_UI_MIME,description:'Compatible URL for previous screenshot widgets'},
       {uri:LEGACY_SCREENSHOT_UI_URI,name:'Desktop Bridge desktop screenshot (legacy)',mimeType:PERMISSION_UI_MIME,description:'Compatible URL for previously displayed screenshots'},
@@ -93,6 +104,9 @@ export async function startServer(config,dependencies={}) {
       const uiFiles={
         [PERMISSION_UI_URI]:'gui-permissions.html',
         [SCREENSHOT_UI_URI]:'screenshot.html',
+        [V7_SCREENSHOT_UI_URI]:'screenshot.html',
+        [V6_SCREENSHOT_UI_URI]:'screenshot.html',
+        [V5_SCREENSHOT_UI_URI]:'screenshot.html',
         [V4_SCREENSHOT_UI_URI]:'screenshot.html',
         [V3_SCREENSHOT_UI_URI]:'screenshot.html',
         [LEGACY_SCREENSHOT_UI_URI]:'screenshot.html',
@@ -100,9 +114,9 @@ export async function startServer(config,dependencies={}) {
       };
       const filename=uiFiles[request.params.uri];
       if(!filename)throw new Error('Unknown UI resource');
-      return {contents:[{uri:request.params.uri,mimeType:PERMISSION_UI_MIME,text:fs.readFileSync(path.join(root,'public',filename),'utf8'),...(filename==='screenshot.html'?{_meta:{'openai/ui':{availableDisplayModes:['inline','fullscreen'],preferredDisplayMode:'inline'}}}:{})}]};
+      return {contents:[{uri:request.params.uri,mimeType:PERMISSION_UI_MIME,text:fs.readFileSync(path.join(root,'public',filename),'utf8').replaceAll('__DESKTOP_BRIDGE_IMAGE_ORIGIN__',base.origin),...(filename==='screenshot.html'?{_meta:{ui:{csp:{connectDomains:[base.origin],resourceDomains:[base.origin]}},'openai/ui':{availableDisplayModes:['inline','fullscreen'],preferredDisplayMode:'inline'}}}:{})}]};
     });
-    server.setRequestHandler(CallToolRequestSchema,async(request)=>{
+    const callTool=async(request)=>{
       await provider.verifyAccessToken(req.auth.token);
       store.recordToolCall(owner);
       if(request.params.name==='list_devices') return {content:[{type:'text',text:JSON.stringify(broker.devices(owner))}]};
@@ -119,18 +133,41 @@ export async function startServer(config,dependencies={}) {
         if(request.params.name==='ping')return {content:[{type:'text',text:JSON.stringify(await broker.ping(validateDeviceArgs(request.params.arguments),owner))}]};
         if(request.params.name==='shutdown')validateDeviceArgs(request.params.arguments);
         if(request.params.name==='list_calls')return {content:[{type:'text',text:JSON.stringify(store.recentCalls(owner))}]};
-        if(request.params.name==='get_call_result'){const call=broker.recover(String(request.params.arguments?.call_id??''),owner);if(!call)throw new Error('Task not found');return {content:[{type:'text',text:JSON.stringify(call)}]};}
-        const result=await broker.call(request.params.name,request.params.arguments,owner);
+        if(request.params.name==='get_call_result'){
+          const call=broker.recover(String(request.params.arguments?.call_id??''),owner);if(!call)throw new Error('Task not found');
+          const mode=request.params.arguments?.image_delivery??'model';
+          const descriptor=mode==='ui'&&call.result?.content?.some(c=>c.type==='image')?issueScreenshot(store,base,req.auth,call.id):undefined;
+          return savedCallResult(call,mode,descriptor);
+        }
+        const args={...(request.params.arguments??{})};
+        const delivery=args.image_delivery??'ui';
+        if(request.params.name==='cua_get_desktop_state'){
+          if(!['ui','model'].includes(delivery))throw new Error('image_delivery must be ui or model');
+          delete args.image_delivery;
+        }
+        const result=await broker.call(request.params.name,args,owner);
         // The host may omit image content when restoring a widget. Expose only the
         // owner-scoped task ID so the UI can recover the saved result without recapturing.
         if(request.params.name==='cua_get_desktop_state'&&!result.isError){
           const callId=result?._meta?.desktopBridge?.callId;
           const hasImage=result.content?.some(item=>item.type==='image'&&typeof item.data==='string'&&item.data.length>0)??false;
-          if(typeof callId==='string')return {...result,structuredContent:{...(result.structuredContent??{}),desktopBridgeCallId:callId,desktopBridgeScreenshotAvailable:hasImage}};
+          const descriptor=delivery==='ui'&&hasImage?issueScreenshot(store,base,req.auth,callId):undefined;
+          if(typeof callId==='string')return deliverImages({...result,structuredContent:{...(result.structuredContent??{}),desktopBridgeCallId:callId,desktopBridgeScreenshotAvailable:hasImage,desktopBridgeImageDelivery:delivery}},delivery,descriptor);
         }
         return result;
       }
       catch(e) {return {isError:true,content:[{type:'text',text:e.message}]};}
+    };
+    server.setRequestHandler(CallToolRequestSchema,async(request)=>{
+      const started=Date.now();let result,error;
+      try{return result=await callTool(request);}
+      catch(cause){error=cause;throw cause;}
+      finally{
+        const diagnostic=resultDiagnostics(request.params.name,result,
+          request.params.arguments?.call_id??result?._meta?.desktopBridge?.callId,started,error);
+        if(dependencies.toolDiagnostics)dependencies.toolDiagnostics(diagnostic);
+        else console.log(JSON.stringify(diagnostic));
+      }
     });
     const transport=new StreamableHTTPServerTransport({sessionIdGenerator:undefined,enableJsonResponse:true});
     let closed=false;
