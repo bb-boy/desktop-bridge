@@ -114,20 +114,38 @@ const client=new McpToolManager({
   backends:[
     {id:'desktop',command:process.execPath,args:[config.mcpEntry],cwd:config.workingDirectory??directory,env:{...process.env,DESKTOP_BRIDGE_REMOTE_AGENT:'1'}},
     ...(cuaConfig.enabled===true?[{
-      id:'cua',prefix:'cua_',command:cuaConfig.command||'cua-driver',
+      id:'cua',prefix:'cua_',optional:true,command:cuaConfig.command||'cua-driver',
       args:Array.isArray(cuaConfig.args)?cuaConfig.args:['mcp'],
       cwd:config.workingDirectory??directory,env:{...process.env}
     }]:[])
   ]
 });
-let ws,retryTimer,stopping=false,attempt=0,localHealthy=false,checkingHealth=false,healthFailures=0,remoteStopping=false,cuaToolsAvailable=false;
+let ws,retryTimer,stopping=false,attempt=0,localHealthy=false,checkingHealth=false,healthFailures=0,remoteStopping=false;
 const heartbeatPath=path.join(directory,'heartbeat.json');
-function writeHeartbeat(){try{fs.writeFileSync(heartbeatPath,JSON.stringify({pid:process.pid,time:Date.now(),connected:ws?.readyState===1,localToolsAvailable:localHealthy,cuaToolsAvailable}),{mode:0o600});}catch{}}
+function writeHeartbeat(){try{fs.writeFileSync(heartbeatPath,JSON.stringify({pid:process.pid,time:Date.now(),connected:ws?.readyState===1,localToolsAvailable:localHealthy,cuaToolsAvailable:client.connections.get('cua')?.ready===true}),{mode:0o600});}catch{}}
 writeHeartbeat();
 const processHeartbeat=setInterval(writeHeartbeat,15000);processHeartbeat.unref();
 const journalPath=path.join(directory,'journal.json');
-let journal={};
-try{journal=JSON.parse(fs.readFileSync(journalPath,'utf8'));}catch(e){if(e.code!=='ENOENT'){log('journal_corrupt');process.exit(78);}}
+function loadJournal() {
+  let text;
+  try {text=fs.readFileSync(journalPath,'utf8');}
+  catch(error) {if(error.code==='ENOENT')return {};throw error;}
+  let saved;
+  try {saved=JSON.parse(text.replace(/^\uFEFF/,''));}
+  catch(error) {if(!(error instanceof SyntaxError))throw error;}
+  if(saved&&typeof saved==='object'&&!Array.isArray(saved)&&Object.values(saved).every(entry=>
+    entry&&['completed','executing','unknown'].includes(entry.status)))return saved;
+
+  // Keep the damaged file for investigation. The relay uses recover messages
+  // for earlier calls, which will return unknown when no saved result exists.
+  const backup=journalPath+'.corrupt-'+Date.now()+'-'+process.pid;
+  fs.renameSync(journalPath,backup);
+  log('journal_quarantined',{file:path.basename(backup)});
+  return {};
+}
+let journal;
+try {journal=loadJournal();}
+catch(error) {log('journal_load_failed',{type:error.name,code:error.code});process.exit(78);}
 function persist() {
   const entries=Object.entries(journal).filter(([,v])=>v.status==='executing'||Date.now()-(v.time??0)<30*86400000).sort((a,b)=>(b[1].time??0)-(a[1].time??0));
   let bytes=0;
@@ -178,6 +196,7 @@ async function execute(message,socket) {
       }
     }
     let result=await client.callTool({name:message.name,arguments:args},undefined,{timeout:110000,maxTotalTimeout:110000});
+    if(process.platform==='win32'&&message.name==='cua_health_report')normalizeCuaWindowsVersion(result);
     if(Buffer.byteLength(JSON.stringify(result))>8*1024*1024) result={isError:true,content:[{type:'text',text:'Tool ran, but its result exceeded the transfer limit. Use smaller pages or save output to a file.'}]};
     journal[message.id]={status:'completed',time:Date.now(),result};persist();
     send(ws,{type:'result',id:message.id,result});
@@ -187,6 +206,20 @@ async function execute(message,socket) {
     send(ws,{type:'result',id:message.id,status:'unknown',error:'Local tool request failed; its execution outcome may be unknown. '+String(e.message).slice(0,500)});
     log('call_failed',{id:message.id});
   } finally {running.delete(message.id);}
+}
+function normalizeCuaWindowsVersion(result) {
+  // CUA Driver can decode the localized `ver` label as UTF-8. The numeric
+  // build string survives that decoding and is enough for the health report.
+  const checks=result.structuredContent?.checks;
+  if(!Array.isArray(checks))return;
+  const check=checks.find(entry=>entry?.name==='platform_supported');
+  const raw=check?.data?.os_version;
+  if(typeof raw!=='string'||!raw.includes('\uFFFD'))return;
+  const version=raw.match(/\d+(?:\.\d+){2,3}/)?.[0];
+  if(!version)return;
+  check.data.os_version=version;
+  if(typeof check.message==='string')check.message=check.message.replaceAll(raw,version);
+  for(const item of result.content)if(item.type==='text')item.text=item.text.replaceAll(raw,version);
 }
 function send(socket,message) {return sendJson(socket,message,{log});}
 async function shutdown(code=0) {
@@ -206,7 +239,6 @@ client.onclose=()=>{if(!stopping){log('local_mcp_closed');void shutdown(1);}};
 client.onerror=error=>log('local_mcp_error',{type:error.name});
 try{await client.start();}catch(error){log('local_mcp_start_failed',{message:String(error.message).slice(0,300)});await shutdown(1);}
 const tools=client.listTools().tools;
-cuaToolsAvailable=tools.some(tool=>tool.name.startsWith('cua_'));
 writeHeartbeat();
 log('local_mcp_ready',{toolCount:tools.length,pid:process.pid,childPid:client.connections.get('desktop')?.transport.pid});
 function recover(id,socket) {
@@ -252,6 +284,7 @@ function connect() {
   });
   socket.on('unexpected-response',(_request,response)=>{
     const status=response.statusCode;response.resume();
+    log('connection_upgrade_rejected',{status});
     // ws delegates handshake failures to this listener: explicitly finish it
     // so the normal reconnect/stop lifecycle can proceed.
     socket.terminate();
