@@ -121,7 +121,7 @@ test('account appears as a circular email-initial avatar with details hidden unt
   assert.match(css,/account-trigger\.account-avatar \{[\s\S]*?border-radius:50%/);
   assert.match(js,/Array\.from\(shown\.split\('@'\)\[0\]\)\.slice\(0,2\)/);
   assert.match(js,/setAccountProfile\(g\)/);
-  assert.match(js,/Signed in with Google/);
+  assert.match(js,/已绑定 Google/);
   assert.match(js,/addEventListener\('pointerdown'/);
   assert.match(js,/event\.key==='Escape'/);
   assert.match(js,/await api\('\/api\/logout',\{\}\)/);

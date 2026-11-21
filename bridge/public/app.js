@@ -26,7 +26,7 @@ function setAccountProfile(google=null){
  const label=Array.from(shown.split('@')[0]).slice(0,2).join('').toUpperCase()||'--';
  $('#account-initials').textContent=label;
  $('#account-email').textContent=shown;
- $('#account-provider').textContent=email?'Signed in with Google':'账号密码登录';
+ $('#account-provider').textContent=email?'已绑定 Google':'Desktop Bridge 账号';
  $('#account-trigger').setAttribute('aria-label','账号：'+shown+'，查看账号信息');
 }
 function closeAccountMenu(restoreFocus=false){
@@ -75,13 +75,14 @@ for(const tab of tabs){
 }
 for(const tab of tabs)tab.tabIndex=tab.classList.contains('active')?0:-1;
 async function accountAction(fn){const feedback=$('#account-feedback');feedback.hidden=true;try{await fn();}catch(e){feedback.textContent=e.message;feedback.hidden=false;}}
-$('#account-settings').onclick=()=>{
- if(!account)return;
+async function openAccountSettings(){
  closeAccountMenu();
  const dialog=$('#account-dialog');
- $('#account-feedback').hidden=true;
  if(!dialog.open)dialog.showModal();
- if(googleEnabled)void accountAction(renderGoogle);
+ return renderGoogle();
+}
+$('#account-settings').onclick=()=>{
+ if(account)void accountAction(openAccountSettings);
 };
 $('#close-account-dialog').onclick=()=>$('#account-dialog').close();
 
@@ -211,10 +212,64 @@ $('#close-device-dialog').onclick=()=>$('#device-dialog').close();
 $('#invite').onclick=()=>action(async()=>{const r=await api('/api/invitations',{}),link=el('a',r.url);link.href=r.url;$('#invite-link').replaceChildren(link);});
 $('#password-form').onsubmit=e=>{e.preventDefault();void accountAction(async()=>{await api('/api/password',Object.fromEntries(new FormData(e.target)));e.target.reset();const feedback=$('#account-feedback');feedback.textContent='密码已更新。其他浏览器会话已退出，客户端授权需要重新关联。';feedback.hidden=false;await refresh();});};
 setInterval(()=>{if(!document.hidden&&account)action(refresh);},10000);
-action(boot);
+action(async()=>{
+ await boot();
+ const setup=query.get('passwordSetup');
+ if(!account||!setup)return;
+ await accountAction(async()=>{
+  const settings=await openAccountSettings();
+  if(settings.passwordSetupVerified)return;
+  if(setup==='wrong-account')throw new Error('请选择此工作空间已绑定的 Google 账号。');
+  if(setup==='cancelled')throw new Error('已取消 Google 验证，可以重新开始。');
+  throw new Error('Google 验证未完成或已过期，请重试。');
+ });
+});
 
 async function googleStart(link=false){const r=await api(link?'/auth/google/link':'/auth/google/start',{returnTo:location.pathname+location.search});location.assign(r.url);}
 $('#google-login').onclick=()=>action(()=>googleStart());
 $('#google-link').onclick=()=>{void accountAction(()=>googleStart(true));};
 $('#google-unlink').onclick=()=>{void accountAction(async()=>{if(confirm('解除 Google 绑定？今后只能使用已有账号密码登录；其他浏览器会话与客户端授权也会失效，但设备绑定不会被删除。')){const r=await api('/api/manage/google/unlink',{});if(r.csrf)csrf=r.csrf;await renderGoogle();const feedback=$('#account-feedback');feedback.textContent='Google 账号已解除绑定。请使用账号密码登录。';feedback.hidden=false;}});};
-async function renderGoogle(){const g=await api('/api/manage/google');$('#google-panel').hidden=!g.enabled;$('#google-status').textContent=g.linked?'已绑定：'+(g.identity?.email??'Google 账号'):'未绑定';$('#google-link').hidden=!!g.linked;$('#google-unlink').hidden=!g.linked;$('#google-unlink').disabled=!g.canUnlink;$('#google-unlink-hint').hidden=!g.linked||g.canUnlink;setAccountProfile(g);}
+$('#verify-password-setup').onclick=()=>{void accountAction(async()=>{
+ const r=await api('/auth/google/password-setup',{});
+ location.assign(r.url);
+});};
+$('#password-setup-form').onsubmit=e=>{
+ e.preventDefault();
+ const form=e.currentTarget;
+ void accountAction(async()=>{
+  const {username,password,confirmPassword}=Object.fromEntries(new FormData(form));
+  if(password!==confirmPassword)throw new Error('两次输入的密码不一致。');
+  const submit=form.querySelector('button[type="submit"]');
+  submit.disabled=true;
+  try {
+   const r=await api('/api/manage/google/password-setup',{username,password});
+   account=r.account;
+   form.reset();
+   await renderGoogle();
+   const feedback=$('#account-feedback');
+   feedback.textContent='已设置登录名 '+account.username+'，现在可以使用账号密码登录。';
+   feedback.hidden=false;
+  } catch(error) {
+   await renderGoogle().catch(()=>{});
+   throw error;
+  } finally {submit.disabled=false;}
+ });
+};
+async function renderGoogle(){
+ const g=await api('/api/manage/google');
+ $('#google-panel').hidden=!g.enabled;
+ $('#google-status').textContent=g.linked?'已绑定：'+(g.identity?.email??'Google 账号'):'未绑定';
+ $('#google-link').hidden=!!g.linked;
+ $('#google-unlink').hidden=!g.linked;
+ $('#google-unlink').disabled=!g.canUnlink;
+ $('#google-unlink-hint').hidden=!g.linked||g.canUnlink;
+ $('#password-change-panel').hidden=!g.hasPassword;
+ $('#password-username').textContent=g.hasPassword?'登录名 '+account.username:'';
+ $('#password-setup-panel').hidden=!g.canSetupPassword;
+ $('#verify-password-setup').hidden=g.passwordSetupVerified;
+ const form=$('#password-setup-form');
+ form.hidden=!g.passwordSetupVerified;
+ if(form.hidden)form.reset();
+ setAccountProfile(g);
+ return g;
+}

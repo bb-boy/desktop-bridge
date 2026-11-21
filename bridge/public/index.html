@@ -8,7 +8,7 @@
   <title>Desktop Bridge · 我的电脑</title>
   <link rel="stylesheet" href="/vendor/nes.css/nes.min.css">
   <link rel="stylesheet" href="/style.css?v=20261022-device-limits">
-  <script defer src="/app.js?v=20261022-device-limits"></script>
+  <script defer src="/app.js?v=20261121-password-setup"></script>
 </head>
 <body class="dashboard pixel-dashboard">
   <a class="skip-link" href="#main">跳转到主要内容</a>
@@ -115,7 +115,17 @@
       <div class="account-actions"><button id="google-link" class="nes-btn is-primary" type="button">绑定 Google 账号</button><button id="google-unlink" class="nes-btn is-error" type="button" hidden>解除 Google 绑定</button></div>
       <p id="google-unlink-hint" class="muted" hidden>当前账号没有可用的密码登录方式，无法解除唯一的 Google 登录绑定。</p>
     </section>
-    <section class="account-settings nes-container"><h3>修改账号密码</h3><form id="password-form"><label>当前密码<input class="nes-input" name="currentPassword" type="password" required autocomplete="current-password"></label><label>新密码<input class="nes-input" name="password" type="password" required minlength="12" maxlength="256" autocomplete="new-password"></label><button class="nes-btn is-primary" type="submit">修改密码</button></form></section>
+    <section class="account-settings nes-container" id="password-setup-panel" hidden>
+      <h3>设置登录名和密码</h3>
+      <button class="nes-btn is-primary" type="button" id="verify-password-setup">使用已绑定的 Google 账号验证</button>
+      <form id="password-setup-form" hidden>
+        <label>登录名<input class="nes-input" name="username" required minlength="3" maxlength="48" autocomplete="username"></label>
+        <label>Desktop Bridge 密码（至少 12 位）<input class="nes-input" name="password" type="password" required minlength="12" maxlength="256" autocomplete="new-password"></label>
+        <label>确认密码<input class="nes-input" name="confirmPassword" type="password" required minlength="12" maxlength="256" autocomplete="new-password"></label>
+        <button class="nes-btn is-primary" type="submit">保存登录名和密码</button>
+      </form>
+    </section>
+    <section class="account-settings nes-container" id="password-change-panel" hidden><h3>修改账号密码</h3><p class="muted" id="password-username"></p><form id="password-form"><label>当前密码<input class="nes-input" name="currentPassword" type="password" required autocomplete="current-password"></label><label>新密码<input class="nes-input" name="password" type="password" required minlength="12" maxlength="256" autocomplete="new-password"></label><button class="nes-btn is-primary" type="submit">修改密码</button></form></section>
   </dialog>
   <dialog class="nes-dialog admin-dialog" id="admin-dialog" aria-labelledby="admin-heading">
     <div class="section-title"><h2 id="admin-heading">后台管理</h2><button id="close-admin-dialog" class="secondary nes-btn" type="button">关闭</button></div>

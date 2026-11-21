@@ -1,6 +1,6 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { createRemoteJWKSet, customFetch, jwtVerify } from 'jose';
-import { opaque, hash, cookieValue } from './security.mjs';
+import { opaque, hash, cookieValue, passwordHash, validUsername, validPassword } from './security.mjs';
 
 // These URLs are deliberately not configurable. Tests inject transport, never claims or keys.
 const ISSUER='https://accounts.google.com';
@@ -9,6 +9,8 @@ const TOKEN='https://oauth2.googleapis.com/token';
 const KEYS='https://www.googleapis.com/oauth2/v3/certs';
 const FLOW_TTL=10*60*1000;
 const FLOW_KIND='google-login';
+const PASSWORD_SETUP_KIND='google-password-setup';
+const PASSWORD_SETUP_TTL=5*60*1000;
 
 export const googleEnabled=config=>typeof config.google?.clientId==='string' && config.google.clientId.trim().length>0 && typeof config.google?.clientSecret==='string' && config.google.clientSecret.trim().length>0;
 
@@ -26,6 +28,13 @@ export function installGoogle(app,config,store,sessions,loginLimiter,dependencie
   const json=(res,status,error)=>res.status(status).json({error});
   const identity=owner=>store.db.prepare('SELECT issuer,subject,email FROM google_identities WHERE owner=?').get(owner);
   const hasPassword=owner=>/^[A-Za-z0-9_-]+:[0-9a-f]{128}$/.test(store.db.prepare('SELECT password FROM accounts WHERE id=?').get(owner)?.password??'');
+  const canSetPassword=owner=>enabled&&!!identity(owner)&&store.db.prepare('SELECT password FROM accounts WHERE id=?').get(owner)?.password==='';
+  const passwordSetupKey=sessionHash=>hash(PASSWORD_SETUP_KIND+':'+sessionHash);
+  function verifiedPasswordSetup(session) {
+    const grant=store.grant(passwordSetupKey(session.hash),PASSWORD_SETUP_KIND);
+    const linked=identity(session.owner);
+    return !!grant&&!!linked&&grant.ownerId===session.owner&&grant.issuer===linked.issuer&&grant.subject===linked.subject;
+  }
   const activeSession=(sessionHash,owner)=>store.db.prepare('SELECT hash FROM sessions WHERE hash=? AND owner=? AND expires>?').get(sessionHash,owner,Date.now());
   function requireEnabled(_req,res,next){if(!enabled)return json(res,503,'google_disabled');next();}
   function requireLoginCsrf(req,res,next) {
@@ -38,7 +47,7 @@ export function installGoogle(app,config,store,sessions,loginLimiter,dependencie
     return url.origin===new URL(config.baseUrl).origin?url.pathname+url.search+url.hash:null;
   }
   function begin(mode,req,res) {
-    const returnTo=returnPath(req.body?.returnTo);
+    const returnTo=mode==='password-setup'?'/?passwordSetup=ready':returnPath(req.body?.returnTo);
     if(!returnTo)return json(res,400,'invalid_return_path');
     const state=opaque(),browser=opaque(),nonce=opaque(),verifier=opaque();
     const current=sessions.session(req);
@@ -65,10 +74,35 @@ export function installGoogle(app,config,store,sessions,loginLimiter,dependencie
     if(identity(req.session.owner))return json(res,409,'google_already_linked');
     begin('link',req,res);
   });
+  app.post('/auth/google/password-setup',requireEnabled,loginLimiter,sessions.requireSession,(req,res)=>{
+    if(!canSetPassword(req.session.owner))return json(res,409,'当前账号无法首次设置登录密码');
+    begin('password-setup',req,res);
+  });
   app.get('/api/manage/google',sessions.requireSession,(req,res)=>{
     const linked=identity(req.session.owner)??null;
     const password=hasPassword(req.session.owner);
-    res.json({enabled,linked:!!linked,identity:linked,hasPassword:password,canUnlink:!!linked&&password});
+    const canSetup=canSetPassword(req.session.owner);
+    res.json({enabled,linked:!!linked,identity:linked,hasPassword:password,canUnlink:!!linked&&password,
+      canSetupPassword:canSetup,passwordSetupVerified:canSetup&&verifiedPasswordSetup(req.session)});
+  });
+  app.post('/api/manage/google/password-setup',requireEnabled,sessions.requireSession,loginLimiter,async(req,res)=>{
+    const owner=req.session.owner;
+    if(!canSetPassword(owner))return json(res,409,'当前账号无法首次设置登录密码');
+    if(!verifiedPasswordSetup(req.session))return json(res,403,'请先使用已绑定的 Google 账号验证');
+    const {username,password}=req.body??{};
+    if(!validUsername(username))return json(res,400,'登录名须以字母开头，包含 3–48 个字母、数字、点、下划线或连字符');
+    if(!validPassword(password))return json(res,400,'密码长度须为 12–256 位');
+    const encoded=await passwordHash(password);
+    const result=store.transaction(()=>{
+      if(!canSetPassword(owner))return {status:409,error:'当前账号无法首次设置登录密码'};
+      if(!activeSession(req.session.hash,owner)||!verifiedPasswordSetup(req.session))return {status:403,error:'Google 验证已失效，请重新验证'};
+      if(store.account(username))return {status:409,error:'该登录名已被使用'};
+      store.db.prepare('UPDATE accounts SET username=?,password=? WHERE id=?').run(username,encoded,owner);
+      store.deleteGrant(passwordSetupKey(req.session.hash));
+      return {account:store.accountById(owner)};
+    });
+    if(result.error)return json(res,result.status,result.error);
+    res.json({ok:true,...result});
   });
   app.post('/api/manage/google/unlink',sessions.requireSession,(req,res)=>{
     const owner=req.session.owner;
@@ -95,9 +129,11 @@ export function installGoogle(app,config,store,sessions,loginLimiter,dependencie
     });
     if(!flow)return json(res,403,'invalid_google_state');
     res.clearCookie(flowCookie(state),{...cookieOptions,maxAge:undefined});
-    if(req.query.error)return json(res,400,'google_login_cancelled');
+    const settingPassword=flow.mode==='password-setup';
+    const resumeSetup=status=>res.redirect(303,'/?passwordSetup='+status);
+    if(req.query.error)return settingPassword?resumeSetup('cancelled'):json(res,400,'google_login_cancelled');
     const code=req.query.code;
-    if(typeof code!=='string'||!code||code.length>4096)return json(res,400,'invalid_google_code');
+    if(typeof code!=='string'||!code||code.length>4096)return settingPassword?resumeSetup('retry'):json(res,400,'invalid_google_code');
     try {
       const response=await transport(TOKEN,{
         method:'POST',redirect:'error',signal:AbortSignal.timeout(5000),
@@ -125,6 +161,15 @@ export function installGoogle(app,config,store,sessions,loginLimiter,dependencie
       const result=store.transaction(()=>{
         if(flow.expires<=Date.now())return {status:403,error:'google_flow_expired'};
         const linked=store.db.prepare('SELECT owner FROM google_identities WHERE issuer=? AND subject=?').get(ISSUER,payload.sub);
+        if(settingPassword) {
+          const current=sessions.session(req);
+          if(!current||current.hash!==flow.sessionHash||current.owner!==flow.ownerId||!canSetPassword(current.owner))return {status:403,error:'password_setup_session_expired'};
+          if(linked?.owner!==current.owner)return {status:403,error:'password_setup_wrong_google_account'};
+          const key=passwordSetupKey(current.hash);
+          store.deleteGrant(key);
+          store.saveGrant(key,PASSWORD_SETUP_KIND,config.google.clientId,{ownerId:current.owner,issuer:ISSUER,subject:payload.sub},Date.now()+PASSWORD_SETUP_TTL);
+          return {owner:current.owner};
+        }
         let owner=linked?.owner;
         if(flow.mode==='link') {
           if(!activeSession(flow.sessionHash,flow.ownerId)||!store.accountById(flow.ownerId))return {status:403,error:'link_session_expired'};
@@ -146,10 +191,11 @@ export function installGoogle(app,config,store,sessions,loginLimiter,dependencie
         sessions.newSession(res,owner);
         return {owner};
       });
-      if(result.error)return json(res,result.status,result.error);
+      if(result.error)return settingPassword?resumeSetup(result.error==='password_setup_wrong_google_account'?'wrong-account':'retry'):json(res,result.status,result.error);
       res.redirect(303,flow.returnTo);
     } catch {
       // Neither upstream responses nor JWTs contain information safe to echo or log.
+      if(settingPassword)return resumeSetup('retry');
       json(res,403,'google_verification_failed');
     }
   });

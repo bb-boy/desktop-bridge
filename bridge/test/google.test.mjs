@@ -58,7 +58,7 @@ async function fixture(t,{enabled=true}={}) {
   }
   async function begin({session,mode='login',returnTo='/'}={}) {
     session??=await anonymous();
-    const response=await post('/auth/google/'+(mode==='link'?'link':'start'),{returnTo},session.headers);
+    const response=await post('/auth/google/'+(mode==='login'?'start':mode),{returnTo},session.headers);
     assert.equal(response.status,200,await response.clone().text());
     const url=new URL((await response.json()).url);
     assert.equal(url.origin,'https://accounts.google.com');
@@ -87,7 +87,7 @@ test('Google: missing server credentials disable sign-in without changing local 
   assert.equal((await fetch(f.origin+'/auth/google/callback')).status,503);
   const owner=await f.localLogin();
   const status=await(await fetch(f.origin+'/api/manage/google',{headers:owner.headers})).json();
-  assert.deepEqual(status,{enabled:false,linked:false,identity:null,hasPassword:true,canUnlink:false});
+  assert.deepEqual(status,{enabled:false,linked:false,identity:null,hasPassword:true,canUnlink:false,canSetupPassword:false,passwordSetupVerified:false});
 });
 
 test('Google: subjects create isolated accounts automatically, survive restart and never merge by email',async t=>{
@@ -153,6 +153,68 @@ test('Google: a Google-only account cannot remove its last login method or be cl
   const owner=await f.localLogin(),conflict=await f.callback(await f.begin({session:owner,mode:'link'}));
   assert.equal(conflict.status,409);
   assert.equal(f.server.store.db.prepare('SELECT owner FROM google_identities WHERE subject=?').get('google-subject').owner,google.account.id);
+});
+
+test('Google: verified first password gives both login methods the same existing workspace',async t=>{
+  const f=await fixture(t),google=await f.fromSessionCookie(sessionCookie(await f.callback(await f.begin())));
+  const owner=google.account.id,callId=opaque(),grantId=hash(opaque());
+  f.server.store.db.prepare('INSERT INTO registry(id,owner,name,tokenHash) VALUES (?,?,?,?)').run('google-device',owner,'Existing computer',hash(opaque()));
+  f.server.store.beginCall(callId,'google-device','get_config',owner);
+  f.server.store.finishCall(callId,'completed',{content:[{type:'text',text:'existing result'}]});
+  f.server.store.saveGrant(grantId,'access','fixture-client',{ownerId:owner},Date.now()+60000);
+  const credentials={username:'workspace-login',password:'A separate long test password'};
+  const passwordSetup=(data,headers=google.headers)=>f.post('/api/manage/google/password-setup',data,headers);
+  assert.equal((await passwordSetup(credentials)).status,403);
+  const flow=await f.begin({session:google,mode:'password-setup'});
+  const verified=await f.callback(flow,{cookie:flow.cookie+'; '+google.headers.cookie,claims:{email:'updated@example.com'}});
+  assert.equal(verified.status,303);
+  assert.equal(verified.headers.get('location'),'/?passwordSetup=ready');
+  assert.equal(sessionCookie(verified),undefined,'verification keeps the existing browser session');
+  const settings=await(await fetch(f.origin+'/api/manage/google',{headers:google.headers})).json();
+  assert.equal(settings.passwordSetupVerified,true);
+  assert.equal((await passwordSetup({...credentials,username:'owner'})).status,409);
+  const saved=await passwordSetup(credentials);
+  assert.equal(saved.status,200);
+  assert.deepEqual((await saved.json()).account,{...google.account,username:credentials.username});
+  assert.equal(f.server.store.account(google.account.username),undefined);
+  assert.equal(f.server.store.db.prepare("SELECT count(*) AS n FROM grants WHERE kind='google-password-setup'").get().n,0);
+  assert.equal((await passwordSetup({...credentials,password:'Another equally long password'})).status,409);
+  const login=await f.post('/api/login',credentials,(await f.anonymous()).headers);
+  assert.equal(login.status,200);
+  const byPassword=await f.fromSessionCookie(sessionCookie(login));
+  const byGoogle=await f.fromSessionCookie(sessionCookie(await f.callback(await f.begin())));
+  for(const login of [byPassword,byGoogle]) {
+    assert.equal(login.account.id,owner);
+    const devices=await(await fetch(f.origin+'/api/manage/devices',{headers:login.headers})).json();
+    assert.deepEqual(devices.devices.map(device=>device.id),['google-device']);
+    const calls=await(await fetch(f.origin+'/api/manage/calls',{headers:login.headers})).json();
+    assert.equal(calls.calls[0].id,callId);
+  }
+  assert.equal(f.server.store.grant(grantId,'access').ownerId,owner);
+});
+
+test('Google: password setup rejects another subject, browser session, CSRF token and expired proof',async t=>{
+  const f=await fixture(t);
+  const google=await f.fromSessionCookie(sessionCookie(await f.callback(await f.begin())));
+  const second=await f.fromSessionCookie(sessionCookie(await f.callback(await f.begin())));
+  const start=()=>f.begin({session:google,mode:'password-setup'});
+  const body={username:'workspace-login',password:'A separate long test password'};
+  const save=headers=>f.post('/api/manage/google/password-setup',body,headers);
+  assert.equal((await f.post('/auth/google/password-setup',{}, {...google.headers,'x-csrf-token':'wrong'})).status,403);
+  const wrong=await start();
+  const mismatch=await f.callback(wrong,{cookie:wrong.cookie+'; '+google.headers.cookie,claims:{sub:'different-subject'}});
+  assert.equal(mismatch.headers.get('location'),'/?passwordSetup=wrong-account');
+  assert.equal(f.server.store.db.prepare('SELECT count(*) AS n FROM google_identities').get().n,1);
+  const wrongBrowser=await start();
+  const refused=await f.callback(wrongBrowser,{cookie:wrongBrowser.cookie+'; '+second.headers.cookie});
+  assert.equal(refused.headers.get('location'),'/?passwordSetup=retry');
+  const right=await start();
+  await f.callback(right,{cookie:right.cookie+'; '+google.headers.cookie});
+  assert.equal((await save({...google.headers,'x-csrf-token':'wrong'})).status,403);
+  assert.equal((await save(second.headers)).status,403);
+  f.server.store.db.prepare("UPDATE grants SET expires=? WHERE kind='google-password-setup'").run(Date.now()-1);
+  assert.equal((await save(google.headers)).status,403);
+  assert.equal(f.server.store.account(google.account.username).password,'');
 });
 
 test('Google: state requires its browser cookie, expires, and cannot be replayed after success or cancellation',async t=>{

@@ -3,6 +3,8 @@ import { promisify } from 'node:util';
 const scrypt=promisify(scryptCallback);
 export const opaque = () => randomBytes(32).toString('base64url');
 export const hash = value => createHash('sha256').update(value).digest('hex');
+export const validUsername = value => typeof value==='string' && /^\p{L}[\p{L}\p{N}_.-]{2,47}$/u.test(value);
+export const validPassword = value => typeof value==='string' && value.length>=12 && value.length<=256;
 export const escapeHtml = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export async function passwordHash(password) {
   const salt=opaque();

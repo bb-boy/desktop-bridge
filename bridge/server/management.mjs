@@ -1,6 +1,6 @@
 import { randomUUID, randomInt } from 'node:crypto';
 import { rateLimit } from 'express-rate-limit';
-import { opaque,hash,passwordHash,checkPassword,cookieValue } from './security.mjs';
+import { opaque,hash,passwordHash,checkPassword,cookieValue,validUsername,validPassword } from './security.mjs';
 import { bridgeToolNames } from './broker.mjs';
 
 const codeHash=value=>hash(String(value??'').toUpperCase().replace(/[^A-Z0-9]/g,''));
@@ -53,7 +53,7 @@ export function installManagement(app,config,store,broker,loginLimiter,sessions=
   app.post('/api/signup',loginLimiter,loginCsrf,async(req,res)=>{
     if(!store.registrationEnabled())return json(res,403,'注册已关闭');
     const {username,password,invitation}=req.body;
-    if(typeof username!=='string'||!/^\p{L}[\p{L}\p{N}_.-]{2,47}$/u.test(username)||typeof password!=='string'||password.length<12||password.length>256)return json(res,400,'账号需为 3–48 位；密码至少 12 位');
+    if(!validUsername(username)||!validPassword(password))return json(res,400,'账号需为 3–48 位；密码至少 12 位');
     const passwordEncoded=await passwordHash(password);
     try {
       const id=store.transaction(()=>{
@@ -79,7 +79,7 @@ export function installManagement(app,config,store,broker,loginLimiter,sessions=
   app.post('/api/password',requireSession,loginLimiter,async(req,res)=>{
     const a=store.db.prepare('SELECT * FROM accounts WHERE id=?').get(req.session.owner);
     if(!await checkPassword(req.body.currentPassword,a.password))return json(res,403,'当前密码错误');
-    if(typeof req.body.password!=='string'||req.body.password.length<12||req.body.password.length>256)return json(res,400,'新密码至少 12 位');
+    if(!validPassword(req.body.password))return json(res,400,'新密码至少 12 位');
     const encoded=await passwordHash(req.body.password);
     const changed=store.transaction(()=>{
       const current=store.account(a.username);

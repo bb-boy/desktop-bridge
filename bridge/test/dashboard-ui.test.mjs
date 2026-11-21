@@ -64,12 +64,14 @@ test('Dashboard: Google account settings opens from the avatar menu, not a top-l
   assert.match(accountDialog,/id="google-unlink"[^>]*>解除 Google 绑定<\/button>/);
   assert.match(accountDialog,/id="google-unlink-hint"/);
   assert.match(accountDialog,/id="password-form"/);
+  assert.match(accountDialog,/id="password-setup-form" hidden/);
+  assert.match(accountDialog,/id="verify-password-setup"/);
   assert.match(accountDialog,/id="close-account-dialog"/);
   assert.ok(script.includes("$('#account-settings').onclick=()=>{"));
   assert.ok(script.includes("if(!dialog.open)dialog.showModal()"));
   assert.ok(script.includes("$('#close-account-dialog').onclick=()=>$('#account-dialog').close()"));
   assert.ok(script.includes("$('#google-unlink').disabled=!g.canUnlink"));
   assert.match(css,/\.account-dialog\.nes-dialog\{[^}]*overflow-y:auto/);
-  assert.match(html,/app\.js\?v=20261022-device-limits/);
+  assert.match(html,/app\.js\?v=20261121-password-setup/);
   assert.match(html,/style\.css\?v=20261022-device-limits/);
 });
