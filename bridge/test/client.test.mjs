@@ -52,6 +52,7 @@ test('agent protocol v2 reports health, deduplicates calls, rotates tokens and r
  const dir=directory(t),httpServer=http.createServer();const wss=new WebSocketServer({server:httpServer});httpServer.listen(0,'127.0.0.1');await once(httpServer,'listening');
  t.after(()=>{for(const socket of wss.clients)socket.terminate();wss.close();httpServer.close();});
  const config=path.join(dir,'agent-config.json');fs.writeFileSync(config,JSON.stringify({serverUrl:'http://127.0.0.1:'+httpServer.address().port,deviceId:'fixture-device',deviceToken:'a'.repeat(43),runtimeDir:runtime,mcpEntry:path.join(root,'test/helpers/client-mcp.mjs'),workingDirectory:dir}));
+ fs.writeFileSync(path.join(dir,'journal.json'),'\uFEFF{}');
  let processAgent;
  const start=()=>{processAgent=child(process.execPath,[path.join(root,'agent/agent.mjs'),config,'--no-browser']);return processAgent;};
  t.after(()=>processAgent?.kill('SIGKILL'));start();
@@ -72,6 +73,48 @@ test('agent protocol v2 reports health, deduplicates calls, rotates tokens and r
  await until(()=>messages.find(m=>m.type==='hello'));next.send(JSON.stringify({type:'welcome',recover:[id]}));
  const recovered=await until(()=>messages.find(m=>m.type==='result'&&m.id===id));assert.equal(recovered.result.content[0].text,'1');assert.equal(fs.readFileSync(path.join(dir,'counter.txt'),'utf8'),'1');
  const finish=exited(processAgent);fs.writeFileSync(path.join(dir,'maintenance.flag'),'stop');await finish;
+});
+
+test('agent logs a rejected upgrade and reconnects despite a damaged journal and unavailable CUA',async t=>{
+ const {WebSocketServer}=require('ws');
+ const dir=directory(t);
+ const httpServer=http.createServer();
+ const wss=new WebSocketServer({noServer:true});
+ let attempts=0;
+ httpServer.on('upgrade',(req,socket,head)=>{
+  if(++attempts===1){socket.end('HTTP/1.1 409 Conflict\r\nConnection: close\r\n\r\n');return;}
+  wss.handleUpgrade(req,socket,head,ws=>wss.emit('connection',ws));
+ });
+ httpServer.listen(0,'127.0.0.1');await once(httpServer,'listening');
+ t.after(()=>{for(const socket of wss.clients)socket.terminate();wss.close();httpServer.close();});
+ const config=path.join(dir,'agent-config.json');
+ fs.writeFileSync(config,JSON.stringify({
+  serverUrl:'http://127.0.0.1:'+httpServer.address().port,deviceId:'fixture-device',deviceToken:'a'.repeat(43),
+  runtimeDir:runtime,mcpEntry:path.join(root,'test/helpers/client-mcp.mjs'),workingDirectory:dir,
+  cuaDriver:{enabled:true,command:path.join(dir,'missing-cua-driver')}
+ }));
+ const corrupt='{"truncated":';
+ fs.writeFileSync(path.join(dir,'journal.json'),corrupt);
+ const agent=child(process.execPath,[path.join(root,'agent/agent.mjs'),config]);
+ t.after(()=>agent.kill('SIGKILL'));
+ const [socket]=await once(wss,'connection');
+ const messages=[];
+ socket.on('message',data=>messages.push(JSON.parse(data)));
+ const hello=await until(()=>messages.find(message=>message.type==='hello'));
+ assert.deepEqual(hello.tools.map(tool=>tool.name),['get_config','increment']);
+ const previous=randomUUID(),fresh=randomUUID();
+ socket.send(JSON.stringify({type:'welcome',recover:[previous]}));
+ assert.equal((await until(()=>messages.find(message=>message.id===previous))).status,'unknown');
+ assert.equal(fs.existsSync(path.join(dir,'counter.txt')),false);
+ socket.send(JSON.stringify({type:'call',id:fresh,name:'increment',arguments:{}}));
+ assert.equal((await until(()=>messages.find(message=>message.id===fresh))).result.content[0].text,'1');
+ const log=fs.readFileSync(path.join(dir,'agent.log'),'utf8').trim().split('\n').map(line=>JSON.parse(line));
+ assert(log.some(entry=>entry.event==='mcp_backend_failed'&&entry.backend==='cua'));
+ assert(log.some(entry=>entry.event==='connection_upgrade_rejected'&&entry.status===409));
+ const backup=log.find(entry=>entry.event==='journal_quarantined');
+ assert.equal(fs.readFileSync(path.join(dir,backup.file),'utf8'),corrupt);
+ assert.equal(JSON.parse(fs.readFileSync(path.join(dir,'heartbeat.json'),'utf8')).cuaToolsAvailable,false);
+ const finish=exited(agent);fs.writeFileSync(path.join(dir,'maintenance.flag'),'stop');await finish;
 });
 
 test('re-pair required state blocks start, persists in status, and clears after explicit pairing',async t=>{

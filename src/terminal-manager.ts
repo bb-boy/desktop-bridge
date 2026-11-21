@@ -1,5 +1,7 @@
-import { spawn } from 'child_process';
-import { TerminalSession, CommandExecutionResult, ActiveSession, TimingInfo, OutputEvent } from './types.js';
+import { execFileSync, spawn } from 'child_process';
+import { win32 } from 'node:path';
+import type { Readable } from 'node:stream';
+import type { TerminalSession, CommandExecutionResult, ActiveSession, TimingInfo, OutputEvent } from './types.js';
 import { DEFAULT_COMMAND_TIMEOUT, MAX_PROCESS_WAIT_MS } from './config.js';
 import { configManager, type ServerConfig } from './config-manager.js';
 import {capture} from "./utils/capture.js";
@@ -34,6 +36,62 @@ function getRepairedPathExt(): string {
     return [...new Set([...STANDARD_PATHEXT.split(';'), ...exts])].join(';');
   }
   return current;
+}
+
+// cmd.exe built-ins and native tools can write in the system OEM code page
+// to redirected pipes, even when there is no console to change with chcp.
+const WINDOWS_OEM_ENCODINGS: Record<string, string> = {
+  '866': 'ibm866', '874': 'windows-874', '932': 'shift_jis', '936': 'gbk',
+  '949': 'euc-kr', '950': 'big5'
+};
+let windowsOemEncoding: string | null | undefined;
+
+function getWindowsOemEncoding(): string | undefined {
+  if (windowsOemEncoding === undefined) {
+    windowsOemEncoding = null;
+    try {
+      const reg = win32.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'reg.exe');
+      const output = execFileSync(reg, ['query', 'HKLM\\SYSTEM\\CurrentControlSet\\Control\\Nls\\CodePage', '/v', 'OEMCP'], {
+        encoding: 'ascii', windowsHide: true, timeout: 2000, stdio: ['ignore', 'pipe', 'ignore']
+      });
+      const codePage = output.match(/\bOEMCP[ \t]+REG_SZ[ \t]+(\d+)\b/i)?.[1];
+      if (codePage) windowsOemEncoding = WINDOWS_OEM_ENCODINGS[codePage] ?? null;
+    } catch { /* UTF-8 remains the default when the code page cannot be read. */ }
+  }
+  return windowsOemEncoding ?? undefined;
+}
+
+function readTerminalText(stream: Readable, fallback: string | undefined, onText: (text: string) => void): void {
+  if (!fallback) {
+    stream.setEncoding('utf8').on('data', onText);
+    return;
+  }
+
+  let pending: Buffer = Buffer.alloc(0);
+  let legacyDecoder: TextDecoder | undefined;
+  const decode = (chunk: Buffer, final: boolean) => {
+    if (legacyDecoder) return legacyDecoder.decode(chunk, {stream: !final});
+    const bytes = pending.length ? Buffer.concat([pending, chunk]) : chunk;
+    try {
+      const text = new TextDecoder('utf-8', {fatal: true, ignoreBOM: true}).decode(bytes, {stream: !final});
+      // Keep any trailing partial UTF-8 character so its bytes are also
+      // available if the next chunk proves this stream uses the OEM encoding.
+      pending = bytes.subarray(Buffer.byteLength(text));
+      return text;
+    } catch {
+      legacyDecoder = new TextDecoder(fallback, {ignoreBOM: true});
+      pending = Buffer.alloc(0);
+      return legacyDecoder.decode(bytes, {stream: !final});
+    }
+  };
+  stream.on('data', (chunk: Buffer) => {
+    const text = decode(chunk, false);
+    if (text) onText(text);
+  });
+  stream.once('end', () => {
+    const text = decode(Buffer.alloc(0), true);
+    if (text) onText(text);
+  });
 }
 
 /** A child process's output pipes. */
@@ -195,6 +253,8 @@ export class TerminalManager {
 
     // Get the appropriate spawn configuration for the shell, with login flags where appropriate
     const spawnConfig: ShellSpawnConfig = getShellSpawnArgs(shellToUse, enhancedCommand);
+    const fallbackEncoding = process.platform === 'win32' && spawnConfig.windowsVerbatim
+      ? getWindowsOemEncoding() : undefined;
     const spawnOptions: any = {
       env: {
         ...process.env,
@@ -351,8 +411,7 @@ export class TerminalManager {
         forwardProcessError(pendingProcessError);
       }
 
-      childProcess.stdout.on('data', (data: any) => {
-        const text = data.toString();
+      readTerminalText(childProcess.stdout, fallbackEncoding, text => {
         const now = Date.now();
 
         if (!firstOutputTime) firstOutputTime = now;
@@ -395,8 +454,7 @@ export class TerminalManager {
         }
       });
 
-      childProcess.stderr.on('data', (data: any) => {
-        const text = data.toString();
+      readTerminalText(childProcess.stderr, fallbackEncoding, text => {
         const now = Date.now();
 
         if (!firstOutputTime) firstOutputTime = now;

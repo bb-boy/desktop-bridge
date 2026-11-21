@@ -14,6 +14,7 @@ for(const required of [
   'bin/desktop-bridge.mjs','dist/client/install.mjs',
   'dist/client/control.mjs','dist/client/startup.mjs','dist/client/windows-background.mjs',
   'dist/client/package.json','dist/client/package-lock.json',
+  'dist/client/desktop-commander-terminal-manager.js',
   'dist/client/node-runtime.json','dist/client/environment.mjs','dist/client/cua-driver.mjs',
   'dist/client/agent/agent.mjs','dist/client/agent/pair.mjs',
   'dist/client/agent/mcp-manager.mjs','dist/client/agent/send-json.mjs',
