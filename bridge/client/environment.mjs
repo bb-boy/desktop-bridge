@@ -65,7 +65,22 @@ export async function probeModules(release) {
  if(!/^ripgrep\s/.test(await capture(rgPath,['--version'])))throw new Error('平台搜索工具 ripgrep 不可执行');
  return {Client,StdioClientTransport,entry};
 }
-export async function prepareDependencies({node,npm,release,force=false}) {
+function applyWindowsTerminalFix(release,source) {
+ if(process.platform!=='win32'||!source)return;
+ const replacement=path.join(source,'desktop-commander-terminal-manager.js');
+ if(!fs.existsSync(replacement))return;
+ const target=path.join(release,'node_modules','@wonderwhy-er','desktop-commander','dist','terminal-manager.js');
+ const installed=fs.readFileSync(target), patched=fs.readFileSync(replacement);
+ if(installed.equals(patched))return;
+ const expected='92a97f083a5b650a86dc3ecfd029dd3a371ca7a0636d9d1f93233a2b70a68e41';
+ if(createHash('sha256').update(installed).digest('hex')!==expected)throw new Error('Unexpected Desktop Commander 0.3.0 terminal module; rerun setup with --repair.');
+ const temporary=target+'.desktop-bridge-tmp';
+ try {
+  fs.writeFileSync(temporary,patched,{mode:0o600});
+  fs.renameSync(temporary,target);
+ } finally {fs.rmSync(temporary,{force:true});}
+}
+export async function prepareDependencies({node,npm,release,source,force=false}) {
  const hash=createHash('sha256').update(fs.readFileSync(path.join(release,'package.json'))).update(fs.readFileSync(path.join(release,'package-lock.json'))).digest('hex');
  const marker=path.join(release,'.dependencies.sha256');let previous;try{previous=fs.readFileSync(marker,'utf8');}catch{}
  let needsInstall=force||hash!==previous;
@@ -75,6 +90,7 @@ export async function prepareDependencies({node,npm,release,force=false}) {
   try{await run(node,[npm,'ci','--omit=dev','--ignore-scripts','--no-fund','--no-audit'],{cwd:release,env:{...process.env,PATH:path.dirname(node)+path.delimiter+(process.env.PATH??'')}});}
   catch{throw new Error('依赖自动安装失败。请确认安装目录可写，并能访问 registry.npmjs.org，然后重试。');}
  }
+ applyWindowsTerminalFix(release,source);
  await probeDependencyProcess(node,release);fs.writeFileSync(marker,hash,{mode:0o600});
  console.log('环境检查：SDK、WebSocket、Desktop Commander 和本机搜索工具正常。');
  return {installed:needsInstall};
@@ -87,7 +103,7 @@ export async function verifyLocalTools({node,release,workingDirectory}){
 export async function verifyLocalToolsInProcess({node,release,workingDirectory}) {
  console.log('正在验证本地工具可以实际执行……');
  const {Client,StdioClientTransport,entry}=await probeModules(release);
- const client=new Client({name:'desktop-bridge-install-check',version:'0.2.9'},{capabilities:{}});
+ const client=new Client({name:'desktop-bridge-install-check',version:'0.2.10'},{capabilities:{}});
  const transport=new StdioClientTransport({command:node,args:[entry],cwd:workingDirectory,stderr:'pipe'});
  try{
   const connecting=client.connect(transport,{timeout:30000});transport.stderr?.on('data',()=>{});await connecting;

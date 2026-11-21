@@ -264,7 +264,7 @@ function connect() {
   let lastSeen=Date.now(),welcomed=false;
   const heartbeat=setInterval(()=>{if(Date.now()-lastSeen>65000)socket.terminate();},15000);
   socket.on('ping',()=>lastSeen=Date.now());
-  socket.on('open',()=>{send(socket,{type:'hello',protocol:2,deviceId:config.deviceId,tools,capabilities:{shutdown:true},version:'0.2.9',platform:process.platform});});
+  socket.on('open',()=>{send(socket,{type:'hello',protocol:2,deviceId:config.deviceId,tools,capabilities:{shutdown:true},version:'0.2.10',platform:process.platform});});
   socket.on('message',data=>{
     lastSeen=Date.now();
     try {

@@ -1,7 +1,7 @@
 import { execFileSync, spawn } from 'child_process';
 import { win32 } from 'node:path';
 import type { Readable } from 'node:stream';
-import { TerminalSession, CommandExecutionResult, ActiveSession, TimingInfo, OutputEvent } from './types.js';
+import type { TerminalSession, CommandExecutionResult, ActiveSession, TimingInfo, OutputEvent } from './types.js';
 import { DEFAULT_COMMAND_TIMEOUT, MAX_PROCESS_WAIT_MS } from './config.js';
 import { configManager, type ServerConfig } from './config-manager.js';
 import {capture} from "./utils/capture.js";

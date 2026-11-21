@@ -57,17 +57,17 @@ if(options.uninstall){
 fs.writeFileSync(path.join(root,'.desktop-bridge-client'),'desktop-bridge-client\n',{mode:0o600});
 if(process.versions.node.split('.')[0]!=='24')throw new Error('Use Install.cmd, Install.command or Install.sh to prepare the supported Node 24 runtime.');
 const {node,npm}=await ensureRuntime(root,source);
-const release=path.join(root,'releases','0.2.9'),configPath=path.join(root,'agent-config.json');
+const release=path.join(root,'releases','0.2.10'),configPath=path.join(root,'agent-config.json');
 fs.mkdirSync(release,{recursive:true,mode:0o700});
 for(const file of ['package.json','package-lock.json'])fs.copyFileSync(path.join(source,file),path.join(release,file));
 const agentSource=fs.existsSync(path.join(source,'agent'))?path.join(source,'agent'):path.join(source,'..','agent');
 fs.cpSync(agentSource,path.join(release,'agent'),{recursive:true,force:true});
 for(const file of ['runner.mjs','lifecycle.mjs','control.mjs','startup.mjs','windows-background.mjs','install-options.mjs','admin-runtime.mjs','admin-service.mjs','admin-elevate.mjs','Start.cmd','Stop.cmd','RePair.cmd','Start.command','Stop.command','start.sh','stop.sh','launch.sh','control.ps1'])fs.copyFileSync(path.join(source,file),path.join(root,file));
-await prepareDependencies({node,npm,release,force:!!options.repair});
+await prepareDependencies({node,npm,release,source,force:!!options.repair});
 try{await verifyLocalTools({node,release,workingDirectory:root});}
 catch{
  console.log('本地工具验证未通过，正在自动重新安装依赖后重试一次……');
- await prepareDependencies({node,npm,release,force:true});
+ await prepareDependencies({node,npm,release,source,force:true});
  try{await verifyLocalTools({node,release,workingDirectory:root});}
  catch{throw new Error('本地工具仍无法执行，安装尚未完成。请检查目录权限、安全软件或网络后重试；客户端保持停止状态。');}
 }
@@ -87,7 +87,7 @@ if(adminRequested){
   const helper=path.join(root,'admin-elevate.mjs');
   const request=elevationRequest('install',{source:root,mode});
   await run(request.command,request.args);
-  fs.writeFileSync(path.join(root,'client-settings.json'),JSON.stringify({mode,privilege:'administrator',version:'0.2.9'},null,2),{mode:0o600});
+  fs.writeFileSync(path.join(root,'client-settings.json'),JSON.stringify({mode,privilege:'administrator',version:'0.2.10'},null,2),{mode:0o600});
   writeInstructions(root,node,mode,'administrator');
 }
 console.log(adminRequested?'管理员运行已授权并配置：'+mode+'。':mode==='manual'?'安装和配对完成：手动模式。使用时运行启动命令，保持窗口，按 Ctrl+C 结束；没有后台实例或登录自启。':'安装和配对完成：后台模式。客户端现在后台运行，登录系统后自动启动。');

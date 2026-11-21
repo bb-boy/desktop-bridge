@@ -2,7 +2,9 @@
 
 Independent npm distribution for the Desktop Bridge **local device client**. It does not publish the upstream Desktop Commander package or cloud relay.
 
-Version 0.2.9 supports opt-in, checksum-pinned Cua Driver 0.38.0 installation and validation on Windows, macOS and Linux. The driver is not silently installed by regular setup or update.
+Version 0.2.10 recovers from an unreadable task journal, isolates Cua Driver startup failures from file and terminal tools, and records rejected WebSocket upgrade status codes. The npm installer includes the Windows terminal encoding fix.
+
+The CLI supports opt-in, checksum-pinned Cua Driver 0.38.0 installation and validation on Windows, macOS and Linux. The driver is not silently installed by regular setup or update.
 
 Version 0.2.9 also sends large Agent results as serialized 16 KiB WebSocket fragments so ping/pong control frames can pass between fragments. Result recovery keeps the existing execution journal and never re-executes a saved command. The separate Windows/macOS screenshot viewer and protected image endpoint are relay-side code in `bridge/`; this npm package contains only the local client.
 
